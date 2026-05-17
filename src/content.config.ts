@@ -2,8 +2,9 @@
 // Strict schemas for writing posts and projects. .strict() makes typos in
 // frontmatter (e.g. `puDate`) fail the build instead of silently ignoring.
 
-import { defineCollection, z } from 'astro:content';
+import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
 
 const writing = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/writing' }),
@@ -24,8 +25,8 @@ const projects = defineCollection({
     description: z.string(),
     pubDate: z.coerce.date(),
     tags: z.array(z.string()),
-    link: z.string().url().optional(),
-    repo: z.string().url().optional(),
+    link: z.url().optional(),
+    repo: z.url().optional(),
   }).strict(),
 });
 
@@ -37,9 +38,9 @@ const publications = defineCollection({
     pubDate: z.coerce.date(),
     authors: z.array(z.string()),
     venue: z.string(),
-    arxiv: z.string().url().optional(),
-    pdf: z.string().url().optional(),
-    code: z.string().url().optional(),
+    arxiv: z.url().optional(),
+    pdf: z.url().optional(),
+    code: z.url().optional(),
     tags: z.array(z.string()).optional(),
   }).strict(),
 });

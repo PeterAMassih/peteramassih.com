@@ -8,7 +8,7 @@ import katex from 'katex';
 
 const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displayMode });
 
-const lossFormula = k('L(x, y) = -\\sum_i A_i \\exp\\!\\left(-\\frac{\\lVert p - p_i \\rVert^2}{2\\sigma_i^2}\\right)');
+const lossFormula = k('L(x, y) = -\\sum_{i=1}^{4} A_i \\exp\\!\\left(-\\frac{\\lVert p - p_i \\rVert^2}{2\\sigma_i^2}\\right)');
 const sgdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
 const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}');
 const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}');

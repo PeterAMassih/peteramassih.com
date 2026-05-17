@@ -1,0 +1,113 @@
+---
+// src/pages/life.astro
+// Conway's Game of Life — interactive with patterns, controls, counters.
+// Game logic in src/scripts/life.js; this file is markup + scoped styling.
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Life — Peter Massih" description="Conway's Game of Life — an interactive cellular automaton.">
+  <main>
+    <header class="head">
+      <h1>Life</h1>
+      <p>
+        Conway's Game of Life is a cellular automaton invented by John Conway in 1970. Each cell on a grid is alive or dead. Every tick, the grid evolves by four simple rules applied to each cell based on its eight neighbors:
+      </p>
+      <ol class="rules">
+        <li>A live cell with fewer than 2 live neighbors dies (underpopulation).</li>
+        <li>A live cell with 2 or 3 live neighbors survives.</li>
+        <li>A live cell with more than 3 live neighbors dies (overpopulation).</li>
+        <li>A dead cell with exactly 3 live neighbors becomes alive (reproduction).</li>
+      </ol>
+    </header>
+
+    <canvas id="life-canvas" class="canvas" aria-label="Game of Life cellular automaton"></canvas>
+
+    <p class="meta">Generation: <span id="gen">0</span> · Population: <span id="pop">0</span></p>
+
+    <div class="controls">
+      <button id="toggle" type="button">Pause</button>
+      <button id="step" type="button">Step</button>
+      <button id="random" type="button">Random</button>
+      <button id="clear" type="button">Clear</button>
+      <span class="label">Speed:</span>
+      <button data-fps="3" type="button">slow</button>
+      <button data-fps="10" type="button" class="active">normal</button>
+      <button data-fps="30" type="button">fast</button>
+    </div>
+
+    <div class="controls patterns">
+      <span class="label">Patterns:</span>
+      <button data-pattern="glider" type="button">Glider</button>
+      <button data-pattern="blinker" type="button">Blinker</button>
+      <button data-pattern="beacon" type="button">Beacon</button>
+      <button data-pattern="pulsar" type="button">Pulsar</button>
+      <button data-pattern="gun" type="button">Gosper gun</button>
+    </div>
+
+    <p class="hint muted">Click a pattern, then click on the grid to place it. Otherwise, click a cell to toggle.</p>
+  </main>
+</BaseLayout>
+
+<script>import '../scripts/life.js';</script>
+
+<style>
+  main {
+    max-width: var(--page-width);
+    margin: var(--space-16) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-6); }
+  .head p { margin-top: var(--space-2); max-width: 65ch; }
+  .rules {
+    margin-top: var(--space-4);
+    padding-left: var(--space-6);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    max-width: 65ch;
+  }
+  .rules li { margin-top: var(--space-1); }
+  .canvas {
+    width: 100%;
+    height: 60vh;
+    display: block;
+    background: var(--color-code-bg);
+    border-radius: 4px;
+    cursor: crosshair;
+  }
+  .meta {
+    margin-top: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .controls {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+  }
+  .controls .label {
+    margin-left: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .controls button {
+    padding: 0.35rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+  }
+  .controls button:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+  .controls button.active {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+    background: var(--color-code-bg);
+  }
+  .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+</style>

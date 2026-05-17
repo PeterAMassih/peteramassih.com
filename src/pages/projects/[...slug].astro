@@ -1,0 +1,66 @@
+---
+// src/pages/projects/[...slug].astro
+// Detail page for one project. Renders the MDX body below the metadata header.
+// Body is optional — frontmatter-only projects still produce a usable page.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects');
+  return projects.map((project) => ({ params: { slug: project.id }, props: { project } }));
+}
+
+type Props = { project: CollectionEntry<'projects'> };
+const { project } = Astro.props;
+const { Content } = await render(project);
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short' });
+---
+
+<BaseLayout title={`${project.data.title} — Peter Massih`} description={project.data.description}>
+  <article class="project">
+    <header>
+      <p class="meta">
+        <time datetime={project.data.pubDate.toISOString()}>{fmt.format(project.data.pubDate)}</time>
+      </p>
+      <h1>{project.data.title}</h1>
+      <p class="desc">{project.data.description}</p>
+      <p class="aux">
+        {project.data.link && <a href={project.data.link} target="_blank" rel="noopener noreferrer">Site →</a>}
+        {project.data.repo && <a href={project.data.repo} target="_blank" rel="noopener noreferrer">Source →</a>}
+        {project.data.tags.length > 0 && <span class="tags">{project.data.tags.join(' · ')}</span>}
+      </p>
+    </header>
+    <div class="body">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .project {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .project > header { margin-bottom: var(--space-12); }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-4);
+  }
+  .project h1 { line-height: 1.2; margin-bottom: var(--space-3); }
+  .desc { color: var(--color-text-muted); margin-top: var(--space-2); }
+  .aux {
+    margin-top: var(--space-4);
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .aux .tags { color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); margin-left: auto; }
+  .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
+  .body :global(h2) { margin-top: var(--space-8); margin-bottom: var(--space-3); }
+  .body :global(h3) { margin-top: var(--space-6); margin-bottom: var(--space-2); }
+</style>

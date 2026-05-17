@@ -1,17 +1,149 @@
 ---
+// src/pages/index.astro
+// Landing. Two-column intro + two prose sections (projects, recent writing).
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
 
+const recent = (await getCollection('writing', ({ data }) =>
+  import.meta.env.PROD ? !data.draft : true,
+))
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+  .slice(0, 3);
+const publications = (await getCollection('publications'))
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+  .slice(0, 2);
+const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<BaseLayout title="Peter Massih">
+  <main>
+    <header class="intro">
+      <div>
+        <h1>Peter Massih</h1>
+        <p class="bio">
+          I do ML research and build the software that ships it.
+          Currently at NEC Labs America. Previously a software engineer (AI/ML) at Lombard Odier.
+        </p>
+        <p class="socials">
+          <a href="https://github.com/PeterAMassih" target="_blank" rel="noopener noreferrer">github</a> ·
+          <a href="https://huggingface.co/PeterAM4" target="_blank" rel="noopener noreferrer">huggingface</a> ·
+          <a href="https://www.linkedin.com/in/peteramassih/" target="_blank" rel="noopener noreferrer">linkedin</a> ·
+          <a href="mailto:peteramassih@gmail.com">email</a>
+        </p>
+      </div>
+      <img class="photo" src="/peter.jpg" alt="Peter Massih" width="240" height="240" />
+    </header>
+
+    <section>
+      <h2>Background</h2>
+      <div class="bg-row">
+        <span class="bg-label">Currently</span>
+        <ul>
+          <li>ML research @ NEC Labs America · Princeton · 2026–</li>
+        </ul>
+      </div>
+      <div class="bg-row">
+        <span class="bg-label">Previously</span>
+        <ul>
+          <li>Software engineer AI/ML @ Lombard Odier · Geneva · 2025–2026</li>
+          <li>ML research @ NEC Labs America · Princeton · 2025</li>
+          <li>Full-stack AI engineer @ Ageospatial (startup) · Lausanne · 2024</li>
+        </ul>
+      </div>
+      <div class="bg-row">
+        <span class="bg-label">Education</span>
+        <ul>
+          <li>MS Computer Science (Data Analytics & ML) @ EPFL · 2023–2026</li>
+          <li>Exchange @ ETH Zurich (CS + Electrical Eng.) · 2022–2023</li>
+          <li>BS Computer & Communication Systems (Electrical Engineering and Computer Science) @ EPFL · 2020–2023</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Publications</h2>
+      {publications.length === 0 ? (
+        <p class="muted">Coming soon.</p>
+      ) : publications.map((pub) => (
+        <>
+          <p><strong><a href={`/publications/${pub.id}/`}>{pub.data.title}</a></strong></p>
+          <p class="muted">
+            {pub.data.authors.map((a, i) => (
+              <>{i > 0 && ', '}{a.startsWith('Peter') ? <strong>{a}</strong> : a}</>
+            ))}
+            {' · '}{pub.data.venue}.
+            {pub.data.arxiv && <> <a href={pub.data.arxiv} target="_blank" rel="noopener noreferrer">arXiv →</a></>}
+          </p>
+        </>
+      ))}
+      <p class="more"><a href="/publications/">All publications →</a></p>
+    </section>
+
+    <section>
+      <h2>Selected projects</h2>
+      <p><strong>3D-BlockGen</strong>: diffusion pipeline that generates buildable LEGO models from text prompts. Open-sourced code, model, and a 542k-sample dataset from Objaverse.</p>
+      <p><strong>Wikispeedia Navigation Analysis</strong>: mixed-effects model over 75k+ gameplay paths, identifying semantic similarity as the dominant navigation strategy (p &lt; 0.001).</p>
+      <p><strong>Reinforcement Learning Mountain Car</strong>: DQN with random network distillation and a direction-aware throttle reward, ~33% faster convergence on Gymnasium's MountainCar-v0.</p>
+      <p class="more"><a href="/projects/">All projects →</a></p>
+    </section>
+
+    <section>
+      <h2>Peter's Patches</h2>
+      {recent.length === 0 ? (
+        <p class="muted">Posts will appear here once I publish them.</p>
+      ) : (
+        <ul class="recent">
+          {recent.map((post) => (
+            <li>
+              <a href={`/writing/${post.id}/`}>
+                <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
+                <span class="title">{post.data.title}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p class="more"><a href="/writing/">All patches →</a></p>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  main {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .intro {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-6);
+    align-items: start;
+    margin-bottom: var(--space-16);
+  }
+  .bio { margin-top: var(--space-2); color: var(--color-text-muted); max-width: 52ch; }
+  .photo { width: 240px; height: 240px; border-radius: 4px; object-fit: cover; }
+  .socials { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
+  .socials a { color: var(--color-text-muted); }
+  .socials a:hover { color: var(--color-text); }
+  section { margin-top: var(--space-12); }
+  section h2 { margin-bottom: var(--space-4); }
+  section p + p { margin-top: var(--space-2); }
+  .bg-row { display: flex; gap: var(--space-4); align-items: baseline; }
+  .bg-row + .bg-row { margin-top: var(--space-3); }
+  .bg-label { width: 6rem; flex-shrink: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
+  .bg-row ul { list-style: none; padding: 0; margin: 0; }
+  .bg-row li + li { margin-top: var(--space-1); }
+  .recent { list-style: none; padding: 0; }
+  .recent li + li { margin-top: var(--space-3); }
+  .recent a { display: grid; grid-template-columns: 4rem 1fr; gap: var(--space-4); color: var(--color-text); align-items: baseline; }
+  .recent a:hover .title { color: var(--color-accent); }
+  .recent time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
+  .recent .title { transition: color var(--transition); }
+  .more { margin-top: var(--space-6); font-size: var(--text-sm); }
+  @media (max-width: 600px) {
+    .intro { grid-template-columns: 1fr; }
+    .bg-row { flex-direction: column; gap: var(--space-1); }
+    .bg-label { width: auto; }
+  }
+</style>

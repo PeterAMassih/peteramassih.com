@@ -1,0 +1,71 @@
+---
+// src/components/SiteHeader.astro
+// Top bar: brand on the left, primary nav, theme toggle on the right.
+// Self-contained: markup + styles + click handler. (The FOUC paint script
+// that sets initial data-theme lives in BaseLayout, since it must run in <head>.)
+---
+
+<header class="site-header">
+  <a href="/" class="brand">Peter Massih</a>
+  <nav class="primary-nav">
+    <a href="/writing/">Peter's Patches</a>
+    <a href="/projects/">Projects</a>
+    <a href="/publications/">Publications</a>
+    <a href="/cv.pdf" target="_blank" rel="noopener">CV</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="Toggle color theme">
+    <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+</header>
+
+<script is:inline>
+  // Effective theme = explicit override else system pref, so the toggle
+  // works correctly even before the user has made an explicit choice.
+  (() => {
+    const root = document.documentElement;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const effective = () => {
+      const s = root.getAttribute('data-theme');
+      return s === 'light' || s === 'dark' ? s : (mql.matches ? 'dark' : 'light');
+    };
+    document.querySelector('.theme-toggle')?.addEventListener('click', () => {
+      const next = effective() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    });
+  })();
+</script>
+
+<style>
+  .site-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: var(--space-4);
+  }
+  .brand { color: var(--color-text); font-weight: 600; font-size: var(--text-base); }
+  .brand:hover { color: var(--color-text); }
+  .primary-nav { display: flex; gap: var(--space-4); font-size: var(--text-sm); margin-right: auto; }
+  .primary-nav a { color: var(--color-text-muted); transition: color var(--transition); }
+  .primary-nav a:hover { color: var(--color-text); }
+  .theme-toggle {
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--color-text-muted); border-radius: 6px;
+    transition: color var(--transition), background var(--transition);
+  }
+  .theme-toggle:hover { color: var(--color-text); background: var(--color-code-bg); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .icon-sun { display: none; }
+    :root:not([data-theme='light']) .icon-moon { display: block; }
+  }
+  :root[data-theme='dark'] .icon-sun { display: none; }
+  :root[data-theme='dark'] .icon-moon { display: block; }
+</style>

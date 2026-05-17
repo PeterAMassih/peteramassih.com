@@ -1,0 +1,66 @@
+---
+// src/layouts/BaseLayout.astro
+// Page shell. <head>, fonts, FOUC theme init. Top bar lives in SiteHeader.
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+
+interface Props { title: string; description?: string; }
+const { title, description = 'Peter Massih — personal site' } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="application/rss+xml" title="Peter's Patches" href="/rss.xml" />
+    {/* Open Graph + Twitter cards — controls the preview when the URL is shared. */}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Peter Massih" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:image" content={new URL('/peter.jpg', Astro.site)} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL('/peter.jpg', Astro.site)} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" />
+    <title>{title}</title>
+    {/* Inline so the stored theme paints on first frame, before render. */}
+    <script is:inline>
+      (() => {
+        const t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
+    <slot name="head" />
+  </head>
+  <body>
+    <SiteHeader />
+    <slot />
+    <footer class="site-footer">
+      <p>© {new Date().getFullYear()} Peter Massih · <a href="/life/">life</a> · <a href="/rss.xml">RSS</a></p>
+    </footer>
+    <script>import '../scripts/copy-code.js';</script>
+  </body>
+
+  <style>
+    .site-footer {
+      max-width: var(--content-width);
+      margin: var(--space-16) auto var(--space-8);
+      padding: 0 var(--space-4);
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      text-align: center;
+    }
+    .site-footer a { color: var(--color-text-muted); transition: color var(--transition); }
+    .site-footer a:hover { color: var(--color-text); }
+  </style>
+</html>

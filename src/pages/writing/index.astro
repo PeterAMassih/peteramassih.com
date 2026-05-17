@@ -1,0 +1,86 @@
+---
+// src/pages/writing/index.astro
+// Chronological writing list, grouped by year. Drafts hidden in production builds.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('writing', ({ data }) =>
+  import.meta.env.PROD ? !data.draft : true,
+)).sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+
+const byYear = new Map<number, typeof posts>();
+for (const p of posts) {
+  const y = p.data.pubDate.getFullYear();
+  if (!byYear.has(y)) byYear.set(y, []);
+  byYear.get(y)!.push(p);
+}
+const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+---
+
+<BaseLayout title="Peter's Patches — Peter Massih" description="Essays and notes by Peter Massih.">
+  <main>
+    <header class="head">
+      <h1>Peter's Patches</h1>
+      <p class="muted">Essays, notes, and the occasional long thought.</p>
+    </header>
+
+    {posts.length === 0 ? (
+      <p class="muted">No posts yet.</p>
+    ) : Array.from(byYear, ([year, group]) => (
+      <section class="year">
+        <h3>{year}</h3>
+        <ul class="posts">
+          {group.map((post) => (
+            <li>
+              <a href={`/writing/${post.id}/`}>
+                <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
+                <span class="title">{post.data.title}</span>
+              </a>
+              <p class="desc">{post.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </main>
+</BaseLayout>
+
+<style>
+  main {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-12); }
+  .head p { margin-top: var(--space-2); }
+  .year { margin-top: var(--space-12); }
+  .year h3 {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-4);
+  }
+  .posts { list-style: none; padding: 0; }
+  .posts li + li { margin-top: var(--space-6); }
+  .posts a {
+    display: grid;
+    grid-template-columns: 5rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+    color: var(--color-text);
+  }
+  .posts a:hover .title { color: var(--color-accent); }
+  .posts time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
+  .posts .title { transition: color var(--transition); }
+  .desc {
+    margin-top: var(--space-1);
+    margin-left: calc(5rem + var(--space-4));
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+  @media (max-width: 600px) {
+    .posts a { grid-template-columns: 1fr; gap: var(--space-1); }
+    .desc { margin-left: 0; }
+  }
+</style>

@@ -1,0 +1,230 @@
+---
+// src/pages/404.astro
+// Custom 404 with an interactive gradient descent visualization.
+// LaTeX rendered server-side via KaTeX; the optimizer formula visible
+// updates as the user switches optimizers (handled in gradient.js).
+import BaseLayout from '../layouts/BaseLayout.astro';
+import katex from 'katex';
+
+const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displayMode });
+
+const lossFormula = k('L(x, y) = -\\sum_i A_i \\exp\\!\\left(-\\frac{\\lVert p - p_i \\rVert^2}{2\\sigma_i^2}\\right)');
+const sgdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
+const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}');
+const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}');
+const lossInline = k('L', false);
+const gradNormInline = k('\\lVert \\nabla L \\rVert', false);
+const metaStep = k('t = ', false);
+const metaLoss = k(',\\quad L = ', false);
+const metaGnorm = k(',\\quad \\lVert \\nabla L \\rVert = ', false);
+const symTheta = k('\\theta', false);
+const symEta = k('\\eta', false);
+const symGradL = k('\\nabla L', false);
+const symBeta = k('\\beta', false);
+const symEps = k('\\epsilon', false);
+const symV = k('v', false);
+const symMV = k('m,\\ v', false);
+const symMHatVHat = k('\\hat m,\\ \\hat v', false);
+const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
+---
+
+<BaseLayout title="Not found — Peter Massih" description="That page doesn't exist.">
+  <link slot="head" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" />
+
+  <main>
+    <header class="head">
+      <h1>404</h1>
+      <p class="muted">That page doesn't exist. Watch a ball find a minimum instead.</p>
+      <p><a href="/">Back to home →</a></p>
+    </header>
+
+    <section class="explainer">
+      <p>The colored map is a loss function <span set:html={lossInline}></span> with four Gaussian wells. An optimizer descends the gradient looking for the global minimum. Three of the wells are local minima where simple methods get stuck.</p>
+      <div class="formula" set:html={lossFormula} />
+    </section>
+
+    <canvas id="grad-canvas" class="canvas" aria-label="Gradient descent visualization"></canvas>
+
+    <div class="legend">
+      <span set:html={lossInline}></span>
+      <span>lower</span>
+      <span class="legend-bar" aria-hidden="true"></span>
+      <span>higher</span>
+    </div>
+
+    <dl class="guide">
+      <dt>contour lines</dt><dd>points of equal loss (closer together means steeper gradient)</dd>
+      <dt>ball</dt><dd>current position of the optimizer</dd>
+      <dt>path</dt><dd>recent trajectory (last 120 steps)</dd>
+      <dt>t</dt><dd>iteration count (current step)</dd>
+      <dt>L</dt><dd>loss at the current position (lower is better)</dd>
+      <dt>‖∇L‖</dt><dd>gradient magnitude (near zero means converged)</dd>
+    </dl>
+
+    <p class="meta">
+      <span set:html={metaStep}></span><span id="step">0</span><span set:html={metaLoss}></span><span id="loss">—</span><span set:html={metaGnorm}></span><span id="gnorm">—</span>
+    </p>
+
+    <div class="controls">
+      <button id="reset" type="button">Reset</button>
+      <button id="toggle" type="button">Play</button>
+      <button id="step-btn" type="button">Step</button>
+      <span class="label">learning rate</span>
+      <button data-lr="0.01" type="button">0.01</button>
+      <button data-lr="0.1" type="button" class="active">0.1</button>
+      <button data-lr="0.5" type="button">0.5</button>
+    </div>
+
+    <div class="controls">
+      <span class="label">optimizer</span>
+      <button data-opt="sgd" type="button" class="active">SGD</button>
+      <button data-opt="momentum" type="button">Momentum</button>
+      <button data-opt="adam" type="button">Adam</button>
+    </div>
+
+    <div class="opt-formula" data-opt-formula="sgd" set:html={sgdFormula} />
+    <div class="opt-formula" data-opt-formula="momentum" set:html={momentumFormula} hidden />
+    <div class="opt-formula" data-opt-formula="adam" set:html={adamFormula} hidden />
+
+    <dl class="glossary">
+      <div data-opt-gloss="sgd momentum adam">
+        <dt set:html={symTheta}></dt><dd>parameter (ball position), updated each step</dd>
+      </div>
+      <div data-opt-gloss="sgd momentum adam">
+        <dt set:html={symEta}></dt><dd>learning rate (constant, selected above)</dd>
+      </div>
+      <div data-opt-gloss="sgd momentum adam">
+        <dt set:html={symGradL}></dt><dd>gradient of L, computed each step</dd>
+      </div>
+      <div data-opt-gloss="momentum" hidden>
+        <dt set:html={symBeta}></dt><dd>exponential decay for past gradients (constant, β = 0.9)</dd>
+      </div>
+      <div data-opt-gloss="momentum" hidden>
+        <dt set:html={symV}></dt><dd>velocity, accumulated from past gradients, updated each step</dd>
+      </div>
+      <div data-opt-gloss="adam" hidden>
+        <dt set:html={symBetaPair}></dt><dd>decay factors (constants, β₁ = 0.9, β₂ = 0.999)</dd>
+      </div>
+      <div data-opt-gloss="adam" hidden>
+        <dt set:html={symMV}></dt><dd>running first and second moments of ∇L, updated each step</dd>
+      </div>
+      <div data-opt-gloss="adam" hidden>
+        <dt set:html={symMHatVHat}></dt><dd>bias-corrected versions of m and v, computed each step</dd>
+      </div>
+      <div data-opt-gloss="adam" hidden>
+        <dt set:html={symEps}></dt><dd>numerical stability constant (ε = 10⁻⁸)</dd>
+      </div>
+    </dl>
+
+    <p class="hint muted">Click anywhere to drop the ball. Switch optimizers to see how each handles local minima.</p>
+  </main>
+</BaseLayout>
+
+<script>import '../scripts/gradient.js';</script>
+
+<style>
+  main {
+    max-width: var(--page-width);
+    margin: var(--space-16) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-6); }
+  .head h1 { font-size: var(--text-3xl); }
+  .head p { margin-top: var(--space-2); }
+  .explainer { margin-bottom: var(--space-4); max-width: 65ch; }
+  .explainer p { margin-top: var(--space-3); color: var(--color-text-muted); }
+  .formula { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .legend-bar {
+    width: 120px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid var(--color-border);
+    background: linear-gradient(to right, var(--color-text), var(--color-code-bg));
+  }
+  .guide {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-1) var(--space-3);
+    margin-top: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    max-width: 65ch;
+  }
+  .guide dt { color: var(--color-text-muted); }
+  .guide dd { margin: 0; }
+  .canvas {
+    width: 100%;
+    height: 60vh;
+    display: block;
+    background: var(--color-code-bg);
+    border-radius: 4px;
+    cursor: crosshair;
+  }
+  .meta {
+    margin-top: var(--space-6);
+    font-family: 'KaTeX_Main', 'Cambria', 'Times New Roman', serif;
+    font-size: var(--text-base);
+    color: var(--color-text-muted);
+  }
+  .glossary {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-1) var(--space-3);
+    margin-top: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    max-width: 65ch;
+  }
+  /* `display: contents` lets the wrapper div participate in the grid as if
+     its dt/dd were direct children, while still being toggleable via `hidden`. */
+  .glossary > div { display: contents; }
+  .glossary > div[hidden] { display: none; }
+  .glossary dt { color: var(--color-text-muted); }
+  .glossary dd { margin: 0; }
+  .controls {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+  }
+  .controls .label {
+    margin-left: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .controls button {
+    padding: 0.35rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+  }
+  .controls button:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+  .controls button.active {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+    background: var(--color-code-bg);
+  }
+  .opt-formula {
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .hint { margin-top: var(--space-3); font-size: var(--text-sm); max-width: 65ch; }
+</style>

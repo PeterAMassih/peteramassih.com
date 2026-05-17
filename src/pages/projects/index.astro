@@ -1,0 +1,86 @@
+---
+// src/pages/projects/index.astro
+// Single chronological list. Each item shows title, month, description, links, tags.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const projects = (await getCollection('projects'))
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short' });
+---
+
+<BaseLayout title="Projects — Peter Massih" description="Things Peter Massih has built.">
+  <main>
+    <header class="head">
+      <h1>Projects</h1>
+      <p class="muted">Selected things I've built, most recent first.</p>
+    </header>
+
+    {projects.length === 0 ? (
+      <p class="muted">No projects yet.</p>
+    ) : (
+      <ul class="list">
+        {projects.map((p) => (
+          <li>
+            <header class="meta">
+              <h2><a href={`/projects/${p.id}/`}>{p.data.title}</a></h2>
+              <time datetime={p.data.pubDate.toISOString()}>{fmt.format(p.data.pubDate)}</time>
+            </header>
+            <p class="desc">{p.data.description}</p>
+            <p class="aux">
+              {p.data.link && <a href={p.data.link}>Site →</a>}
+              {p.data.repo && <a href={p.data.repo}>Source →</a>}
+              {p.data.tags.length > 0 && (
+                <span class="tags">{p.data.tags.join(' · ')}</span>
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  main {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-12); }
+  .head p { margin-top: var(--space-2); }
+  .list { list-style: none; padding: 0; }
+  .list li { padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border); }
+  .list li:last-child { border-bottom: none; }
+  .meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+  .meta h2 { font-size: var(--text-xl); }
+  .meta h2 a { color: var(--color-text); transition: color var(--transition); }
+  .meta h2 a:hover { color: var(--color-accent); }
+  .meta time {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    flex-shrink: 0;
+  }
+  .desc { margin-top: var(--space-2); color: var(--color-text-muted); }
+  .aux {
+    margin-top: var(--space-3);
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .aux .tags {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    margin-left: auto;
+  }
+</style>

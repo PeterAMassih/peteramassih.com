@@ -1,0 +1,67 @@
+---
+// src/pages/writing/[...slug].astro
+// Renders one writing entry. KaTeX CSS loads only for posts with math: true.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('writing', ({ data }) =>
+    import.meta.env.PROD ? !data.draft : true,
+  );
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+type Props = { post: CollectionEntry<'writing'> };
+const { post } = Astro.props;
+const { Content } = await render(post);
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
+  {post.data.math && (
+    <link slot="head" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" />
+  )}
+
+  <article class="post">
+    <header>
+      <p class="meta">
+        <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
+        {post.data.tags && post.data.tags.length > 0 && (
+          <span class="tags"> · {post.data.tags.join(' · ')}</span>
+        )}
+      </p>
+      <h1>{post.data.title}</h1>
+    </header>
+    <div class="body">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .post {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .post > header { margin-bottom: var(--space-12); }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-4);
+  }
+  .post h1 { line-height: 1.2; }
+  /* Body is MDX output — :global since it's not scoped to this component. */
+  .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
+  .body :global(h2) { margin-top: var(--space-8); margin-bottom: var(--space-3); }
+  .body :global(h3) { margin-top: var(--space-6); margin-bottom: var(--space-2); }
+  .body :global(ul), .body :global(ol) { margin-top: var(--space-4); padding-left: var(--space-6); }
+  .body :global(li) { margin-top: var(--space-1); }
+  .body :global(blockquote) {
+    margin: var(--space-6) 0;
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+</style>

@@ -1,0 +1,64 @@
+---
+// src/pages/publications/index.astro
+// Chronological publication list, pulled from the publications collection.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const publications = (await getCollection('publications'))
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+---
+
+<BaseLayout title="Publications — Peter Massih" description="Research papers by Peter Massih.">
+  <main>
+    <header class="head">
+      <h1>Publications</h1>
+      <p class="muted">Most recent first.</p>
+    </header>
+
+    {publications.length === 0 ? (
+      <p class="muted">No publications yet.</p>
+    ) : (
+      <ul class="list">
+        {publications.map((pub) => (
+          <li>
+            <p class="title"><a href={`/publications/${pub.id}/`}>{pub.data.title}</a></p>
+            <p class="authors">
+              {pub.data.authors.map((a, i) => (
+                <>
+                  {i > 0 && ', '}
+                  {a.startsWith('Peter') ? <strong>{a}</strong> : a}
+                </>
+              ))}
+            </p>
+            <p class="venue">
+              {pub.data.venue}
+              {pub.data.arxiv && <> · <a href={pub.data.arxiv} target="_blank" rel="noopener noreferrer">arXiv →</a></>}
+              {pub.data.pdf && <> · <a href={pub.data.pdf} target="_blank" rel="noopener noreferrer">PDF →</a></>}
+              {pub.data.code && <> · <a href={pub.data.code} target="_blank" rel="noopener noreferrer">Code →</a></>}
+            </p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  main {
+    max-width: var(--content-width);
+    margin: var(--space-24) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-12); }
+  .head p { margin-top: var(--space-2); }
+  .list { list-style: none; padding: 0; }
+  .list li { padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border); }
+  .list li:last-child { border-bottom: none; }
+  .title { font-weight: 600; line-height: 1.4; }
+  .title a { color: var(--color-text); transition: color var(--transition); }
+  .title a:hover { color: var(--color-accent); }
+  .authors { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .venue { margin-top: var(--space-2); color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .venue a { color: var(--color-text-muted); }
+  .venue a:hover { color: var(--color-text); }
+</style>

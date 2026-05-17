@@ -10,6 +10,7 @@ export async function GET(context) {
     title: "Peter's Patches",
     description: 'Essays and notes by Peter Massih.',
     site: context.site,
+    customData: '<language>en-us</language>',
     items: posts
       .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
       .map((post) => ({

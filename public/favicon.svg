@@ -1,9 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <style>
-    text { fill: #171717; }
+    .cell { fill: none; stroke: #171717; }
+    .patch { fill: #171717; stroke: #171717; }
     @media (prefers-color-scheme: dark) {
-      text { fill: #fafafa; }
+      .cell { stroke: #fafafa; }
+      .patch { fill: #fafafa; stroke: #fafafa; }
     }
   </style>
-  <text x="16" y="22" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700">pm</text>
+  <g stroke-width="1.5" shape-rendering="crispEdges">
+    <rect class="cell"  x="3"  y="3"  width="6" height="6"/>
+    <rect class="patch" x="9"  y="3"  width="6" height="6"/>
+    <rect class="cell"  x="15" y="3"  width="6" height="6"/>
+    <rect class="cell"  x="3"  y="9"  width="6" height="6"/>
+    <rect class="cell"  x="9"  y="9"  width="6" height="6"/>
+    <rect class="cell"  x="15" y="9"  width="6" height="6"/>
+    <rect class="cell"  x="3"  y="15" width="6" height="6"/>
+    <rect class="cell"  x="9"  y="15" width="6" height="6"/>
+    <rect class="patch" x="15" y="15" width="6" height="6"/>
+  </g>
 </svg>

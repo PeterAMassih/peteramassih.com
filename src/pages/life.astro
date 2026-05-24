@@ -29,6 +29,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <button id="step" type="button">Step</button>
       <button id="random" type="button">Random</button>
       <button id="clear" type="button">Clear</button>
+    </div>
+
+    <div class="controls">
       <span class="label">Speed:</span>
       <button data-fps="3" type="button">slow</button>
       <button data-fps="10" type="button" class="active">normal</button>
@@ -88,7 +91,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     align-items: center;
   }
   .controls .label {
-    margin-left: var(--space-2);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);

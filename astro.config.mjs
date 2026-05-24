@@ -8,6 +8,9 @@ import rehypeKatex from 'rehype-katex';
 export default defineConfig({
   site: 'https://peteramassih.com',
   integrations: [mdx(), sitemap()],
+  // Allow any *.trycloudflare.com hostname so phone testing through a quick tunnel works.
+  // The leading dot tells Vite to treat it as a subdomain wildcard; only applies in dev.
+  vite: { server: { allowedHosts: ['.trycloudflare.com'] } },
   markdown: {
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeKatex],

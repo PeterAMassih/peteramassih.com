@@ -52,6 +52,15 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
     padding: 0 var(--space-4);
   }
   .head { margin-bottom: var(--space-12); }
+  /* The writing index is the only page that is a "publication" rather than UI.
+     One serif heading, system fonts only (no extra download), to mark it as such. */
+  .head h1 {
+    font-family: 'Iowan Old Style', 'Charter', 'Sitka Text', 'Georgia', serif;
+    font-size: 2.75rem;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+  }
   .head p { margin-top: var(--space-2); }
   .year { margin-top: var(--space-12); }
   .year h3 {

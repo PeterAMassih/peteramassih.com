@@ -1,0 +1,23 @@
+---
+title: "EPFL-TA-Meister — LLM as a Teaching Assistant"
+description: "Llama-3-8B fine-tuned as an EPFL teaching assistant: SFT, DPO alignment, RAG over coursebooks, then 4-bit/8-bit/GPTQ/AWQ quantization. Five models shipped to HuggingFace."
+pubDate: 2024-06-15
+tags: ["LLM", "SFT", "DPO", "RAG", "quantization"]
+repo: "https://github.com/PeterAMassih/mnlp-p3"
+---
+
+## What this is
+
+Llama-3-8B fine-tuned as a teaching assistant for EPFL coursework. Three milestones: literature review and preference data, then SFT + DPO, then RAG + quantization.
+
+## How it works
+
+M2: SFT on a preference dataset built from EPFL course material, then DPO on top to align answer style with what students prefer.
+
+M3: RAG over ~5 GB of EPFL coursebooks for grounded answers. Quantized the resulting checkpoints four ways: 4-bit (bitsandbytes), 8-bit, GPTQ-4bit, AWQ-4bit. Benchmarked each for quality vs latency.
+
+## Results
+
+Five models on HuggingFace: `PeterAM4/EPFL-TA-Meister`, `-SFT`, `-GPTQ-4bit`, `-4bit`, `-AWQ-4bit`. All three milestone repos public: `mnlp_p1` (lit review + preference data), `mnlp_p2` (SFT + DPO), `mnlp-p3` (RAG + quantization).
+
+CS-552 Modern NLP at EPFL, team "4-pack".

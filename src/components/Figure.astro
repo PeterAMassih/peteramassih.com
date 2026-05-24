@@ -1,0 +1,48 @@
+---
+// src/components/Figure.astro
+// Wraps an image with an optional caption. When given a local ImageMetadata
+// (from `import foo from './foo.png'`) it routes through Astro's optimizer
+// for responsive sizing + format conversion. When given a string URL, it
+// renders a plain lazy <img> — use this for public/ assets and external URLs.
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  src: ImageMetadata | string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
+const { src, alt, caption, width, height } = Astro.props;
+const isLocal = typeof src !== 'string';
+---
+
+<figure>
+  {isLocal ? (
+    <Image src={src as ImageMetadata} alt={alt} width={width} height={height} />
+  ) : (
+    <img src={src as string} alt={alt} width={width} height={height} loading="lazy" decoding="async" />
+  )}
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  figure {
+    margin: var(--space-8) 0;
+  }
+  figure :global(img) {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 4px;
+  }
+  figcaption {
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+    text-align: center;
+    line-height: 1.5;
+  }
+</style>

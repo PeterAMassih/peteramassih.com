@@ -1,0 +1,25 @@
+---
+title: "3D-BlockGen — Diffusion Models for Brick-Compatible 3D Generation"
+description: "Two-stage diffusion pipeline generating buildable LEGO models from text. Transformer-based UNet3D conditioned on CLIP, 542k voxelized Objaverse samples, greedy LegoLization converts voxel output to physical bricks."
+pubDate: 2025-01-16
+tags: ["diffusion", "3D", "PyTorch", "CLIP"]
+repo: "https://github.com/PeterAMassih/3D-BlockGen"
+---
+
+## What this is
+
+Diffusion model that generates LEGO-compatible 3D objects from text. Two stages: shape first, then color. A LegoLization step turns the voxel output into real brick layouts.
+
+## How it works
+
+Stage 1 is a UNet3D with cross-attention on CLIP text embeddings, denoising a 32³ voxel grid into a shape. Stage 2 reuses the UNet3D, takes the shape plus the text, and predicts color per voxel.
+
+Training data: 542,292 Objaverse models, voxelized, three rotations each. Fine-tuning data: a cleaner 11,464-sample subset.
+
+LegoLization runs after diffusion. It maps the voxel grid onto standard LEGO brick sizes, so the model output is something you can actually build.
+
+## Results
+
+Open-sourced everything: code, weights, training set, eval set. Datasets on HuggingFace as `peteram/3d-blockgen` and `peteram/3d-blockgen-finetune`.
+
+Master's research at EPFL IVRL with Martin Everaert, Eric Bezzam, and Prof. Sabine Süsstrunk.

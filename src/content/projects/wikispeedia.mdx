@@ -1,0 +1,29 @@
+---
+title: "Are We Playing Wikispeedia All Wrong?"
+description: "Mixed Linear Model over 75k+ Wikispeedia gameplay paths (n=50,138) identifies semantic-similarity navigation as the dominant strategy: β=−21.3 s, p<0.001."
+pubDate: 2024-12-20
+tags: ["data analysis", "NetworkX", "mixed-effects", "TF-IDF"]
+repo: "https://github.com/epfl-ada/ada-2024-project-5pack"
+link: "https://epfl-ada.github.io/ada-2024-project-5pack/"
+---
+
+## What this is
+
+Study of 76k+ Wikispeedia gameplay paths to find which navigation strategy actually shortens completion time. Players take 2.4× longer than the shortest path on average. Plenty of room to study which heuristics help.
+
+## How it works
+
+Data: 51k completed paths, 25k abandoned. Tested four strategies:
+
+- **Hub-based**: route through high-PageRank pages.
+- **Semantic**: click the link closest to the target in TF-IDF space.
+- **Top-link**: click links high in the page layout.
+- **Backtracking**: revisit earlier pages.
+
+Fit a Mixed Linear Model with backward selection (n=50,138). Per-game difficulty as a random effect, each strategy's contribution to completion time as the fixed effects.
+
+## Results
+
+Semantic navigation wins: β = −21.3 s per unit semantic-increase score (p&lt;0.001). Top-link helps too (β = −8.2 s). Backtracking hurts (β = +37.5 s). Hub usage barely moves the needle (β = +2.4 s).
+
+CS-401 Applied Data Analysis at EPFL, team "5pack". Full write-up at the linked site.

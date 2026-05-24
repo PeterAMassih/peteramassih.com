@@ -1,0 +1,10 @@
+---
+title: "ACME Client (RFC 8555)"
+description: "Standards-compliant ACME certificate-issuance client. Full HTTP-01 and DNS-01 challenge flows against the Pebble test CA."
+pubDate: 2022-12-22
+tags: ["security", "PKI", "Python"]
+---
+
+Certificate-issuance client for ACME (RFC 8555), the protocol Let's Encrypt uses. Talks to a local Pebble test CA. `client.py` drives the full flow: account registration, order placement, challenge, finalization, certificate download. Both challenge types work end-to-end: HTTP-01 spins up a Flask server that returns the challenge token on `/.well-known/acme-challenge/`; DNS-01 spins up a `dnslib` authoritative DNS server that serves the TXT challenge on demand. EC keys and x509 CSRs are generated with the `cryptography` library.
+
+ETH Zurich Network Security.

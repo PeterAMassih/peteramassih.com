@@ -1,0 +1,10 @@
+---
+title: "Cloud-Based Schedulers for Mixed Workloads"
+description: "Co-scheduling memcached against PARSEC batch workloads on a Kubernetes cluster. Ibench interference profiling across CPU/L1d/L1i/L2/LLC/membw; exponential anti-burst regression policy."
+pubDate: 2023-06-09
+tags: ["Kubernetes", "GCP", "scheduling"]
+---
+
+Cluster scheduler that runs latency-sensitive workloads (memcached) alongside batch jobs (PARSEC) while keeping tail-latency under SLA. Part 1 profiles interference with `ibench` across the cache hierarchy (L1d, L1i, L2, LLC) and memory bandwidth. Part 2 measures memcached tail-latency under different co-tenants using `memcache-perf`. Parts 3 and 4 build a Python policy that throttles batch jobs when latency spikes, using an exponential-regression anti-burst model. Deployed on GCP via Kubernetes.
+
+ETH Zurich Cloud Computing Architecture.

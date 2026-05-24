@@ -1,0 +1,28 @@
+---
+title: "Reinforcement Learning on MountainCar-v0"
+description: "DQN, DQN+auxiliary rewards, and DQN+RND benchmarked on Gymnasium's MountainCar-v0. A direction-aware throttle reward cuts training from 300 to 200 episodes."
+pubDate: 2024-06-09
+tags: ["RL", "DQN", "PyTorch", "Gymnasium"]
+repo: "https://github.com/PeterAMassih/RL-MountainCar"
+---
+
+## What this is
+
+DQN variants on Gymnasium's MountainCar-v0: vanilla DQN, DQN with a hand-designed auxiliary reward, and DQN with Random Network Distillation. Goal: see what actually helps under sparse rewards.
+
+## How it works
+
+Four agents, all from scratch in PyTorch:
+
+- **Random baseline** to set the floor.
+- **DQN** with experience replay and a target network.
+- **DQN + auxiliary reward**: added a direction-aware throttle bonus that rewards pushing the cart in the direction it's already moving. Speeds up the swing-up oscillation that solves the task.
+- **DQN + RND**: intrinsic exploration bonus for novel states.
+
+Gymnasium 0.29 on Python 3.10. One end-to-end notebook runs all four agents and plots the learning curves.
+
+## Results
+
+The direction-aware reward cut episodes-to-solve from 300 to ~200 for vanilla DQN. RND helped exploration early but didn't match the auxiliary-reward variant's final policy. Report PDF in the repo.
+
+CS-456 ANN & RL at EPFL.

@@ -1,0 +1,19 @@
+---
+title: "paraphrasing — DeepSeek-R1-Distill-Qwen-7B + LoRA"
+description: "Reasoning-model fine-tune for paraphrase generation. Multi-domain LoRA training across literary, technical, and academic text. BERTScore 0.9521 beats BART and T5 on the same evaluation set."
+pubDate: 2025-07-29
+tags: ["LLM", "LoRA", "fine-tuning"]
+repo: "https://github.com/PeterAMassih/paraphrasing"
+---
+
+## What this is
+
+LoRA fine-tune of DeepSeek-R1-Distill-Qwen-7B for paraphrasing. The model keeps its chain-of-thought during training, so it reasons before producing a paraphrase.
+
+## How it works
+
+Built a multi-domain training set: literary fiction, technical docs (React, TensorFlow), academic papers, and news. Generated gold paraphrases with OpenAI as SFT targets. Trained with LoRA to keep the parameter count small.
+
+## Results
+
+BERTScore 0.9521, BLEU diversity 0.5135, edit distance 0.3439, syntactic diversity 0.1472, harmonic 0.4684. Beats BART and T5 on the same eval set.

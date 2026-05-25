@@ -1,0 +1,84 @@
+---
+// src/pages/stack.astro
+// Falling-tetromino game with synthesized Korobeiniki audio.
+// Game logic in src/scripts/stack.js; this file is markup + scoped styling.
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Stack — Peter Massih" description="A minimal falling-tetromino game with synthesized Korobeiniki.">
+  <main>
+    <h1>Stack</h1>
+
+    <canvas id="stack-canvas" class="canvas" aria-label="Falling tetromino playfield" width="300" height="600"></canvas>
+
+    <p class="meta">
+      score <span id="score">0</span> · high <span id="high">0</span> · lines <span id="lines">0</span> · level <span id="level">1</span>
+    </p>
+
+    <div class="controls">
+      <button id="toggle" type="button">pause</button>
+      <button id="restart" type="button">restart</button>
+      <button id="sound" type="button" aria-pressed="false">sound: off</button>
+    </div>
+
+    <p class="hint">← → move · ↑ rotate · ↓ soft drop · space hard drop · p pause</p>
+  </main>
+</BaseLayout>
+
+<script>import '../scripts/stack.js';</script>
+
+<style>
+  main {
+    max-width: var(--content-width);
+    margin: var(--space-16) auto var(--space-16);
+    padding: 0 var(--space-4);
+    text-align: center;
+  }
+  h1 { margin-bottom: var(--space-8); }
+  .canvas {
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    aspect-ratio: 1 / 2;
+    margin: 0 auto var(--space-4);
+    background: var(--color-code-bg);
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .meta {
+    margin-top: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    letter-spacing: 0.02em;
+  }
+  .controls {
+    margin-top: var(--space-6);
+    display: flex;
+    gap: var(--space-6);
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .controls button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color var(--transition);
+  }
+  .controls button:hover { color: var(--color-text); }
+  .controls button[aria-pressed='true'] { color: var(--color-accent); }
+  .hint {
+    margin-top: var(--space-6);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  @media (max-width: 480px) {
+    .controls { gap: var(--space-4); }
+    .hint { font-size: 0.75rem; }
+  }
+</style>

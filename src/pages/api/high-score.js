@@ -1,11 +1,13 @@
 // src/pages/api/high-score.js
 // Astro server endpoint for the global high score, deployed inside the
 // Cloudflare Worker bundle by @astrojs/cloudflare. The SESSION KV binding
-// (configured on the Cloudflare project) is reached through
-// `locals.runtime.env.SESSION`.
+// (declared in wrangler.jsonc) is reached through the cloudflare:workers
+// virtual module — Astro 6's replacement for the removed locals.runtime.env.
 //
 // GET  /api/high-score                 → { score }
 // POST /api/high-score { score: int }  → { score, updated }
+
+import { env } from 'cloudflare:workers';
 
 // Opt out of static prerendering so this file runs as a server endpoint
 // inside the Worker, not as a baked HTML response.
@@ -23,8 +25,7 @@ function json(data, init = {}) {
   return new Response(JSON.stringify(data), { ...init, headers });
 }
 
-export async function GET({ locals }) {
-  const env = locals.runtime.env;
+export async function GET() {
   const stored = await env.SESSION.get(KEY);
   const score = parseInt(stored || '0', 10);
   return json({ score }, {
@@ -33,9 +34,7 @@ export async function GET({ locals }) {
   });
 }
 
-export async function POST({ request, locals }) {
-  const env = locals.runtime.env;
-
+export async function POST({ request }) {
   let body;
   try {
     body = await request.json();

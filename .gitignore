@@ -27,3 +27,9 @@ pnpm-debug.log*
 dist/
 .astro/
 
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

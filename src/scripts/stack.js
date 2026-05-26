@@ -166,16 +166,23 @@ function spawn() {
 // Global high score lives in a Cloudflare KV namespace, fronted by a Pages
 // Function at /api/high-score. Both calls are tolerant of network failure —
 // if the endpoint is unreachable the game still plays, the high just shows 0.
+// Logging is loud on purpose for now; can be quieted once we trust the path.
 function loadHighScore() {
   fetch(HIGH_SCORE_URL)
-    .then((r) => r.json())
-    .then((data) => {
+    .then(async (r) => {
+      if (!r.ok) throw new Error(`GET ${r.status} ${r.statusText}`);
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new Error(`GET non-JSON response (${ct || 'no content-type'})`);
+      }
+      const data = await r.json();
+      console.log('[stack] high-score GET →', data);
       if (typeof data.score === 'number' && data.score > highScore) {
         highScore = data.score;
         updateMeta();
       }
     })
-    .catch(() => {});
+    .catch((err) => console.warn('[stack] high-score GET failed:', err.message));
 }
 
 function saveHighScore() {
@@ -183,7 +190,13 @@ function saveHighScore() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ score: highScore }),
-  }).catch(() => {});
+  })
+    .then(async (r) => {
+      if (!r.ok) throw new Error(`POST ${r.status} ${r.statusText}`);
+      const data = await r.json();
+      console.log('[stack] high-score POST →', data);
+    })
+    .catch((err) => console.warn('[stack] high-score POST failed:', err.message));
 }
 
 

@@ -73,7 +73,7 @@ const SOFT_REPEAT = 30;
 const LOCK_DELAY = 500;
 const CLEAR_DURATION = 280; // ms; how long the line-clear flash lasts
 
-const HIGH_SCORE_KEY = 'stack:high';
+const HIGH_SCORE_URL = '/api/high-score';
 
 
 /* ── Board ───────────────────────────────────────────────────────────────── */
@@ -163,13 +163,27 @@ function spawn() {
   }
 }
 
+// Global high score lives in a Cloudflare KV namespace, fronted by a Pages
+// Function at /api/high-score. Both calls are tolerant of network failure —
+// if the endpoint is unreachable the game still plays, the high just shows 0.
 function loadHighScore() {
-  const stored = localStorage.getItem(HIGH_SCORE_KEY);
-  highScore = stored ? parseInt(stored, 10) || 0 : 0;
+  fetch(HIGH_SCORE_URL)
+    .then((r) => r.json())
+    .then((data) => {
+      if (typeof data.score === 'number' && data.score > highScore) {
+        highScore = data.score;
+        updateMeta();
+      }
+    })
+    .catch(() => {});
 }
 
 function saveHighScore() {
-  try { localStorage.setItem(HIGH_SCORE_KEY, String(highScore)); } catch {}
+  fetch(HIGH_SCORE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ score: highScore }),
+  }).catch(() => {});
 }
 
 
@@ -526,8 +540,14 @@ function handleTouchEnd(e) {
   e.preventDefault();
   if (paused || gameOver || clearing) return;
 
-  const totalDx = touchLastX - touchStartX;
-  const totalDy = touchLastY - touchStartY;
+  // touchLastX/Y only advance when a discrete-step threshold is crossed, so
+  // they don't reflect the real finger position on release. Read it from the
+  // event itself — that's where an upward-only swipe shows up.
+  const t = (e.changedTouches && e.changedTouches[0]) || null;
+  const endX = t ? t.clientX : touchLastX;
+  const endY = t ? t.clientY : touchLastY;
+  const totalDx = endX - touchStartX;
+  const totalDy = endY - touchStartY;
 
   if (!touchMoved && Math.abs(totalDx) < TAP_SLOP && Math.abs(totalDy) < TAP_SLOP) {
     rotate();

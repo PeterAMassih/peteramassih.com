@@ -21,7 +21,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <button id="sound" type="button" aria-pressed="false">sound: off</button>
     </div>
 
-    <p class="hint">← → move · ↑ rotate · ↓ soft drop · space hard drop · p pause</p>
+    <p class="hint hint-keyboard">← → move · ↑ rotate · ↓ soft drop · space hard drop · p pause</p>
+    <p class="hint hint-touch">drag ← → move · tap rotate · drag ↓ soft drop · swipe ↑ hard drop</p>
   </main>
 </BaseLayout>
 
@@ -44,6 +45,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     background: var(--color-code-bg);
     border-radius: 4px;
     image-rendering: pixelated;
+    /* Stop the browser from claiming swipes (scroll, back-nav, pull-to-refresh). */
+    touch-action: none;
   }
   .meta {
     margin-top: var(--space-3);
@@ -76,6 +79,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
+  }
+  .hint-touch { display: none; }
+  /* Coarse-pointer, no-hover devices get the touch hint instead of the keyboard one. */
+  @media (hover: none) and (pointer: coarse) {
+    .hint-keyboard { display: none; }
+    .hint-touch { display: block; }
   }
   @media (max-width: 480px) {
     .controls { gap: var(--space-4); }

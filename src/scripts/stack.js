@@ -470,6 +470,73 @@ function handleKeyUp(e) {
 }
 
 
+/* ── Touch input ─────────────────────────────────────────────────────────── */
+
+// Drag horizontally to shift the piece (one column per SWIPE_CELL of travel).
+// Drag downward to soft-drop. A short stationary tap rotates. An upward flick
+// on release is a hard drop. Tapping the canvas while game-over restarts.
+const SWIPE_CELL = 28;
+const SWIPE_HARD = 60;
+const TAP_SLOP = 10;
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchLastX = 0;
+let touchLastY = 0;
+let touchMoved = false;
+
+function handleTouchStart(e) {
+  if (e.touches.length !== 1) return;
+  e.preventDefault();
+  if (gameOver) { resetAndStart(); return; }
+  const t = e.touches[0];
+  touchStartX = touchLastX = t.clientX;
+  touchStartY = touchLastY = t.clientY;
+  touchMoved = false;
+}
+
+function handleTouchMove(e) {
+  if (e.touches.length !== 1) return;
+  e.preventDefault();
+  if (paused || gameOver || clearing || !current) return;
+  const t = e.touches[0];
+
+  const dx = t.clientX - touchLastX;
+  if (Math.abs(dx) >= SWIPE_CELL) {
+    const cells = Math.trunc(dx / SWIPE_CELL);
+    const dir = Math.sign(cells);
+    for (let i = 0; i < Math.abs(cells); i++) move(dir);
+    touchLastX += cells * SWIPE_CELL;
+    touchMoved = true;
+  }
+
+  const dy = t.clientY - touchLastY;
+  if (dy >= SWIPE_CELL) {
+    const drops = Math.trunc(dy / SWIPE_CELL);
+    for (let i = 0; i < drops; i++) {
+      softDrop();
+      if (!current || clearing) break;
+    }
+    touchLastY += drops * SWIPE_CELL;
+    touchMoved = true;
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  if (paused || gameOver || clearing) return;
+
+  const totalDx = touchLastX - touchStartX;
+  const totalDy = touchLastY - touchStartY;
+
+  if (!touchMoved && Math.abs(totalDx) < TAP_SLOP && Math.abs(totalDy) < TAP_SLOP) {
+    rotate();
+  } else if (totalDy < -SWIPE_HARD) {
+    hardDrop();
+  }
+}
+
+
 /* ── Controls + meta ─────────────────────────────────────────────────────── */
 
 let scoreEl, highEl, linesEl, levelEl, toggleBtn, restartBtn, soundBtn;
@@ -671,12 +738,32 @@ function stopMusic() {
   if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
 }
 
+// iOS Safari runs Web Audio in the "ambient" audio session by default, which
+// the hardware silent switch mutes. Playing any HTMLAudioElement flips the
+// session to "playback" (volume-only, ignores the silent switch). Run on the
+// first sound-on so visitors don't have to know about the iOS quirk.
+let silentModeUnlocked = false;
+function unlockSilentMode() {
+  if (silentModeUnlocked) return;
+  silentModeUnlocked = true;
+  try {
+    const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+    a.volume = 0;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});
+  } catch (_) {}
+}
+
 function toggleSound() {
   soundOn = !soundOn;
   soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
   soundBtn.textContent = soundOn ? 'sound: on' : 'sound: off';
-  if (soundOn && !paused && !gameOver) startMusic();
-  else stopMusic();
+  if (soundOn) {
+    unlockSilentMode();
+    if (!paused && !gameOver) startMusic();
+  } else {
+    stopMusic();
+  }
 }
 
 
@@ -757,6 +844,10 @@ function init() {
   bindButton(soundBtn, toggleSound);
   window.addEventListener('keydown', handleKey);
   window.addEventListener('keyup', handleKeyUp);
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+  canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
   // Pause music + drop held-key state when the tab is hidden so it doesn't keep
   // playing in the background and the game doesn't snap on resume.

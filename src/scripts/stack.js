@@ -276,12 +276,14 @@ function lock() {
 function completeLineClear() {
   if (!clearing) return;
   const cleared = clearing.rows.length;
-  // Remove from the highest row index down so splice doesn't shift the others.
+  // Splice the full rows out first, highest index down so earlier removals
+  // don't shift the indices still to come. Only then drop in the replacement
+  // empty rows: unshifting inside the splice loop re-shifts every index after
+  // the first removal, so later splices hit the wrong rows — which left full
+  // rows stranded on triples and tetrises (only ever two lines appeared to clear).
   const sorted = clearing.rows.slice().sort((a, b) => b - a);
-  for (const r of sorted) {
-    board.splice(r, 1);
-    board.unshift(Array(COLS).fill(0));
-  }
+  for (const r of sorted) board.splice(r, 1);
+  for (let i = 0; i < cleared; i++) board.unshift(Array(COLS).fill(0));
   lines += cleared;
   score += SCORE[cleared] * level;
   if (score > highScore) { highScore = score; saveHighScore(); }

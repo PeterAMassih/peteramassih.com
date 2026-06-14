@@ -1,12 +1,13 @@
 // src/scripts/gradient.js
 // Interactive gradient descent on a Gaussian-mixture loss landscape.
-// Loss = -Σᵢ Aᵢ·exp(-‖p−pᵢ‖² / 2σᵢ²) — three shallow wells (local minima)
-// + one deeper well (global minimum). Vanilla SGD often gets stuck in a
-// shallow well from common starting points; Momentum/Adam tend to escape.
+// Loss = -Σᵢ Aᵢ·exp(-[(x-xᵢ)² + (y-yᵢ)²] / 2σᵢ²). Three shallow wells are
+// local minima and one deeper well is the global minimum. Plain gradient
+// descent often gets stuck in a shallow well from a common start. Momentum
+// and Adam tend to escape.
 
-// WELLS — hand-tuned parameters for this demo, not from any benchmark.
+// WELLS holds hand-tuned parameters for this demo, not from any benchmark.
 // There is no canonical "Gaussian mixture for gradient descent" test
-// function in the literature; common ones (Rosenbrock, Himmelblau, Beale)
+// function in the literature. Common ones (Rosenbrock, Himmelblau, Beale)
 // don't tell the local-vs-global trap story we want.
 //
 // Design constraints these four numbers satisfy:
@@ -16,9 +17,9 @@
 //   2. Three shallow wells of equal depth (A = 2.0) plus one clearly
 //      deeper well (A = 3.2). The 60% depth gap makes the global minimum
 //      visually dominant while keeping local minima deep enough to trap
-//      vanilla SGD from a nearby start.
+//      plain gradient descent from a nearby start.
 //   3. Slightly wider sigma on the deep well (1.6 vs 1.3) so its basin
-//      of attraction is the largest — most starting points converge there
+//      of attraction is the largest, and most starting points converge there
 //      unless dropped close to a shallow well.
 //   4. Deep well at (1.5, 1.5), deliberately not in a corner, so the
 //      dominant feature sits in the visual center-right of the canvas.
@@ -26,7 +27,7 @@ const WELLS = [
   { x: -2.5, y: -2.5, A: 2.0, s: 1.3 },
   { x:  2.5, y: -2.0, A: 2.0, s: 1.3 },
   { x: -2.0, y:  2.5, A: 2.0, s: 1.3 },
-  { x:  1.5, y:  1.5, A: 3.2, s: 1.6 }, // deepest — global minimum
+  { x:  1.5, y:  1.5, A: 3.2, s: 1.6 }, // deepest well, the global minimum
 ];
 const WORLD = 5;
 const F_MIN = -4.5;
@@ -58,7 +59,7 @@ function grad(x, y) {
 }
 
 // Actual local minima of the combined function. Well centers are NOT
-// the local minima when wells overlap — the tails of other wells shift
+// the local minima when wells overlap. The tails of other wells shift
 // each minimum by a small amount. Find them numerically once at load time.
 function findMin(startX, startY) {
   let x = startX, y = startY;
@@ -81,7 +82,7 @@ const state = {
   running: false,
 };
 let lr = 0.1;
-let optimizer = 'sgd';
+let optimizer = 'gd';
 
 function reset(x, y) {
   state.x = x; state.y = y;
@@ -92,7 +93,7 @@ function reset(x, y) {
   state.active = true;
 }
 
-function stepSgd() {
+function stepGd() {
   const [gx, gy] = grad(state.x, state.y);
   state.x -= lr * gx;
   state.y -= lr * gy;
@@ -119,7 +120,7 @@ function stepAdam() {
   state.y -= lr * (state.my / bc1) / (Math.sqrt(state.vy / bc2) + eps);
 }
 function doStep() {
-  if (optimizer === 'sgd') stepSgd();
+  if (optimizer === 'gd') stepGd();
   else if (optimizer === 'momentum') stepMomentum();
   else stepAdam();
   state.step++;
@@ -209,7 +210,7 @@ function renderHeatmap() {
   }
   hctx.putImageData(data, 0, 0);
 
-  // Mark each actual local minimum (not the well centers — those differ
+  // Mark each actual local minimum (not the well centers, which differ
   // by a few pixels because of inter-well gradient contributions).
   hctx.strokeStyle = colors.accent;
   hctx.lineWidth = 1;
@@ -224,7 +225,7 @@ function renderHeatmap() {
 
 function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  // GPU-accelerated blit; respects the dpr transform so it fills the whole canvas.
+  // GPU-accelerated blit. Respects the dpr transform so it fills the whole canvas.
   ctx.drawImage(heatmapCanvas, 0, 0, w, h);
 
   if (state.path.length > 1) {

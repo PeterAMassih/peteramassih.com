@@ -1,22 +1,30 @@
 ---
 // src/pages/404.astro
 // Custom 404 with an interactive gradient descent visualization.
-// LaTeX rendered server-side via KaTeX; the optimizer formula visible
+// LaTeX is rendered server-side via KaTeX. The visible optimizer formula
 // updates as the user switches optimizers (handled in gradient.js).
 import BaseLayout from '../layouts/BaseLayout.astro';
 import katex from 'katex';
 
 const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displayMode });
 
-const lossFormula = k('L(x, y) = -\\sum_{i=1}^{4} A_i \\exp\\!\\left(-\\frac{\\lVert p - p_i \\rVert^2}{2\\sigma_i^2}\\right)');
-const sgdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
+// Squared distance from (x, y) to a well center (x_i, y_i). Shared between the
+// loss and its gradient so the two rendered formulas can never drift apart.
+const sqDist = '(x - x_i)^2 + (y - y_i)^2';
+const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} A_i \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right)`);
+const gradFormula = k(`\\nabla L(x, y) = \\sum_{i=1}^{4} \\frac{A_i}{\\sigma_i^2} \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right) \\begin{pmatrix} x - x_i \\\\ y - y_i \\end{pmatrix}`);
+const gdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
 const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}');
 const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}');
 const lossInline = k('L', false);
-const gradNormInline = k('\\lVert \\nabla L \\rVert', false);
 const metaStep = k('t = ', false);
 const metaLoss = k(',\\quad L = ', false);
 const metaGnorm = k(',\\quad \\lVert \\nabla L \\rVert = ', false);
+// loss-landscape symbols (defined in a glossary directly under the loss formula)
+const symPos = k('\\theta = (x, y)', false);
+const symAi = k('A_i', false);
+const symCenter = k('(x_i,\\ y_i)', false);
+const symSigmaI = k('\\sigma_i', false);
 const symTheta = k('\\theta', false);
 const symEta = k('\\eta', false);
 const symGradL = k('\\nabla L', false);
@@ -39,8 +47,16 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     </header>
 
     <section class="explainer">
-      <p>The colored map is a loss function <span set:html={lossInline}></span> with four Gaussian wells. An optimizer descends the gradient looking for the global minimum. Three of the wells are local minima where simple methods get stuck.</p>
+      <p>The colored map is a loss function <span set:html={lossInline}></span> built from four Gaussian wells. Each term in the sum is a bump centered on a well, and the leading minus sign turns every bump into a basin. The deepest, widest well is the global minimum. The other three are shallower local minima where simple methods get stuck.</p>
       <div class="formula" set:html={lossFormula} />
+      <dl class="glossary">
+        <dt set:html={symPos}></dt><dd>the ball's position, the value the optimizers below update</dd>
+        <dt set:html={symAi}></dt><dd>how deep a well is (larger is deeper)</dd>
+        <dt set:html={symCenter}></dt><dd>where a well is centered, at its bump's peak</dd>
+        <dt set:html={symSigmaI}></dt><dd>how wide a well is (larger spreads its basin)</dd>
+      </dl>
+      <p>An optimizer never sees the whole map. It knows only the gradient <span set:html={symGradL}></span> at its current position, which points uphill toward steeper loss. It steps the other way, downhill:</p>
+      <div class="formula" set:html={gradFormula} />
     </section>
 
     <canvas id="grad-canvas" class="canvas" aria-label="Gradient descent visualization"></canvas>
@@ -80,23 +96,24 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
 
     <div class="controls">
       <span class="label">optimizer</span>
-      <button data-opt="sgd" type="button" class="active">SGD</button>
+      <button data-opt="gd" type="button" class="active">GD</button>
       <button data-opt="momentum" type="button">Momentum</button>
       <button data-opt="adam" type="button">Adam</button>
     </div>
 
-    <div class="opt-formula" data-opt-formula="sgd" set:html={sgdFormula} />
+    <div class="opt-formula" data-opt-formula="gd" set:html={gdFormula} />
     <div class="opt-formula" data-opt-formula="momentum" set:html={momentumFormula} hidden />
     <div class="opt-formula" data-opt-formula="adam" set:html={adamFormula} hidden />
+    <p class="opt-note muted" data-opt-formula="gd">Here <span set:html={symGradL}></span> is the exact gradient computed above, so this is plain gradient descent. Replace it with a noisy minibatch estimate and the same rule becomes stochastic gradient descent (SGD).</p>
 
     <dl class="glossary">
-      <div data-opt-gloss="sgd momentum adam">
+      <div data-opt-gloss="gd momentum adam">
         <dt set:html={symTheta}></dt><dd>parameter (ball position), updated each step</dd>
       </div>
-      <div data-opt-gloss="sgd momentum adam">
+      <div data-opt-gloss="gd momentum adam">
         <dt set:html={symEta}></dt><dd>learning rate (constant, selected above)</dd>
       </div>
-      <div data-opt-gloss="sgd momentum adam">
+      <div data-opt-gloss="gd momentum adam">
         <dt set:html={symGradL}></dt><dd>gradient of L, computed each step</dd>
       </div>
       <div data-opt-gloss="momentum" hidden>
@@ -136,7 +153,9 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
   .head p { margin-top: var(--space-2); }
   .explainer { margin-bottom: var(--space-4); max-width: 65ch; }
   .explainer p { margin-top: var(--space-3); color: var(--color-text-muted); }
-  .formula { margin-top: var(--space-3); font-size: var(--text-sm); }
+  /* overflow-x lets the wider gradient (with its column vector) scroll on
+     narrow screens instead of forcing the page wider. */
+  .formula { margin-top: var(--space-3); font-size: var(--text-sm); overflow-x: auto; }
   .legend {
     display: flex;
     align-items: center;
@@ -227,6 +246,11 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     margin-top: var(--space-3);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
+  }
+  .opt-note {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    max-width: 65ch;
   }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); max-width: 65ch; }
 </style>

@@ -11,7 +11,7 @@ const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displ
 // Squared distance from (x, y) to a well center (x_i, y_i). Shared between the
 // loss and its gradient so the two rendered formulas can never drift apart.
 const sqDist = '(x - x_i)^2 + (y - y_i)^2';
-const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} A_i \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right)`);
+const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} \\underbrace{A_i}_{\\text{depth}}\\, \\exp\\!\\left(-\\frac{\\overbrace{${sqDist}}^{\\text{squared distance to well } i}}{2\\,{\\underbrace{\\sigma_i}_{\\text{width}}}^{2}}\\right)`);
 const gradFormula = k(`\\nabla L(x, y) = \\sum_{i=1}^{4} \\frac{A_i}{\\sigma_i^2} \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right) \\begin{pmatrix} x - x_i \\\\ y - y_i \\end{pmatrix}`);
 const gdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
 const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}');
@@ -20,11 +20,12 @@ const lossInline = k('L', false);
 const metaStep = k('t = ', false);
 const metaLoss = k(',\\quad L = ', false);
 const metaGnorm = k(',\\quad \\lVert \\nabla L \\rVert = ', false);
-// loss-landscape symbols (defined in a glossary directly under the loss formula)
+// loss-landscape symbols (used in the formula labels, glossary, and values table)
 const symPos = k('\\theta = (x, y)', false);
 const symAi = k('A_i', false);
 const symCenter = k('(x_i,\\ y_i)', false);
 const symSigmaI = k('\\sigma_i', false);
+const symI = k('i', false);
 const symTheta = k('\\theta', false);
 const symEta = k('\\eta', false);
 const symGradL = k('\\nabla L', false);
@@ -47,14 +48,25 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     </header>
 
     <section class="explainer">
-      <p>The colored map is a loss function <span set:html={lossInline}></span> built from four Gaussian wells. Each term in the sum is a bump centered on a well, and the leading minus sign turns every bump into a basin. The deepest, widest well is the global minimum. The other three are shallower local minima where simple methods get stuck.</p>
+      <p>The colored map is a loss function <span set:html={lossInline}></span> built from four Gaussian wells. Each term in the sum is a bump centered on a well, and the leading minus sign turns every bump into a basin. Three are shallow local minima where simple methods get stuck. The fourth is deeper and wider, the global minimum.</p>
       <div class="formula" set:html={lossFormula} />
       <dl class="glossary">
         <dt set:html={symPos}></dt><dd>the ball's position, the value the optimizers below update</dd>
-        <dt set:html={symAi}></dt><dd>how deep a well is (larger is deeper)</dd>
         <dt set:html={symCenter}></dt><dd>where a well is centered, at its bump's peak</dd>
-        <dt set:html={symSigmaI}></dt><dd>how wide a well is (larger spreads its basin)</dd>
       </dl>
+      {/* Values mirror WELLS in src/scripts/gradient.js. Keep the two in sync. */}
+      <p>Each well in the sum uses these exact values:</p>
+      <table class="wells">
+        <thead>
+          <tr><th set:html={symI}></th><th set:html={symCenter}></th><th set:html={symAi}></th><th set:html={symSigmaI}></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>(&minus;2.5, &minus;2.5)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>2</td><td>(2.5, &minus;2.0)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>3</td><td>(&minus;2.0, 2.5)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>4</td><td>(1.5, 1.5)</td><td>3.2</td><td>1.6</td></tr>
+        </tbody>
+      </table>
       <p>An optimizer never sees the whole map. It knows only the gradient <span set:html={symGradL}></span> at its current position, which points uphill toward steeper loss. It steps the other way, downhill:</p>
       <div class="formula" set:html={gradFormula} />
     </section>

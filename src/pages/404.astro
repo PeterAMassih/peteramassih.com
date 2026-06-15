@@ -196,6 +196,26 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
   }
   .guide dt { color: var(--color-text-muted); }
   .guide dd { margin: 0; }
+  .wells {
+    margin-top: var(--space-3);
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+  }
+  /* Right padding spaces the columns; the first column sits flush at the
+     left margin and the last drops its trailing pad. */
+  .wells th, .wells td {
+    padding: var(--space-2) var(--space-6) var(--space-2) 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .wells th {
+    color: var(--color-text-subtle);
+    font-weight: 400;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .wells th:last-child, .wells td:last-child { padding-right: 0; }
   .canvas {
     width: 100%;
     height: 60vh;

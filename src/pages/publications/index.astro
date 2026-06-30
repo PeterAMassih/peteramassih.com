@@ -33,6 +33,7 @@ const publications = (await getCollection('publications'))
             <p class="venue">
               {pub.data.venue}
               {pub.data.arxiv && <> · <a href={pub.data.arxiv} target="_blank" rel="noopener noreferrer">arXiv →</a></>}
+              {pub.data.doi && <> · <a href={pub.data.doi} target="_blank" rel="noopener noreferrer">DOI →</a></>}
               {pub.data.pdf && <> · <a href={pub.data.pdf} target="_blank" rel="noopener noreferrer">PDF →</a></>}
               {pub.data.code && <> · <a href={pub.data.code} target="_blank" rel="noopener noreferrer">Code →</a></>}
             </p>

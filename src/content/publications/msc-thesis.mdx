@@ -1,0 +1,29 @@
+---
+title: "Three Modalities of Production AI in Financial Services: Retrieval, Generation, and Detection"
+description: "Master's thesis on three production AI systems deployed at a Swiss private bank, spanning retrieval, generation, and anomaly detection."
+pubDate: 2026-03-27
+authors: ["Peter A. Massih"]
+venue: "MSc Thesis, EPFL (VILAB) & Lombard Odier, 2026"
+doi: "https://doi.org/10.5281/zenodo.21074981"
+pdf: "/master-thesis.pdf"
+---
+
+This thesis is about three AI systems built and put into production at Lombard Odier, a Swiss private bank. Each one solves a different problem with a different kind of model, and all three run under FINMA regulation, used every day by bankers, fund screeners, and tax specialists. One lesson kept coming back: the integration work takes more effort than building the models, and a system matched to its task beats a more general one. The work was done at EPFL's Visual Intelligence and Learning Laboratory (VILAB), in collaboration with Lombard Odier.
+
+## Retrieval
+
+A retrieval-augmented generation (RAG) pipeline that answers questions over the bank's research documents. Every chunk keeps the page it came from, so each answer cites the exact page. It indexes a 52-page prospectus in 44 seconds instead of about 16 minutes, and points to the right page 95% of the time on a 20-question French benchmark. A sweep over 30 GGUF quantization variants shrinks the embedding model by 70% with almost no quality loss.
+
+## Generation
+
+ALBA is an on-premise advisory pipeline. It combines a client's portfolio with curated summaries of the bank's macro views and equity research, then drafts structured buy and sell recommendations. A 3B-active-parameter model running locally scores 96% on advisory quality, against 47% for GPT-5.1 with web search. The takeaway: for this kind of structured financial reasoning, good context beats a bigger model.
+
+## Detection
+
+A regression model (ElasticNet) learns the normal relationships between the columns of a tax statement, then flags new statements that break those patterns. It needs no labeled examples of errors. Domain-specific preprocessing cut false positives from 90% to 5% while keeping 80% precision on the cases it escalates, and it runs across the bank's Swiss client base.
+
+## Artifacts
+
+- [Full thesis (PDF)](/master-thesis.pdf)
+- [GGUF quantized embedding models](https://huggingface.co/PeterAM4/Qwen3-Embedding-0.6B-GGUF) on Hugging Face
+- [PrivilEdge RAG benchmark dataset](https://huggingface.co/datasets/PeterAM4/priviledge-prospectus-rag-benchmark) on Hugging Face

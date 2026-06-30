@@ -39,7 +39,10 @@ const publications = defineCollection({
     authors: z.array(z.string()),
     venue: z.string(),
     arxiv: z.url().optional(),
-    pdf: z.url().optional(),
+    doi: z.url().optional(),
+    // Allowed to be a local asset path (e.g. /master-thesis.pdf), unlike the
+    // external arxiv/code links, so this is a plain string rather than z.url().
+    pdf: z.string().optional(),
     code: z.url().optional(),
     tags: z.array(z.string()).optional(),
   }).strict(),

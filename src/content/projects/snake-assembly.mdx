@@ -1,10 +1,10 @@
 ---
 title: "Snake on Nios II Assembly"
-description: "Snake game in pure Nios II assembly on the Gecko4EPFL FPGA. 96-LED display, memory-mapped button input, checkpoint save/restore every 10 points."
+description: "Snake game in pure Nios II assembly on the Gecko4Education FPGA. 96-LED display, memory-mapped button input, checkpoint save/restore every 10 points."
 pubDate: 2021-12-22
 tags: ["assembly", "FPGA"]
 ---
 
-Snake game in pure Nios II assembly, running on the Gecko4Education-EPFL FPGA board against the multicycle Nios II processor from lecture. The 8×12 LED matrix is the display. Head and tail coordinates, score, and food position live at fixed memory addresses (`HEAD_X` at `0x1000`, etc.). Button input is memory-mapped at `0x2030`. Every time the score crosses a multiple of 10, the whole game state is snapshotted into a checkpoint region; pressing the checkpoint button restores it. Tested in `nios2sim` and on real hardware.
+Snake game in pure Nios II assembly, running on the Gecko4Education FPGA board against the multicycle Nios II processor from lecture. The 8×12 LED matrix is the display. Head and tail coordinates, score, and food position live at fixed memory addresses (`HEAD_X` at `0x1000`, etc.). Button input is memory-mapped at `0x2030`. Every time the score crosses a multiple of 10, the whole game state is snapshotted into a checkpoint region. Pressing the checkpoint button restores it. Tested in `nios2sim` and on real hardware.
 
 CS-208 Computer Architecture at EPFL.

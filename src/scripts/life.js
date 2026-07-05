@@ -1,5 +1,3 @@
-
-
 // src/scripts/life.js
 // Conway's Game of Life — state, rules, rendering, UI bindings.
 // Toroidal grid (edges wrap). Auto-bootstraps when imported.
@@ -41,8 +39,13 @@ let canvas, ctx, cols, rows, grid;
 let running = true, generation = 0, fps = 10, placingPattern = null, last = 0;
 let genEl, popEl, toggleBtn;
 
+/** @return {Uint8Array[]} A rows-by-cols grid of dead cells. */
 const empty = () => Array.from({ length: rows }, () => new Uint8Array(cols));
 
+/**
+ * Sizes the canvas backing store to its CSS box at device resolution and
+ * recomputes the grid dimensions from the new size.
+ */
 function fit() {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
@@ -54,6 +57,7 @@ function fit() {
   rows = Math.floor(h / CELL);
 }
 
+/** Fills the grid with ~28% live cells and resets the generation counter. */
 function randomize() {
   grid = empty();
   for (let r = 0; r < rows; r++)
@@ -62,6 +66,10 @@ function randomize() {
   generation = 0;
 }
 
+/**
+ * Advances the grid one generation under Conway's four rules.
+ * Neighbor lookups wrap at the edges (toroidal topology).
+ */
 function step() {
   const next = empty();
   for (let r = 0; r < rows; r++) {
@@ -79,12 +87,24 @@ function step() {
   generation++;
 }
 
+/**
+ * Stamps a pattern onto the grid, top-left at (startR, startC), wrapping
+ * at the edges.
+ * @param {number[][]} pattern 0/1 rows from PATTERNS.
+ * @param {number} startR Row for the pattern's top-left cell.
+ * @param {number} startC Column for the pattern's top-left cell.
+ */
 function place(pattern, startR, startC) {
   for (let r = 0; r < pattern.length; r++)
     for (let c = 0; c < pattern[r].length; c++)
       if (pattern[r][c]) grid[(startR + r) % rows][(startC + c) % cols] = 1;
 }
 
+/**
+ * Repaints the grid and updates the generation/population counters.
+ * Colors are read from CSS custom properties each frame so theme switches
+ * apply without a listener.
+ */
 function draw() {
   const css = getComputedStyle(document.documentElement);
   ctx.fillStyle = css.getPropertyValue('--color-code-bg').trim();
@@ -98,16 +118,25 @@ function draw() {
   if (popEl) popEl.textContent = pop;
 }
 
+/**
+ * requestAnimationFrame loop, throttled to the selected fps.
+ * @param {number} now Timestamp supplied by requestAnimationFrame.
+ */
 function loop(now) {
   if (running && now - last > 1000 / fps) { step(); draw(); last = now; }
   requestAnimationFrame(loop);
 }
 
+/** Deselects any armed pattern button. */
 function clearPatternSelection() {
   document.querySelectorAll('[data-pattern]').forEach((b) => b.classList.remove('active'));
   placingPattern = null;
 }
 
+/**
+ * Finds the DOM, seeds a random grid, starts the loop, and wires all
+ * controls. Bails silently on pages without the canvas.
+ */
 function init() {
   canvas = document.getElementById('life-canvas');
   if (!canvas) return;
@@ -159,7 +188,18 @@ function init() {
     draw();
   });
 
-  window.addEventListener('resize', () => { fit(); draw(); });
+  // fit() changes rows/cols, so the old grid must be rebuilt at the new
+  // size — indexing it at the new dimensions would throw and kill the loop.
+  // Copy the overlapping region so the population survives the resize.
+  window.addEventListener('resize', () => {
+    const old = grid;
+    fit();
+    grid = empty();
+    for (let r = 0; r < Math.min(old.length, rows); r++)
+      for (let c = 0; c < Math.min(old[r].length, cols); c++)
+        grid[r][c] = old[r][c];
+    draw();
+  });
 }
 
 init();

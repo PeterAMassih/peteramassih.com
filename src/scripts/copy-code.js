@@ -2,6 +2,11 @@
 // Adds a "Copy" button to every <pre>. Hidden until the pre is hovered or
 // the button gets keyboard focus. Idempotent — safe to re-run.
 
+/**
+ * Attaches a copy button to every <pre> on the page that lacks one.
+ * The try/catch stays because clipboard access is permission-gated;
+ * a denied write shows "Failed" instead of breaking the button.
+ */
 function attach() {
   document.querySelectorAll('pre').forEach((pre) => {
     if (pre.querySelector('.copy-btn')) return;

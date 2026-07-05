@@ -38,6 +38,12 @@ const FPS = 30;
 const COLOR_GAMMA = 0.55;
 const CONVERGE_GRAD = 0.001;
 
+/**
+ * Loss at a point: the negated sum of all Gaussian wells.
+ * @param {number} x World x-coordinate.
+ * @param {number} y World y-coordinate.
+ * @return {number} Loss value; more negative is deeper.
+ */
 function f(x, y) {
   let s = 0;
   for (const w of WELLS) {
@@ -47,6 +53,12 @@ function f(x, y) {
   return -s;
 }
 
+/**
+ * Analytic gradient of f.
+ * @param {number} x World x-coordinate.
+ * @param {number} y World y-coordinate.
+ * @return {number[]} [df/dx, df/dy].
+ */
 function grad(x, y) {
   let gx = 0, gy = 0;
   for (const w of WELLS) {
@@ -58,9 +70,15 @@ function grad(x, y) {
   return [gx, gy];
 }
 
-// Actual local minima of the combined function. Well centers are NOT
-// the local minima when wells overlap. The tails of other wells shift
-// each minimum by a small amount. Find them numerically once at load time.
+/**
+ * Descends from a starting point to the nearby local minimum.
+ * Well centers are NOT the local minima when wells overlap — the tails of
+ * other wells shift each minimum slightly, so the true minima are found
+ * numerically once at load time.
+ * @param {number} startX Starting x in world coordinates.
+ * @param {number} startY Starting y in world coordinates.
+ * @return {number[]} [x, y] of the local minimum.
+ */
 function findMin(startX, startY) {
   let x = startX, y = startY;
   for (let i = 0; i < 500; i++) {
@@ -84,6 +102,12 @@ const state = {
 let lr = 0.1;
 let optimizer = 'gd';
 
+/**
+ * Restarts the descent from a point, clearing all optimizer state
+ * (momentum velocity, Adam moments, step count, path history).
+ * @param {number} x Starting x in world coordinates.
+ * @param {number} y Starting y in world coordinates.
+ */
 function reset(x, y) {
   state.x = x; state.y = y;
   state.vx = state.vy = state.mx = state.my = 0;
@@ -93,11 +117,14 @@ function reset(x, y) {
   state.active = true;
 }
 
+/** One plain gradient descent update: θ ← θ − lr·∇f. */
 function stepGd() {
   const [gx, gy] = grad(state.x, state.y);
   state.x -= lr * gx;
   state.y -= lr * gy;
 }
+
+/** One momentum update: v ← βv − lr·∇f, θ ← θ + v, with β = 0.9. */
 function stepMomentum() {
   const beta = 0.9;
   const [gx, gy] = grad(state.x, state.y);
@@ -106,6 +133,8 @@ function stepMomentum() {
   state.x += state.vx;
   state.y += state.vy;
 }
+
+/** One Adam update with bias correction (β₁ = 0.9, β₂ = 0.999). */
 function stepAdam() {
   const b1 = 0.9, b2 = 0.999, eps = 1e-8;
   const [gx, gy] = grad(state.x, state.y);
@@ -119,6 +148,8 @@ function stepAdam() {
   state.x -= lr * (state.mx / bc1) / (Math.sqrt(state.vx / bc2) + eps);
   state.y -= lr * (state.my / bc1) / (Math.sqrt(state.vy / bc2) + eps);
 }
+
+/** Applies one update of the selected optimizer and records the path. */
 function doStep() {
   if (optimizer === 'gd') stepGd();
   else if (optimizer === 'momentum') stepMomentum();
@@ -133,23 +164,43 @@ let canvas, ctx, heatmapCanvas;
 let colors = null;
 let els = null;
 
+/**
+ * Converts canvas pixel coordinates to world coordinates (y flipped).
+ * @param {number} px Pixel x.
+ * @param {number} py Pixel y.
+ * @return {number[]} [x, y] in world space.
+ */
 function pixToWorld(px, py) {
   return [
     (px / canvas.clientWidth) * 2 * WORLD - WORLD,
     -((py / canvas.clientHeight) * 2 * WORLD - WORLD),
   ];
 }
+
+/**
+ * Converts world coordinates to canvas pixel coordinates (y flipped).
+ * @param {number} x World x.
+ * @param {number} y World y.
+ * @return {number[]} [px, py] in CSS pixels.
+ */
 function worldToPix(x, y) {
   return [
     ((x + WORLD) / (2 * WORLD)) * canvas.clientWidth,
     ((WORLD - y) / (2 * WORLD)) * canvas.clientHeight,
   ];
 }
+
+/**
+ * Parses a 6-digit hex color into RGB components.
+ * @param {string} hex Color like "#1a1a1a".
+ * @return {number[]} [r, g, b] in 0–255.
+ */
 function hexToRgb(hex) {
   const v = hex.replace('#', '');
   return [parseInt(v.slice(0,2), 16), parseInt(v.slice(2,4), 16), parseInt(v.slice(4,6), 16)];
 }
 
+/** Caches the current theme's colors from CSS custom properties. */
 function readColors() {
   const css = getComputedStyle(document.documentElement);
   colors = {
@@ -160,17 +211,20 @@ function readColors() {
   };
 }
 
+/** Sizes the main canvas backing store to device resolution for a crisp path + ball. */
 function fit() {
-  // Main canvas at device resolution for crisp path + ball.
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
   canvas.height = canvas.clientHeight * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+/**
+ * Renders the loss heatmap, contour lines, and minima markers to an
+ * offscreen CSS-pixel canvas, so each frame can GPU-blit it with drawImage
+ * instead of a slow per-frame putImageData on a device-sized canvas.
+ */
 function renderHeatmap() {
-  // Render to an offscreen CSS-pixel canvas so drawImage can GPU-blit + scale
-  // each frame, instead of slow per-frame putImageData on a device-sized canvas.
   const { bg, fg, contour } = colors;
   const w = canvas.clientWidth, h = canvas.clientHeight;
   heatmapCanvas = document.createElement('canvas');
@@ -223,6 +277,10 @@ function renderHeatmap() {
   }
 }
 
+/**
+ * Draws one frame: blits the cached heatmap, then overlays the descent
+ * path and ball, and refreshes the step/loss/gradient-norm readouts.
+ */
 function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   // GPU-accelerated blit. Respects the dpr transform so it fills the whole canvas.
@@ -252,13 +310,18 @@ function draw() {
 }
 
 let last = 0;
+
+/**
+ * requestAnimationFrame loop, throttled to FPS. Pauses itself once the
+ * gradient norm drops below CONVERGE_GRAD so we don't burn cycles
+ * redrawing a frozen frame.
+ * @param {number} now Timestamp supplied by requestAnimationFrame.
+ */
 function loop(now) {
   if (state.running && state.active && now - last > 1000 / FPS) {
     doStep();
     draw();
     last = now;
-    // Stop the loop once the ball has effectively converged so we don't
-    // burn cycles redrawing a frozen frame.
     const [gx, gy] = grad(state.x, state.y);
     if (Math.sqrt(gx*gx + gy*gy) < CONVERGE_GRAD && state.step > 5) {
       state.running = false;
@@ -268,8 +331,14 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+/** Re-reads theme colors and re-renders everything after a theme change. */
 function refreshTheme() { readColors(); renderHeatmap(); draw(); }
 
+/**
+ * Finds the DOM, renders the landscape, starts the loop, and wires all
+ * controls (reset, play/pause, single-step, learning rate, optimizer,
+ * click-to-drop, theme changes). Bails silently on pages without the canvas.
+ */
 function init() {
   canvas = document.getElementById('grad-canvas');
   if (!canvas) return;

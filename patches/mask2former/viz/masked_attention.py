@@ -189,8 +189,10 @@ class MaskedAttention(MovingCameraScene):
         self.beat(Restore(frame), rt=1.8)
 
         # ---- shot 3 (0:12-0:20): the stencil -------------------------------
-        hole1 = Ellipse(width=2 * 0.85 * 1.6, height=2 * 0.68 * 1.6)
-        hole1.move_to(CAT_C + np.array([0.55, 0.28, 0.0]))
+        # Imperfect and slightly offset, but still visibly centered on the
+        # cat: too much offset reads as a bug, not a rough first mask.
+        hole1 = Ellipse(width=2 * 0.85 * 1.45, height=2 * 0.68 * 1.45)
+        hole1.move_to(CAT_C + np.array([0.25, 0.14, 0.0]))
         plate = self.make_plate(hole1)
         engraving = Text("−∞", font=FONT_BODY, font_size=64, color=MUTED)
         engraving.scale(0.5).move_to([3.6, -1.5, 0]).set_opacity(0.0)
@@ -201,7 +203,8 @@ class MaskedAttention(MovingCameraScene):
                   engraving.animate.set_opacity(0.5), rt=2.2)
 
         alive1 = [i for i in range(84)
-                  if i < 14 or in_ellipse(self.origins[i], 1.6, (0.55, 0.28))]
+                  if i < 14 or in_ellipse(self.origins[i], 1.45,
+                                          (0.25, 0.14))]
         targets1 = self.phase_targets(alive1)
         self.hold(0.3)
         # The conservation beat, the most important seconds of the scene: the

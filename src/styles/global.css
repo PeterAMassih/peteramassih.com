@@ -48,7 +48,7 @@ code {
 pre {
   position: relative;
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: 0.9375rem; /* 15px, roomier than body-sm for code */
   background: var(--color-code-bg);
   padding: var(--space-4);
   border-radius: 6px;

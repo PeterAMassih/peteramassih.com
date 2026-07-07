@@ -111,7 +111,11 @@ class MaskedAttention(MovingCameraScene):
         # bundle mouth reads as a braid, not two sorted blocks.
         idxs = [i for i in self.slot_order if i in set(alive)]
         n = len(idxs)
-        w = min(TOTAL_WIDTH / max(n, 1), 6.0)
+        # No cap: the survivors must sum to exactly TOTAL_WIDTH so the braid holds
+        # its width through the masking beat. That constancy is the renormalization
+        # the scene exists to show. At the fewest survivors (n=14) each strand is
+        # 6.6 wide, still a clean stroke.
+        w = TOTAL_WIDTH / max(n, 1)
         targets = {}
         for rank, i in enumerate(idxs):
             slot = -THROAT_W / 2 + THROAT_W * (rank + 0.5) / n

@@ -31,3 +31,23 @@ not committed. The static instance matters: Pango mis-tracks the variable TTF.
 
 Final assets are encoded to webm/mp4/gif into `public/assets/m2f/` by
 `export.sh <scene_module> <SceneClass> <asset_name>`.
+
+## Static figure: the model's own prediction (Fig. 2)
+
+`fig_mask_classification.py` is not a Manim scene. It runs the real Mask2Former
+model on one public-domain image and composes the section 2.2 figure
+(`public/assets/m2f/mask_classification.{webp,png}`): the predicted dog mask in
+gold, beside the same mask as a blocky 0/1 grid.
+
+Extra dependencies, on top of the render setup above:
+
+```sh
+uv pip install --python .venv/bin/python torch torchvision transformers scipy
+.venv/bin/python fig_mask_classification.py
+```
+
+The first run downloads the checkpoint (`facebook/mask2former-swin-large-coco-panoptic`,
+~850 MB, cached by Hugging Face) and the source image into `sources/` (not
+committed). Provenance and licensing are documented in the script header: the
+image is CC0 1.0 from Wikimedia Commons, so the figure is redistributable. The
+model runs in eval mode with no sampling, so the output is deterministic.

@@ -3,4 +3,5 @@ media/
 __pycache__/
 frames/
 fonts/
+sources/
 *.log

@@ -39,10 +39,24 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
 </BaseLayout>
 
 <style>
+  /* Prose, the notation table, and math stay at the readable measure and stay
+     aligned; only code blocks and figures break out to --wide-width. */
   .post {
-    max-width: var(--content-width);
+    max-width: var(--wide-width);
     margin: var(--space-24) auto var(--space-16);
     padding: 0 var(--space-4);
+  }
+  .post > header,
+  .body :global(p),
+  .body :global(h2),
+  .body :global(h3),
+  .body :global(ul),
+  .body :global(ol),
+  .body :global(blockquote),
+  .body :global(table),
+  .body :global(.katex-display) {
+    max-width: var(--content-width);
+    margin-inline: auto;
   }
   .post > header { margin-bottom: var(--space-12); }
   .meta {

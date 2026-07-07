@@ -28,7 +28,8 @@
   --space-24: 6rem;
 
   /* Layout */
-  --content-width: 680px;
+  --content-width: 680px;      /* prose, tables, and math: the readable measure */
+  --wide-width: 760px;         /* code blocks and figures break out a little wider */
   --page-width: 768px;
 
   /* Motion */

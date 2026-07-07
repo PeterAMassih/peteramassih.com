@@ -122,7 +122,6 @@ class ShorelineProbes(MovingCameraScene):
         fulcrum = Triangle().scale(0.3).move_to(PIVOT + DOWN * 0.16)
         fulcrum.set_stroke(INK, width=2.0, opacity=0.85)
         fulcrum.set_fill(SLATE, opacity=0.15)
-        self.beat(FadeIn(fulcrum), FadeIn(beam), rt=0.8)
 
         # Keep the probe geometry before the map leaves.
         poly_truth = polygon_of(truth, n=260)
@@ -139,7 +138,11 @@ class ShorelineProbes(MovingCameraScene):
             return False
 
         the_map = VGroup(truth, pred, shore)
-        self.beat(the_map.animate.scale(0.2)
+        # The beam appears as the map is already settling onto the left pan, so
+        # there is no empty, level balance to freeze on: the first beam a viewer
+        # sees is one that is being loaded.
+        self.beat(FadeIn(fulcrum), FadeIn(beam),
+                  the_map.animate.scale(0.2)
                   .move_to(pan_center(-1) + UP * 0.24), rt=2.0)
         the_map.add_updater(lambda m: m.move_to(pan_center(-1) + UP * 0.24))
         # The dense loss: exact, and heavy. Positive angle drops the left

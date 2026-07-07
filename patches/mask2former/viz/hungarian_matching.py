@@ -12,7 +12,7 @@ import numpy as np
 from manim import *  # noqa: F403 -- manim scenes conventionally star-import
 
 from shapes import DOG, DUCK, blob, silhouette, warped
-from tokens import BACKGROUND, EMBER, GOLD, GREEN, HOLLOW, MUTED, SLATE
+from tokens import ACCENT, BACKGROUND, EMBER, GOLD, GREEN, HOLLOW, MUTED, SLATE
 
 config.background_color = BACKGROUND
 
@@ -44,7 +44,11 @@ class Cord:
     """A connector whose geometry is the argument. Its two ends track mobjects,
     so it follows every shuffle, condensation, swap, and gradient pulse."""
 
-    STRAND_COLORS = (GOLD, SLATE, SLATE)
+    # Three distinguishable threads: the composite cost is class + BCE + Dice,
+    # so the strands must not collapse into one rope. Muted teal keeps the third
+    # legible without a garish new hue.
+    STRAND_COLORS = (GOLD, SLATE,
+                     interpolate_color(ManimColor(ACCENT), ManimColor(MUTED), 0.35))
 
     def __init__(self, start_mob, end_mob, calm=5.3, taut=6.3):
         self.start_mob = start_mob
@@ -79,7 +83,7 @@ class Cord:
         n = np.array([-d[1], d[0], 0.0]) / length
         braid = self.braid.get_value()
         spring = self.spring.get_value()
-        amp = 0.04 * braid + 0.10 * spring
+        amp = 0.085 * braid + 0.10 * spring
         turns = max(2.0, length * 1.2) + spring * (3.5 + length * 3.0)
         dim = self.dim.get_value()
         strands = VGroup()
@@ -88,7 +92,7 @@ class Cord:
                 ManimColor(MUTED), ManimColor(base), max(braid, spring))
             # Strain is a tint, not a repaint: once the cord is a braid, the
             # strand identities (class, mask, dice) must stay readable.
-            ember_mix = strain * (0.85 - 0.35 * max(braid, spring))
+            ember_mix = strain * (0.85 - 0.6 * max(braid, spring))
             col = interpolate_color(col, ManimColor(EMBER), ember_mix)
             phase = i * TAU / 3
 

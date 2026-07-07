@@ -119,10 +119,14 @@ class MaskedAttention(MovingCameraScene):
         targets = {}
         for rank, i in enumerate(idxs):
             slot = -THROAT_W / 2 + THROAT_W * (rank + 0.5) / n
-            color = WARM if i < 14 else SLATE
-            # Thick survivors stay translucent enough for the cat to show
-            # through its own light.
-            op = 0.62 if n < 30 else 0.5
+            warm = i < 14
+            color = WARM if warm else SLATE
+            # Warm strands read brighter than the cool crowd, so the few warm
+            # among many cool is visible during the full drink (the small but
+            # nonzero foreground share: softmax never gives it zero). Widths
+            # stay equal, so the total mass is still conserved.
+            base = 0.62 if n < 30 else 0.5
+            op = base if warm else base * 0.6
             targets[i] = strand_curve(self.origins[i], slot, w, color, op)
         for i in range(len(self.origins)):
             if i not in targets:

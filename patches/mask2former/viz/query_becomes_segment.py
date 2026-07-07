@@ -30,6 +30,9 @@ GOLD_LIGHT = interpolate_color(ManimColor(GOLD), ManimColor(BACKGROUND), 0.4)
 GOLD_DEEP = interpolate_color(ManimColor(GOLD), ManimColor(INK), 0.25)
 ACCENT_LIGHT = interpolate_color(ManimColor(ACCENT), ManimColor(BACKGROUND),
                                  0.6)
+# A second instance of the same class needs a clearly different tint: dark teal
+# against teal reads at panel scale where a pale tint does not.
+ACCENT_DARK = interpolate_color(ManimColor(ACCENT), ManimColor(INK), 0.5)
 
 
 def soft_blob(seed, scale, center):
@@ -187,9 +190,12 @@ class QueryBecomesSegment(Scene):
         prism.set_fill(INK, opacity=0.05).move_to(prism_c)
         self.beat(Create(prism), rt=0.8)
 
-        def wedge(color, ang, op, L=1.45):
+        def wedge(color, ang, op, hollow=False, L=1.45):
             w = Polygon([0, 0, 0], [L, 0.26, 0], [L, -0.26, 0])
-            w.set_stroke(width=0).set_fill(color, opacity=op)
+            if hollow:  # the void class: outline only, the series' empty-set mark
+                w.set_stroke(SLATE, width=1.4, opacity=0.5).set_fill(opacity=0)
+            else:
+                w.set_stroke(width=0).set_fill(color, opacity=op)
             return w.rotate(ang * DEGREES, about_point=ORIGIN).shift(
                 prism_c + np.array([0.28, -0.05, 0]))
 
@@ -197,17 +203,30 @@ class QueryBecomesSegment(Scene):
             slot = orb.get_center()
             self.beat(orb.animate.move_to(prism_c + LEFT * 0.85), rt=0.55)
             self.beat(orb.animate.scale(0.7).move_to(prism_c), rt=0.4)
-            # Dispersion fan: candidate classes as soft lobes, no hard rays.
-            fan = VGroup(wedge(SLATE, 22, 0.12), wedge(GOLD_DEEP, 0, 0.16),
-                         wedge(ACCENT, -20, 0.30))
-            keep = {ACCENT: 2, GOLD_DEEP: 1}[tint]
+            # Class selection, not a physics rainbow: the candidate classes fan
+            # out, then all but the true one are pulled back into the prism. The
+            # wide first pass shows the void class as a hollow candidate, so the
+            # K+1 choice reads.
+            if wide:
+                specs = [(ACCENT, 38, 0.16, False), (SLATE, 19, 0.12, False),
+                         (GOLD_DEEP, 0, 0.16, False), (SLATE, -19, 0.10, False),
+                         (SLATE, -38, 0.0, True)]
+            else:
+                specs = [(ACCENT, 26, 0.15, False), (GOLD_DEEP, 3, 0.16, False),
+                         (SLATE, -22, 0.11, False)]
+            fan = VGroup(*[wedge(c, a, o, hollow=h) for c, a, o, h in specs])
+            tint_hex = ManimColor(tint).to_hex()
+            keep = next(k for k, s in enumerate(specs)
+                        if not s[3] and ManimColor(s[0]).to_hex() == tint_hex)
             self.beat(LaggedStart(*[GrowFromPoint(f, prism_c) for f in fan],
-                                  lag_ratio=0.12), rt=0.55 if wide else 0.4)
+                                  lag_ratio=0.1), rt=0.6 if wide else 0.4)
             losers = [f for k, f in enumerate(fan) if k != keep]
-            self.beat(*[FadeOut(f, scale=0.2) for f in losers],
-                      fan[keep].animate.set_fill(opacity=0.42),
-                      rt=0.5 if wide else 0.35)
-            exit_p = fan[keep].get_center_of_mass() + RIGHT * 0.35
+            # Losers retract into the prism; the winner brightens and is worn out.
+            self.beat(*[l.animate.scale(0.12).move_to(prism_c).set_opacity(0)
+                        for l in losers],
+                      fan[keep].animate.set_fill(tint, opacity=0.5),
+                      rt=0.55 if wide else 0.4)
+            exit_p = fan[keep].get_center_of_mass()
             self.beat(orb.animate.scale(1 / 0.7).move_to(exit_p)
                       .set_stroke(tint), glow.animate.set_fill(tint),
                       rt=0.7 if wide else 0.5)
@@ -247,9 +266,9 @@ class QueryBecomesSegment(Scene):
             sem_field.animate.set_fill(opacity=0.05),
             # instance: distinct things (thin ink identity outlines), dimmed
             # stuff
-            ins_a.animate.set_fill(GOLD)
+            ins_a.animate.set_fill(ACCENT)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            ins_b.animate.set_fill(GOLD_LIGHT)
+            ins_b.animate.set_fill(ACCENT_DARK)
             .set_stroke(INK, width=1.1, opacity=0.5),
             ins_dog.animate.set_fill(GOLD_DEEP)
             .set_stroke(INK, width=1.1, opacity=0.5),
@@ -257,12 +276,12 @@ class QueryBecomesSegment(Scene):
             # panoptic: identities AND labeled stuff
             pan_a.animate.set_fill(ACCENT)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            pan_b.animate.set_fill(ACCENT_LIGHT)
+            pan_b.animate.set_fill(ACCENT_DARK)
             .set_stroke(INK, width=1.1, opacity=0.5),
             pan_dog.animate.set_fill(GOLD_DEEP)
             .set_stroke(INK, width=1.1, opacity=0.5),
             pan_field.animate.set_fill(SLATE, opacity=0.24),
             rt=3.4)
-        self.hold(6.8)
+        self.hold(2.5)
         print(f"scene clock: {self.clock:.2f} s")
         self.hold(2.0)

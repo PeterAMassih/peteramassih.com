@@ -73,6 +73,21 @@ def frost(center, opacity):
     return f.move_to(center)
 
 
+def lattice(center, cols, rows):
+    # Token grid for one scale, following the pane's shear. Dot count doubles
+    # per axis from coarse to fine, so panes 32/16/8 carry 1:4:16 dots, the real
+    # stride 32/16/8 token ratio (1024:4096:16384).
+    g = VGroup()
+    for j in range(rows):
+        fy = (j + 0.5) / rows
+        for i in range(cols):
+            fx = (i + 0.5) / cols
+            g.add(Dot([center[0] - PANE_W / 2 + fx * PANE_W + SHEAR * fy,
+                       center[1] - PANE_H / 2 + fy * PANE_H, 0],
+                      radius=0.028).set_fill(SLATE, opacity=0.5))
+    return g
+
+
 class ScalesBreathe(MovingCameraScene):
     def beat(self, *anims, rt=1.0, **kw):
         self.play(*anims, run_time=rt, **kw)
@@ -102,21 +117,23 @@ class ScalesBreathe(MovingCameraScene):
         frost16 = frost(P16_C, 0.3)
 
         pane8 = parallelogram(P8_C, TINT_8)
-        lattice = VGroup(*[Dot([P8_C[0] - PANE_W / 2 + 0.45 + 0.28 * i
-                                + 0.14 * (j % 2),
-                                P8_C[1] - PANE_H / 2 + 0.4 + 0.36 * j, 0],
-                               radius=0.016).set_fill(SLATE, opacity=0.4)
-                           for i in range(24) for j in range(7)])
         duckling = silhouette(DUCK, 0.16, SLATE, fill_opacity=0.75)
         duckling.move_to(P8_C + DUCKLING_LOCAL)
         c8 = VGroup(water_blob(1.05).move_to(P8_C + np.array([-0.5, -0.4, 0])),
                     silhouette(DUCK, 0.58, SLATE, fill_opacity=0.6)
                     .move_to(P8_C + np.array([1.3, 0.15, 0])),
-                    lattice, duckling)
+                    duckling)
         frost8 = frost(P8_C, 0.06)
 
-        stack = [pane32, c32, frost32, pane16, c16, frost16, pane8, c8,
-                 frost8]
+        # Token lattices, one per pane: 6x2, 12x4, 24x8 = 12:48:192 dots = the
+        # 1:4:16 stride 32/16/8 ratio. Density, not mere presence, is the cost.
+        lat32 = lattice(P32_C, 6, 2)
+        lat16 = lattice(P16_C, 12, 4)
+        lat8 = lattice(P8_C, 24, 8)
+        lattices = VGroup(lat32, lat16, lat8)
+
+        stack = [pane32, c32, frost32, lat32, pane16, c16, frost16, lat16,
+                 pane8, c8, frost8, lat8]
 
         # ---- shot 1 (0:00-0:07): the vanishing ------------------------------
         frame = self.camera.frame
@@ -146,8 +163,8 @@ class ScalesBreathe(MovingCameraScene):
         # Density as shimmer: the lattice breathes twice; staying here is
         # heavy.
         for _ in range(2):
-            self.beat(lattice.animate(rate_func=there_and_back)
-                      .set_opacity(0.75), rt=1.3)
+            self.beat(lattices.animate(rate_func=there_and_back)
+                      .set_opacity(0.8), rt=1.3)
         self.hold(1.5)
 
         # ---- shot 3 (0:12-0:22): the breath ---------------------------------
@@ -220,9 +237,9 @@ class ScalesBreathe(MovingCameraScene):
             m.save_state()
         slab_c = np.array([0.0, 0.1, 0.0])
         self.beat(*[m.animate.shift(slab_c - P32_C)
-                    for m in [pane32, c32, frost32]],
+                    for m in [pane32, c32, frost32, lat32]],
                   *[m.animate.shift(slab_c - P8_C)
-                    for m in [pane8, c8, frost8]],
+                    for m in [pane8, c8, frost8, lat8]],
                   rt=2.0)
         slab = VGroup(*stack)
         # The slab sags with weight: it drops, squashes, and bows.

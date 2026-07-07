@@ -10,7 +10,7 @@ part: 1
 
 > **TL;DR.** Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] made a single architecture beat the best specialized models on panoptic, instance, and semantic segmentation at the same time: 57.8 PQ and 50.1 AP on COCO, 57.7 mIoU on ADE20K. It also trained six times faster than its predecessor in a third of the memory. The mechanism is not scale. It is a rewired Transformer decoder whose cross-attention is masked to each query's own predicted foreground, a coarse-to-fine feeding schedule, three zero-cost optimization changes, and a point-sampled loss. This post is written to be the reference on the paper: the lineage of every idea, every equation derived rather than stated, short proofs of the properties the design quietly relies on, the complete recipe, and the ablations ranked by what they actually bought.
 
-This is the first entry in **Peter's Patches**, a series where I take one influential paper and rebuild it in public until nothing in it is taken on faith. Claims trace to the paper (arXiv:2112.01527) and its appendices. Where a statement is my own reading, or an implementation detail from the official repository rather than the paper, I say so.
+Claims trace to the paper (arXiv:2112.01527) and its appendices, and everything is derived on the page rather than asserted. Where a statement is my own reading, or an implementation detail from the official repository rather than the paper, I say so.
 
 **Contents.** [0. Background](#0-the-background-you-need) · [1. The problem, formally](#1-the-segmentation-problem-formally) · [2. Two paradigms](#2-origins-two-paradigms) · [3. Set prediction](#3-the-set-prediction-machinery) · [4. The meta-architecture](#4-the-meta-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-losses-match-on-points-train-on-points) · [9. The recipe](#9-the-full-training-recipe) · [10. Results](#10-results-worth-remembering) · [11. Ablations, ranked](#11-what-actually-mattered) · [12. Limitations](#12-limitations-read-honestly) · [13. Lineage forward](#13-where-it-went-next) · [14. Implementation](#14-implementation-corner) · [15. Test yourself](#15-test-yourself) · [16. References](#16-references) · [17. Citation](#17-citation)
 
@@ -22,17 +22,35 @@ Start here if any of this is new. Skip to §1 if words like attention, embedding
 
 **Feature maps.** A backbone network converts the image into a much smaller grid where each cell holds a vector summarizing a whole patch of the original. That grid is a feature map. Stride 32, written $1/32$, means the grid is 32 times smaller per side, so a 1024 by 1024 image becomes a 32 by 32 summary. Hold onto one consequence: a small, distant object can simply vanish at that scale, because no cell is left to represent it. That single fact drives all of §6.
 
-**Embeddings and the dot product.** The summary vectors are embeddings: vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product $u^\top v$ is the similarity meter. It is large when two vectors agree and near zero when they are unrelated. Keep this close, because the architecture's central trick (§4) is almost embarrassingly simple. A segment's mask is nothing but the dot product between one vector and every pixel's vector, squashed into $[0,1]$.
+**Embeddings and the dot product.** The summary vectors are embeddings: vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product is the similarity meter, and the intuition is one line of algebra. For vectors $u, v$ with angle $\theta$ between them,
 
-**Softmax.** Given a list of scores, softmax exponentiates each one and divides by the total. The result is a set of positive weights that sum to 1, a probability distribution over options. Two properties matter here. First, softmax never outputs an exact zero. Every option keeps a sliver of weight, however unpromising. Second, it only cares about score differences, and it renormalizes whatever survives. The first property causes the central pathology of this paper (§5.1). The second is exactly what the fix exploits (§5.2).
+$$
+u^\top v = \sum_k u_k v_k = \|u\|\,\|v\|\cos\theta,
+$$
 
-**Attention, in one honest paragraph.** Attention is a soft, differentiable dictionary lookup. A query asks a question. Every location in the image offers a key, which says how relevant that location is to the question, and a value, which is what the location contains. Score each location by the dot product of query and key, softmax the scores into weights, and return the weighted average of the values. That is the whole mechanism. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
+so it is large and positive when the vectors point the same way, near zero when they are orthogonal, and negative when they disagree. Keep this close, because the architecture's central trick (§4) is almost embarrassingly simple. A segment's mask is nothing but the dot product between one vector and every pixel's vector, squashed into $[0,1]$.
+
+**Softmax.** Given scores $z_1, \dots, z_n$, softmax turns them into weights
+
+$$
+w_i = \frac{e^{z_i}}{\sum_j e^{z_j}},
+$$
+
+which are positive and sum to 1, a probability distribution over options. Two properties matter here, and both are visible in the formula. First, $e^{z_i} > 0$ always, so softmax never outputs an exact zero. Every option keeps a sliver of weight, however unpromising. Second, shifting every score by the same constant $c$ cancels between numerator and denominator, so only score differences matter, and whatever survives is renormalized to sum to 1. The first property causes the central pathology of this paper (§5.1). The second is exactly what the fix exploits (§5.2).
+
+**Attention, in one honest paragraph.** Attention is a soft, differentiable dictionary lookup. A query asks a question. Every location in the image offers a key, which says how relevant that location is to the question, and a value, which is what the location contains. Score each location by the dot product of query and key, softmax the scores into weights $w_x$, and return the weighted average $\sum_x w_x\, v_x$ of the values. That is the whole mechanism: where to look comes from query times key, what you get back is a blend of values, and the blend weights are a probability distribution. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
 
 **Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in a residual connection: keep what you had, add what you just learned. The decoder in this post is a stack of such layers in which 100 learned query tokens repeatedly read from the image and confer among themselves. After nine layers, each query has become a description of one segment.
 
-**Losses, gradients, training.** A loss is a single number measuring how wrong the current output is. Training nudges every weight downhill on that number. The under-appreciated consequence: a network is shaped less by its wiring than by what exactly you choose to measure. Most of this paper's cleverness lives in the measuring (§3, §8).
+**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Training repeats one step: compute the gradient $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, and move every weight a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The under-appreciated consequence: a network is shaped less by its wiring than by what exactly you choose to measure. Most of this paper's cleverness lives in the measuring (§3, §8).
 
-**IoU.** Intersection over union: the overlap of two regions divided by their combined area. It is 1 when they are identical and 0 when they are disjoint. This is the standard ruler for "are these the same region," and it sits inside every metric in §1.
+**IoU.** Intersection over union for two regions $A$ and $B$:
+
+$$
+\text{IoU}(A, B) = \frac{|A \cap B|}{|A \cup B|},
+$$
+
+which is 1 when they are identical and 0 when they are disjoint. This is the standard ruler for "are these the same region," and it sits inside every metric in §1.
 
 **Sets versus lists.** A list has an order. A set does not. The model's 100 guesses come out in arbitrary order, and a fair grader must not care about that order. This innocent-sounding fact forces all of the machinery in §3.
 
@@ -99,7 +117,7 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 1. Query slots claim segments, a prism separates the what from the where, and the same claimed fields regroup three ways: semantic, instance, panoptic. Nothing re-runs. Only the grouping changes.</figcaption>
+<figcaption>Fig. 1. The gold orbs are the model's query slots, and the gray sheet is the image, holding two ducks and a dog. Each orb casts a soft gold field, its current guess at where its segment is, and the nine tick marks are the decoder layers that sharpen those fields until each one claims a whole object. The triangle is the class head acting as a prism: the tint that survives the refraction is the predicted class, teal for duck, deep gold for dog, so the field answers where and the tint answers what. The three panels at the end regroup the same claimed fields as semantic, instance, and panoptic output. Nothing re-runs. Only the grouping changes.</figcaption>
 </figure>
 
 The observation that motivates the whole research program: these tasks differ only in the semantics of grouping. Yet by 2021 each had its own architecture family, its own tricks, and its own hardware optimizations. Triplicated effort, and specializations that provably do not transfer, as we see next.
@@ -121,6 +139,8 @@ Why this family cannot do instances is worth stating precisely, because it is th
 ### 2.2 Mask classification (2017 onward)
 
 The alternative lineage outputs segments directly. **Mask R-CNN** [[He et al. 2017](#ref-he2017)] predicts a binary mask per detected box. That is mask classification, but tethered to boxes, which caps it at things and makes stuff awkward. **Max-DeepLab** [[Wang et al. 2021](#ref-wang2021)] first made mask prediction end-to-end with a Transformer, for panoptic segmentation specifically. The general form arrived with **DETR** [[Carion et al. 2020](#ref-carion2020)]: represent each potential object as a learned query vector, decode all $N$ of them in parallel, and make the loss order-free via bipartite matching (§3). DETR was a detector, but its panoptic extension already predicted masks from queries. **MaskFormer** [[Cheng et al. 2021](#ref-cheng2021)], by the same first author as Mask2Former, then showed the sharp result: a DETR-style mask classifier is not just a way to unify tasks, it beats per-pixel classifiers at semantic segmentation itself. **K-Net** [[Zhang et al. 2021](#ref-zhang2021)] pushed the set-prediction view into instance segmentation with dynamic kernels.
+
+**The idea, before the formalism.** Stop asking every pixel "what class are you" and start asking "which region are you part of." Mask classification splits segmentation into two independent questions per segment: where it is, a binary mask over the pixels, and what it is, one label for the whole region. In probabilistic terms, each slot $i$ carries a field of per-pixel Bernoulli variables, where $m_i(x)$ is the probability that pixel $x$ belongs to segment $i$, together with one categorical distribution $\hat p_i$ over the $K+1$ classes for what the region is. The mask carries no class information and the class carries no location information. That clean factorization of where from what is exactly what §4 hard-wires into the architecture, one head per question.
 
 Formally, mask classification predicts
 
@@ -146,7 +166,9 @@ $$
 \text{cost}(i,j) = -\,\hat p_{i}(c^{\text{gt}}_j) + \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big).
 $$
 
-This is the DETR convention: raw probability rather than log probability for the class term, plus the same mask terms used in training, active only for real segments. An assignment is a permutation $\sigma \in S_N$, with total cost
+This is the DETR convention: raw probability rather than log probability for the class term, plus the same mask terms used in training, active only for real segments. Why raw probability? A log blows up as $\hat p \to 0$, so one confidently wrong class could dominate the whole cost row. The raw probability stays in $[0,1]$, which keeps the class term on the same footing as the bounded mask terms. That is DETR's stated reason, and it matters only for matching. The training loss still uses the log.
+
+Two small facts make the padding trick legitimate. First, an assignment between the padded sets is a permutation $\sigma \in S_N$, and restricted to the real targets it is exactly an injection of ground truths into predictions, so no real segment can be dropped and no prediction can serve two targets. Second, a prediction paired with $\varnothing$ contributes only its class term $-\hat p_i(\varnothing)$, which does not depend on which padding slot it received, so the minimization is genuinely over "which predictions take the real targets" and nothing else. An assignment has total cost
 
 $$
 \mathcal{C}(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
@@ -173,7 +195,7 @@ One-to-one matching, as opposed to greedy nearest-target, matters for a subtler 
 <source data-src="/assets/m2f/hungarian_matching.webm" type="video/webm">
 <source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 2. Predictions and ground truths as points in segment space, assignments as cords, total cost as a coiled rope that shortens with every swap. The shuffle at the end moves nothing: the loss sees a set.</figcaption>
+<figcaption>Fig. 2. Gold shapes are the model's six predicted masks, green shapes are the three ground-truth segments. Both condense into points on the dotted disc, segment space, where lookalikes land near each other, so distance means dissimilarity. Cords are candidate pairings, and a cord's length is its matching cost: long, red-tinted cords are bad pairings under strain. The coil at the side is the total cost as one physical length of rope, and the Hungarian step is the untangling that shortens it. Leftover gold points take hollow rings, the no-object class, held only by whisper-thin threads (that thinness is the 0.1 down-weighting). When the storage list shuffles at the end, nothing in segment space moves: the loss sees a set.</figcaption>
 </figure>
 
 ### 3.2 The loss terms, with their gradients
@@ -291,7 +313,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 <source src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 3. Attention as light. The open drink returns mostly background. The stencil, which is the previous layer's mask, cuts the outside strands, and the survivors thicken until the beam's total width is what it was. Renormalization, made visible.</figcaption>
+<figcaption>Fig. 3. The gold orb is one query, and the blue-gray expanse below it is the image, with the warm patch as the object this query is becoming. Every thin strand is one image location's contribution to the attention read: cool strands come from background, warm strands from the object, and the braid they form is the value the query drinks, so its total width is the attention mass, which always sums to 1. The plate that slides in is the query's own mask from the previous layer, the engraved minus infinity of Eq. 3. Strands outside its hole are cut, and the survivors visibly thicken until the braid is exactly as wide as before: that conservation is the renormalization of Eq. 2. The breaths that follow are the layers, mask and understanding sharpening each other, and the one-beat collapse near the end is the empty-mask guard rail of §5.3.</figcaption>
 </figure>
 
 ### 5.3 Stability, gradients, and the guard rail
@@ -331,7 +353,7 @@ computed separately for $x$ and $y$ and concatenated. The rung is a learnable sc
 <source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 4. At 1/32 a small object is not representable. At 1/8 everything is, expensively. The decoder breathes coarse to fine, three times, and the fused-slab alternative sags under its own weight.</figcaption>
+<figcaption>Fig. 4. The three panes are the same image at the pyramid's three strides, each wearing its own faint edge tint (the learnable level embedding). The nearly opaque pane is stride 32, where the duckling dissolves because no cell is left to hold it. The clearest pane is stride 8, where everything survives but the shimmering lattice shows how many tokens live there. The gold orb is one query, and its glow is its current mask taking shape. It drinks one pane per layer, coarse to fine, three times: that is the round-robin schedule. The slab that forms and sags is the rejected alternative, all scales at every layer, three times the tokens for no gain.</figcaption>
 </figure>
 
 ### 6.3 The pixel decoder is a free variable, and that is a finding
@@ -387,7 +409,7 @@ The genuinely clever part is that the sampling distribution differs by role.
 <source data-src="/assets/m2f/shoreline_probes.webm" type="video/webm">
 <source data-src="/assets/m2f/shoreline_probes.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 5. All the loss lives on a thin shoreline of disagreement. Weighing the whole map dips the beam. A constellation of probes levels it: same weight, a fraction of the cost. Fair where you compare, concentrated where you learn.</figcaption>
+<figcaption>Fig. 5. The green sheet is a ground-truth mask and the gold sheet is the model's soft prediction. Where they overlap they agree and stay quiet. Where they disagree, the seam ignites ember: a thin shoreline, since most of any two decent masks agrees. The balance beam weighs loss. The whole dense map dips the left pan, and the handful of needles that landed sparks on the shoreline levels it from the right: the unbiased estimate of §8.1, proven by balance rather than arithmetic. The split screen then shows the two sampling rules of §8.2: the same needle constellation stamped identically across pairs for fair matching, and needles magnetized to the shoreline for training. The brief grid at the end is the sample lattice, 112 by 112 points.</figcaption>
 </figure>
 
 ### 8.3 The result grid, read carefully

@@ -25,7 +25,6 @@ DUCK_B = np.array([0.6, -2.2, 0.0])
 DOG_P = np.array([3.6, -1.0, 0.0])
 FILE_Y = 3.0
 GATE_XS = [-1.2 + 0.6 * k for k in range(9)]
-PRISM_C = np.array([5.0, 2.55, 0.0])
 
 GOLD_LIGHT = interpolate_color(ManimColor(GOLD), ManimColor(BACKGROUND), 0.4)
 GOLD_DEEP = interpolate_color(ManimColor(GOLD), ManimColor(INK), 0.25)
@@ -175,37 +174,53 @@ class QueryBecomesSegment(Scene):
                   Transform(glow_d, crisp_d),
                   glow_x.animate.set_fill(opacity=0.0), rt=3.15)
 
-        # ---- shot 3 (0:16-0:22): the prism ---------------------------------
-        prism = Triangle().scale(0.5).move_to(PRISM_C).rotate(-PI / 12)
-        prism.set_stroke(INK, width=1.8, opacity=0.7)
-        prism.set_fill(SLATE, opacity=0.12)
-        self.beat(Create(prism), rt=0.7)
+        # ---- shot 3 (0:16-0:22): the prism ----------------------------------
+        # The class head as refraction: an orb glides into a prism and its
+        # light fans into candidate tints; one lobe survives and the orb rides
+        # out wearing it, while its field takes the same tint. Where stays in
+        # the field, what arrives as color. Gates leave first: they are done.
+        self.beat(FadeOut(gates), rt=0.6)
 
-        # The duck-A orb (file leader) travels into the prism.
-        lead = orbs[0]
-        self.beat(lead.animate.move_to(PRISM_C), rt=1.0)
+        prism_c = np.array([0.0, 1.55, 0.0])
+        prism = Polygon([-0.46, -0.38, 0], [0.46, -0.38, 0], [0.0, 0.5, 0])
+        prism.set_stroke(SLATE, width=2.2, opacity=0.85)
+        prism.set_fill(INK, opacity=0.05).move_to(prism_c)
+        self.beat(Create(prism), rt=0.8)
 
-        ray_dirs = [np.array([0.92, 0.38, 0]), np.array([1.0, 0.02, 0]),
-                    np.array([0.92, -0.34, 0]), np.array([0.8, -0.68, 0])]
-        rays = VGroup(*[Line(PRISM_C + RIGHT * 0.32,
-                             PRISM_C + RIGHT * 0.32 + d * 1.1)
-                        .set_stroke(SLATE, width=1.4, opacity=0.5)
-                        for d in ray_dirs])
-        duck_icon = silhouette(DUCK, 0.2, SLATE, fill_opacity=0.6)
-        duck_icon.move_to(PRISM_C + RIGHT * 0.32 + ray_dirs[1] * 1.45)
-        self.beat(Create(rays, lag_ratio=0.1), FadeIn(duck_icon), rt=0.7)
-        # One ray is the answer: it takes the class tint; the others die.
-        self.beat(rays[1].animate.set_stroke(ACCENT, width=3.0, opacity=0.95),
-                  rays[0].animate.set_stroke(opacity=0.12),
-                  rays[2].animate.set_stroke(opacity=0.12),
-                  rays[3].animate.set_stroke(opacity=0.12),
-                  lead.animate.set_stroke(ACCENT, width=2.6),
-                  rt=1.4)
-        self.hold(1.1)
+        def wedge(color, ang, op, L=1.45):
+            w = Polygon([0, 0, 0], [L, 0.26, 0], [L, -0.26, 0])
+            w.set_stroke(width=0).set_fill(color, opacity=op)
+            return w.rotate(ang * DEGREES, about_point=ORIGIN).shift(
+                prism_c + np.array([0.28, -0.05, 0]))
+
+        def refract(orb, glow, tint, wide):
+            slot = orb.get_center()
+            self.beat(orb.animate.move_to(prism_c + LEFT * 0.85), rt=0.55)
+            self.beat(orb.animate.scale(0.7).move_to(prism_c), rt=0.4)
+            # Dispersion fan: candidate classes as soft lobes, no hard rays.
+            fan = VGroup(wedge(SLATE, 22, 0.12), wedge(GOLD_DEEP, 0, 0.16),
+                         wedge(ACCENT, -20, 0.30))
+            keep = {ACCENT: 2, GOLD_DEEP: 1}[tint]
+            self.beat(LaggedStart(*[GrowFromPoint(f, prism_c) for f in fan],
+                                  lag_ratio=0.12), rt=0.55 if wide else 0.4)
+            losers = [f for k, f in enumerate(fan) if k != keep]
+            self.beat(*[FadeOut(f, scale=0.2) for f in losers],
+                      fan[keep].animate.set_fill(opacity=0.42),
+                      rt=0.5 if wide else 0.35)
+            exit_p = fan[keep].get_center_of_mass() + RIGHT * 0.35
+            self.beat(orb.animate.scale(1 / 0.7).move_to(exit_p)
+                      .set_stroke(tint), glow.animate.set_fill(tint),
+                      rt=0.7 if wide else 0.5)
+            self.beat(orb.animate.move_to(slot), FadeOut(fan[keep]),
+                      rt=0.55 if wide else 0.45)
+
+        refract(orbs[0], glow_a, ACCENT, wide=True)
+        refract(orbs[1], glow_b, ACCENT, wide=False)
+        refract(orbs[2], glow_d, GOLD_DEEP, wide=False)
+        self.hold(0.4)
 
         # ---- shot 4 (0:22-0:35): one machine, three tasks -------------------
-        self.beat(FadeOut(orbs), FadeOut(gates), FadeOut(prism),
-                  FadeOut(rays), FadeOut(duck_icon), rt=0.9)
+        self.beat(FadeOut(orbs), FadeOut(prism), rt=0.9)
 
         panel = VGroup(field, duck_a, duck_b, dog, glow_a, glow_b, glow_d)
         panel_mid = panel.copy()

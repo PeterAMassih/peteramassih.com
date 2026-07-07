@@ -30,7 +30,7 @@ PRISM_C = np.array([5.0, 2.55, 0.0])
 GOLD_LIGHT = interpolate_color(ManimColor(GOLD), ManimColor(BACKGROUND), 0.4)
 GOLD_DEEP = interpolate_color(ManimColor(GOLD), ManimColor(INK), 0.25)
 ACCENT_LIGHT = interpolate_color(ManimColor(ACCENT), ManimColor(BACKGROUND),
-                                 0.4)
+                                 0.6)
 
 
 def soft_blob(seed, scale, center):
@@ -53,9 +53,12 @@ def soft_blob(seed, scale, center):
 def soft_field(shape, color, base_op=0.16):
     # Soft luminance: three nested layers standing in for a falloff, since
     # Cairo has no blur. Fill only; outlines arrive with crystallization.
+    # Every layer is clipped to the image: an affinity field is a dot
+    # product with pixel embeddings and cannot exist off the image.
+    clip = Rectangle(width=11.2, height=4.4).move_to(FIELD_C)
     layers = VGroup()
     for s, f in [(1.0, 1.0), (1.2, 0.55), (1.45, 0.3)]:
-        m = shape.copy().scale(s)
+        m = Intersection(shape.copy().scale(s), clip)
         m.set_stroke(opacity=0).set_fill(color, opacity=base_op * f)
         layers.add(m)
     return layers
@@ -80,7 +83,7 @@ class QueryBecomesSegment(Scene):
         duck_a.move_to(DUCK_A)
         duck_b = silhouette(DUCK, 0.55, SLATE, fill_opacity=0.5, mirror=True)
         duck_b.move_to(DUCK_B)
-        dog = silhouette(DOG, 0.62, SLATE, fill_opacity=0.5).move_to(DOG_P)
+        dog = silhouette(DOG, 0.68, SLATE, fill_opacity=0.62).move_to(DOG_P)
 
         # ---- shot 1 (0:00-0:06): born with opinions -------------------------
         self.beat(FadeIn(field), FadeIn(duck_a), FadeIn(duck_b), FadeIn(dog),
@@ -223,19 +226,26 @@ class QueryBecomesSegment(Scene):
         pan_field, pan_a, pan_b, pan_dog = (panel_right[0], panel_right[4],
                                             panel_right[5], panel_right[6])
         self.beat(
-            # semantic: the two ducks merge into one hue
+            # semantic: the two ducks merge into one hue, no identities
             sem_a.animate.set_fill(ACCENT), sem_b.animate.set_fill(ACCENT),
             sem_dog.animate.set_fill(GOLD_DEEP),
             sem_field.animate.set_fill(opacity=0.05),
-            # instance: distinct things, dimmed stuff
-            ins_a.animate.set_fill(GOLD),
-            ins_b.animate.set_fill(GOLD_LIGHT),
-            ins_dog.animate.set_fill(GOLD_DEEP),
+            # instance: distinct things (thin ink identity outlines), dimmed
+            # stuff
+            ins_a.animate.set_fill(GOLD)
+            .set_stroke(INK, width=1.1, opacity=0.5),
+            ins_b.animate.set_fill(GOLD_LIGHT)
+            .set_stroke(INK, width=1.1, opacity=0.5),
+            ins_dog.animate.set_fill(GOLD_DEEP)
+            .set_stroke(INK, width=1.1, opacity=0.5),
             ins_field.animate.set_fill(opacity=0.04),
-            # panoptic: distinct things and labeled stuff
-            pan_a.animate.set_fill(ACCENT),
-            pan_b.animate.set_fill(ACCENT_LIGHT),
-            pan_dog.animate.set_fill(GOLD_DEEP),
+            # panoptic: identities AND labeled stuff
+            pan_a.animate.set_fill(ACCENT)
+            .set_stroke(INK, width=1.1, opacity=0.5),
+            pan_b.animate.set_fill(ACCENT_LIGHT)
+            .set_stroke(INK, width=1.1, opacity=0.5),
+            pan_dog.animate.set_fill(GOLD_DEEP)
+            .set_stroke(INK, width=1.1, opacity=0.5),
             pan_field.animate.set_fill(SLATE, opacity=0.24),
             rt=3.4)
         self.hold(6.8)

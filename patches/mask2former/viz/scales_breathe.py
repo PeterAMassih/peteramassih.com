@@ -15,7 +15,7 @@ import numpy as np
 from manim import *  # noqa: F403 -- manim scenes conventionally star-import
 
 from shapes import DUCK, silhouette
-from tokens import ACCENT, BACKGROUND, GOLD, INK, SLATE
+from tokens import BACKGROUND, GOLD, INK, SLATE
 
 config.background_color = BACKGROUND
 
@@ -24,9 +24,12 @@ P32_C = np.array([0.9, 2.0, 0.0])
 P16_C = np.array([0.0, 0.1, 0.0])
 P8_C = np.array([-0.9, -1.8, 0.0])
 
-TINT_32 = interpolate_color(ManimColor(SLATE), ManimColor(INK), 0.25)
-TINT_16 = interpolate_color(ManimColor(SLATE), ManimColor(ACCENT), 0.55)
-TINT_8 = interpolate_color(ManimColor(SLATE), ManimColor(GOLD), 0.5)
+# Level embeddings as a lightness ramp within the slate family: dark for
+# coarse, light for fine. Teal and gold are reserved nouns elsewhere in the
+# series and must not label levels.
+TINT_32 = interpolate_color(ManimColor(SLATE), ManimColor(INK), 0.5)
+TINT_16 = ManimColor(SLATE)
+TINT_8 = interpolate_color(ManimColor(SLATE), ManimColor(BACKGROUND), 0.45)
 
 DUCKLING_LOCAL = np.array([-1.7, -0.6, 0.0])
 
@@ -153,15 +156,17 @@ class ScalesBreathe(MovingCameraScene):
 
         orb_c = np.array([4.6, -3.0, 0.0])
         orb = Circle(radius=0.5).move_to(orb_c)
-        orb.set_stroke(GOLD, width=2.5).set_fill(GOLD, opacity=0.1)
-        halo = Circle(radius=0.58).move_to(orb_c)
-        halo.set_stroke(GOLD, width=3, opacity=0.2)
-        # The orb's field: a miniature scene that loads coarse-to-fine.
+        orb.set_stroke(GOLD, width=2.5).set_fill(GOLD, opacity=0.05)
+        halo = Circle(radius=0.54).move_to(orb_c)
+        halo.set_stroke(GOLD, width=2, opacity=0.18)
+        # The orb's field: a miniature scene that loads coarse-to-fine. No
+        # strokes: outline-only is the series' void signature, and the field
+        # must read as filling up, not as empty rings.
         f_water = water_blob(0.22).set_fill(SLATE, opacity=0.0)
         f_duck = silhouette(DUCK, 0.13, SLATE, fill_opacity=0.0)
-        f_duck.shift(np.array([0.12, 0.06, 0]))
+        f_duck.set_stroke(opacity=0)
         f_ducklet = silhouette(DUCK, 0.055, SLATE, fill_opacity=0.0)
-        f_ducklet.shift(np.array([-0.16, -0.1, 0]))
+        f_ducklet.set_stroke(opacity=0)
         f_water.move_to(orb_c + np.array([0, -0.05, 0]))
         f_duck.move_to(orb_c + np.array([0.12, 0.1, 0]))
         f_ducklet.move_to(orb_c + np.array([-0.16, -0.12, 0]))
@@ -176,9 +181,9 @@ class ScalesBreathe(MovingCameraScene):
             self.beat(*[m.animate.shift(delta) for m in orb_parts],
                       *extra, rt=rt)
 
-        ticks = VGroup(*[Line([5.4 + 0.16 * k, -3.75, 0],
-                              [5.4 + 0.16 * k, -3.55, 0])
-                         .set_stroke(SLATE, width=1.6, opacity=0.18)
+        ticks = VGroup(*[Line([5.4 + 0.17 * k, -3.78, 0],
+                              [5.4 + 0.17 * k, -3.54, 0])
+                         .set_stroke(SLATE, width=1.6, opacity=0.15)
                          for k in range(9)])
         self.add(ticks)
 
@@ -186,28 +191,28 @@ class ScalesBreathe(MovingCameraScene):
                  16: P16_C + np.array([4.6, -0.2, 0]),
                  8: P8_C + np.array([4.6, -0.2, 0])}
 
-        # Each visit is a move beat then a drink beat.
-        def sip(target, tick_idx, fills, rt_move, rt_drink):
+        # Each visit is a move beat then a drink beat. Fill animations are
+        # built inside the drink beat: an .animate builder snapshots its
+        # target at creation, so one built before the move would drag the
+        # layer back to a stale position.
+        def sip(target, tick_idx, mob, op, rt_move, rt_drink):
             orb_move(target,
-                     extra=[ticks[tick_idx].animate.set_stroke(opacity=0.55)],
+                     extra=[ticks[tick_idx].animate
+                            .set_stroke(INK, width=2.2, opacity=0.7)],
                      rt=rt_move)
             self.beat(halo.animate(rate_func=there_and_back)
-                      .set_stroke(opacity=0.45), *fills, rt=rt_drink)
+                      .set_stroke(opacity=0.4),
+                      mob.animate.set_fill(opacity=op), rt=rt_drink)
 
         def breath(k, water_op, duck_op, ducklet_op, rt_move, rt_drink):
-            sip(visit[32], 3 * k,
-                [f_water.animate.set_fill(opacity=water_op)],
-                rt_move, rt_drink)
-            sip(visit[16], 3 * k + 1,
-                [f_duck.animate.set_fill(opacity=duck_op)],
-                rt_move, rt_drink)
-            sip(visit[8], 3 * k + 2,
-                [f_ducklet.animate.set_fill(opacity=ducklet_op)],
+            sip(visit[32], 3 * k, f_water, water_op, rt_move, rt_drink)
+            sip(visit[16], 3 * k + 1, f_duck, duck_op, rt_move, rt_drink)
+            sip(visit[8], 3 * k + 2, f_ducklet, ducklet_op,
                 rt_move, rt_drink)
 
-        breath(0, 0.3, 0.35, 0.0, 0.6, 0.4)
-        breath(1, 0.38, 0.5, 0.4, 0.55, 0.35)
-        breath(2, 0.45, 0.62, 0.75, 0.5, 0.3)
+        breath(0, 0.5, 0.5, 0.0, 0.6, 0.4)
+        breath(1, 0.55, 0.62, 0.6, 0.55, 0.35)
+        breath(2, 0.6, 0.72, 0.9, 0.5, 0.3)
         self.hold(0.1)
 
         # ---- shot 4 (0:22-0:30): the alternative, rejected -------------------

@@ -43,13 +43,31 @@ def in_ellipse(p, scale, off=(0.0, 0.0)):
     return dx * dx + dy * dy <= 1.0
 
 
+def in_polygon(p, poly):
+    x, y = p[0], p[1]
+    c = False
+    j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, yi = poly[i][0], poly[i][1]
+        xj, yj = poly[j][0], poly[j][1]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            c = not c
+        j = i
+    return c
+
+
 def make_origins():
+    # Warm strands must be rooted strictly inside the cat, or the tightened
+    # stencil would appear to let the query drink through the mask.
+    inset = silhouette(CAT, CAT_SCALE * 0.86, "#000000").move_to(CAT_C)
+    cat_poly = np.array([inset.point_from_proportion(t)
+                         for t in np.linspace(0, 1, 160, endpoint=False)])
     rng = np.random.default_rng(7)
     cat_pts = []
     while len(cat_pts) < 14:
         p = CAT_C + np.array([rng.uniform(-0.62, 0.62),
-                              rng.uniform(-0.5, 0.5), 0.0])
-        if in_ellipse(p, 0.95):
+                              rng.uniform(-0.62, 0.62), 0.0])
+        if in_polygon(p, cat_poly):
             cat_pts.append(p)
     bg_pts = []
     while len(bg_pts) < 70:
@@ -61,10 +79,11 @@ def make_origins():
 
 
 def strand_curve(origin, slot_x, width, color, opacity, cut=1.0):
-    # Rises from its pixel to its slot in the throat below the orb.
-    q = np.array([slot_x, THROAT_Y, 0.0])
+    # Rises from its pixel through its throat slot and on to the orb's
+    # underside, so the drink is causally closed: no wedge, no severed tips.
+    q = ORB_C + DOWN * 0.44 + RIGHT * slot_x * 0.22
     c1 = origin + UP * 1.3
-    c2 = q + DOWN * 0.9
+    c2 = np.array([slot_x, THROAT_Y, 0.0])
 
     def path(t):
         s = t * cut
@@ -87,8 +106,10 @@ class MaskedAttention(MovingCameraScene):
 
     def phase_targets(self, alive):
         # Alive strands share the conserved total width and evenly split the
-        # throat; dead strands retract toward their origin and dim out.
-        idxs = sorted(alive, key=lambda i: self.origins[i][0])
+        # throat; dead strands retract toward their origin and dim out. Slot
+        # order is a fixed shuffle so warm and cool strands interleave: the
+        # bundle mouth reads as a braid, not two sorted blocks.
+        idxs = [i for i in self.slot_order if i in set(alive)]
         n = len(idxs)
         w = min(TOTAL_WIDTH / max(n, 1), 6.0)
         targets = {}
@@ -129,6 +150,7 @@ class MaskedAttention(MovingCameraScene):
 
         cat_pts, bg_pts = make_origins()
         self.origins = cat_pts + bg_pts
+        self.slot_order = list(np.random.default_rng(5).permutation(84))
 
         field = Rectangle(width=FIELD_W, height=FIELD_H).move_to(FIELD_C)
         field.set_stroke(opacity=0).set_fill(SLATE, opacity=0.1)
@@ -137,14 +159,10 @@ class MaskedAttention(MovingCameraScene):
 
         orb = Circle(radius=0.42).move_to(ORB_C)
         orb.set_stroke(GOLD, width=2.5).set_fill(GOLD, opacity=0.12)
-        halo = Circle(radius=0.5).move_to(ORB_C)
-        halo.set_stroke(GOLD, width=3, opacity=0.22)
-
-        beam = Polygon([-THROAT_W / 2, THROAT_Y, 0],
-                       [THROAT_W / 2, THROAT_Y, 0],
-                       [0.22, ORB_C[1] - 0.44, 0],
-                       [-0.22, ORB_C[1] - 0.44, 0])
-        beam.set_stroke(opacity=0).set_fill(MUD, opacity=0.0)
+        # The halo hugs the rim: the series allows nothing beyond a subtle
+        # halo on gold.
+        halo = Circle(radius=0.455).move_to(ORB_C)
+        halo.set_stroke(GOLD, width=2, opacity=0.18)
 
         # ---- shot 1 (0:00-0:06): the drink --------------------------------
         self.beat(FadeIn(field), FadeIn(cat), rt=0.7)
@@ -155,11 +173,9 @@ class MaskedAttention(MovingCameraScene):
                   halo.animate.set_stroke(opacity=0.35), rt=0.6)
         first = self.phase_targets(range(84))
         self.strands = [first[i] for i in range(84)]
-        self.add(beam)
         self.beat(LaggedStart(*[Create(s) for s in self.strands],
                               lag_ratio=0.015), rt=2.1)
-        self.beat(beam.animate.set_fill(MUD, opacity=0.55),
-                  orb.animate.set_fill(MUD, opacity=0.8), rt=0.9)
+        self.beat(orb.animate.set_fill(MUD, opacity=0.8), rt=0.9)
         self.hold(0.9)
 
         # ---- shot 2 (0:06-0:12): why the background wins -------------------
@@ -187,37 +203,29 @@ class MaskedAttention(MovingCameraScene):
         alive1 = [i for i in range(84)
                   if i < 14 or in_ellipse(self.origins[i], 1.6, (0.55, 0.28))]
         targets1 = self.phase_targets(alive1)
-        # First the cut: outside strands retract and die...
-        self.hold(0.2)
+        self.hold(0.3)
+        # The conservation beat, the most important seconds of the scene: the
+        # dying strands' width drains INTO the survivors in the same motion,
+        # so the bundle's total width never dips. One slow simultaneous
+        # retarget, not a cut followed by a thicken.
         self.beat(*[Transform(self.strands[i], targets1[i])
-                    for i in range(84) if i not in alive1], rt=1.2)
-        self.hold(0.5)
-        # ...then the conservation beat, the most important seconds of the
-        # scene: survivors thicken and respread until the beam's total width
-        # is exactly what it was.
-        self.beat(*[Transform(self.strands[i], targets1[i])
-                    for i in alive1], rt=1.8)
+                    for i in range(84)], rt=2.8)
         self.beat(orb.animate.set_fill(
             interpolate_color(MUD, ManimColor(WARM), 0.6), opacity=0.82),
-            beam.animate.set_fill(
-                interpolate_color(MUD, ManimColor(WARM), 0.6), opacity=0.55),
-            rt=1.1)
-        self.hold(1.0)
+            rt=1.2)
+        self.hold(1.5)
 
         # ---- shot 4 (0:20-0:26): the loop ----------------------------------
         def breathe(hole, alive, warm_mix, rt_morph, rt_cut):
             self.beat(halo.animate(rate_func=there_and_back)
-                      .set_stroke(opacity=0.5),
+                      .set_stroke(opacity=0.4),
                       Transform(plate, self.make_plate(hole)), rt=rt_morph)
             targets = self.phase_targets(alive)
             self.beat(*[Transform(self.strands[i], targets[i])
                         for i in range(84)],
                       orb.animate.set_fill(
                           interpolate_color(MUD, ManimColor(WARM), warm_mix),
-                          opacity=0.85),
-                      beam.animate.set_fill(
-                          interpolate_color(MUD, ManimColor(WARM), warm_mix),
-                          opacity=0.55), rt=rt_cut)
+                          opacity=0.85), rt=rt_cut)
 
         hole2 = Ellipse(width=2 * 0.85 * 1.25, height=2 * 0.68 * 1.25)
         hole2.move_to(CAT_C + np.array([0.2, 0.1, 0.0]))
@@ -231,7 +239,7 @@ class MaskedAttention(MovingCameraScene):
         breathe(hole3, alive3, 0.9, 0.9, 1.0)
         # Third breath: the stencil is true now; the light only settles.
         self.beat(halo.animate(rate_func=there_and_back)
-                  .set_stroke(opacity=0.5),
+                  .set_stroke(opacity=0.4),
                   orb.animate.set_fill(WARM, opacity=0.88), rt=1.4)
         self.hold(0.6)
 
@@ -240,7 +248,6 @@ class MaskedAttention(MovingCameraScene):
         dead = self.phase_targets([])
         self.beat(Transform(plate, self.make_plate(None)),
                   *[Transform(self.strands[i], dead[i]) for i in range(84)],
-                  beam.animate.set_fill(opacity=0.0),
                   orb.animate.set_fill(GOLD, opacity=0.12), rt=1.4)
         # For that layer the stencil simply dissolves: one open drink.
         open_targets = self.phase_targets(range(84))
@@ -249,7 +256,6 @@ class MaskedAttention(MovingCameraScene):
                   engraving.animate.set_opacity(0.0), rt=0.8)
         self.beat(*[Transform(self.strands[i], open_targets[i])
                     for i in range(84)],
-                  beam.animate.set_fill(MUD, opacity=0.55),
                   orb.animate.set_fill(MUD, opacity=0.8), rt=1.2)
         self.hold(0.4)
         # Recover: redraw the stencil and cut again. Transform interpolates
@@ -259,8 +265,7 @@ class MaskedAttention(MovingCameraScene):
         targets3 = self.phase_targets(alive3)
         self.beat(*[Transform(self.strands[i], targets3[i])
                     for i in range(84)],
-                  orb.animate.set_fill(WARM, opacity=0.88),
-                  beam.animate.set_fill(WARM, opacity=0.55), rt=1.2)
+                  orb.animate.set_fill(WARM, opacity=0.88), rt=1.2)
 
         # ---- shot 6 (0:32-0:42): residue ------------------------------------
         big_open = Text("(", font=FONT_BODY, font_size=120, color=MUTED)

@@ -46,16 +46,19 @@ def inside(p, poly):
 
 def sheet_pair(center, scale, seed, offset):
     # The prediction nearly matches the truth: disagreement must live on a
-    # thin irregular band, not in fat lobes.
-    truth = silhouette(DUCK, scale, GREEN, fill_opacity=0.4)
+    # thin irregular band, not in fat lobes. The band is built explicitly as
+    # (truth minus pred) union (pred minus truth) so both kinds of miss glow,
+    # and it sits opaque on top so ember never tints agreeing pixels.
+    truth = silhouette(DUCK, scale, GREEN, fill_opacity=0.35)
     truth.set_stroke(GREEN, width=1.4, opacity=0.7).move_to(center)
-    pred = silhouette(warped(DUCK, 0.05, seed), scale * 0.99, GOLD,
-                      fill_opacity=0.4)
+    pred = silhouette(warped(DUCK, 0.04, seed), scale * 0.99, GOLD,
+                      fill_opacity=0.35)
     pred.set_stroke(GOLD, width=1.4, opacity=0.7)
     pred.move_to(center + np.array([*offset, 0.0]))
-    shore = Difference(Union(truth, pred), Intersection(truth, pred))
-    shore.set_fill(EMBER, opacity=0.5)
-    shore.set_stroke(EMBER, width=1.2, opacity=0.7)
+    shore = Union(Difference(truth.copy(), pred.copy()),
+                  Difference(pred.copy(), truth.copy()))
+    shore.set_fill(EMBER, opacity=0.8)
+    shore.set_stroke(opacity=0)
     return truth, pred, shore
 
 
@@ -73,7 +76,7 @@ class ShorelineProbes(MovingCameraScene):
         self.camera.background_color = BACKGROUND
 
         # ---- shot 1 (0:00-0:06): the shoreline ------------------------------
-        truth, pred, shore = sheet_pair(SHEET_C, 1.5, 21, (0.15, 0.1))
+        truth, pred, shore = sheet_pair(SHEET_C, 1.5, 21, (0.1, 0.07))
         truth.shift(LEFT * 7)
         pred.shift(RIGHT * 7)
         self.add(truth, pred)
@@ -82,8 +85,7 @@ class ShorelineProbes(MovingCameraScene):
         shore.set_fill(opacity=0).set_stroke(opacity=0)
         self.add(shore)
         # Agreement stays quiet; disagreement ignites.
-        self.beat(shore.animate.set_fill(EMBER, opacity=0.5)
-                  .set_stroke(EMBER, width=1.2, opacity=0.7), rt=1.2)
+        self.beat(shore.animate.set_fill(EMBER, opacity=0.8), rt=1.2)
 
         frame = self.camera.frame
         frame.save_state()
@@ -123,18 +125,29 @@ class ShorelineProbes(MovingCameraScene):
         self.beat(FadeIn(fulcrum), FadeIn(beam), rt=0.8)
 
         # Keep the probe geometry before the map leaves.
-        poly_truth = polygon_of(truth)
-        poly_pred = polygon_of(pred)
+        poly_truth = polygon_of(truth, n=260)
+        poly_pred = polygon_of(pred, n=260)
+
+        def on_shore(p):
+            # A needle sparks if any part of its tip touches disagreement;
+            # a cold needle standing in the ember band would break the
+            # mechanism at freeze-frame.
+            for q in (p, p + RIGHT * 0.05, p + LEFT * 0.05,
+                      p + UP * 0.05, p + DOWN * 0.05):
+                if inside(q, poly_truth) != inside(q, poly_pred):
+                    return True
+            return False
 
         the_map = VGroup(truth, pred, shore)
         self.beat(the_map.animate.scale(0.2)
                   .move_to(pan_center(-1) + UP * 0.24), rt=2.0)
         the_map.add_updater(lambda m: m.move_to(pan_center(-1) + UP * 0.24))
-        # The dense loss: exact, and heavy.
-        self.beat(theta.animate.set_value(-0.14), rt=1.8)
+        # The dense loss: exact, and heavy. Positive angle drops the left
+        # arm: the loaded pan must be the one that sinks.
+        self.beat(theta.animate.set_value(0.14), rt=1.8)
 
         dup_truth, dup_pred, dup_shore = sheet_pair(SHEET_C, 1.5, 21,
-                                                    (0.15, 0.1))
+                                                    (0.1, 0.07))
         dup = VGroup(dup_truth, dup_pred, dup_shore)
         self.beat(FadeIn(dup), rt=1.2)
         self.hold(0.4)
@@ -150,7 +163,7 @@ class ShorelineProbes(MovingCameraScene):
                               SHEET_C[1] - 1.4 + 0.35 * j
                               + rng.uniform(-0.11, 0.11),
                               0.0])
-                hot = inside(p, poly_truth) != inside(p, poly_pred)
+                hot = on_shore(p)
                 line = Line(p + UP * 0.09, p + DOWN * 0.09)
                 line.set_stroke(INK, width=1.4, opacity=0.65 if hot else 0.35)
                 needle = VGroup(line)
@@ -173,15 +186,16 @@ class ShorelineProbes(MovingCameraScene):
                           if h])
         self.add(sparks)
         pile_rng = np.random.default_rng(11)
-        pile = [pan_center(1) + UP * (0.1 + 0.09 * (k // 6))
+        pile = [pan_center(1) + UP * (0.18 + 0.09 * (k // 6))
                 + RIGHT * (-0.3 + 0.12 * (k % 6))
                 + RIGHT * pile_rng.uniform(-0.02, 0.02)
                 for k in range(len(sparks))]
         self.beat(LaggedStart(*[s.animate.move_to(q)
                                 for s, q in zip(sparks, pile)],
                               lag_ratio=0.03), rt=1.4)
+        # The pile sits ON the pan, clearly above its rim.
         sparks.add_updater(lambda m, pc=pan_center: m.move_to(
-            pc(1) + UP * 0.22))
+            pc(1) + UP * 0.3))
         # Equal weight from a few hundred points: the beam levels, slowly.
         self.beat(theta.animate.set_value(0.0), rt=1.4,
                   rate_func=rate_functions.ease_in_out_sine)
@@ -196,13 +210,13 @@ class ShorelineProbes(MovingCameraScene):
                   rt=1.0)
 
         pairs = VGroup()
-        for k, (seed, off) in enumerate([(31, (0.12, 0.08)),
-                                         (41, (-0.1, 0.09)),
-                                         (51, (0.1, -0.1))]):
+        for k, (seed, off) in enumerate([(31, (0.08, 0.06)),
+                                         (41, (-0.07, 0.06)),
+                                         (51, (0.07, -0.07))]):
             t, p, s = sheet_pair([-5.4, 2.1 - 1.9 * k, 0], 0.62, seed, off)
             pairs.add(VGroup(t, p, s))
         train_t, train_p, train_s = sheet_pair([2.6, 1.7, 0], 0.95, 61,
-                                               (0.14, 0.1))
+                                               (0.1, 0.07))
         train = VGroup(train_t, train_p, train_s)
         self.beat(FadeIn(pairs, lag_ratio=0.15), FadeIn(train), rt=1.0)
 
@@ -260,8 +274,14 @@ class ShorelineProbes(MovingCameraScene):
         lattice = [np.array([SHEET_C[0] - 2.15 + 0.307 * i,
                              SHEET_C[1] - 1.32 + 0.33 * j, 0.0])
                    for i in range(15) for j in range(9)]
-        self.beat(*[n.animate.move_to(q).set_opacity(0.5)
-                    for n, q in zip(needles, lattice)], rt=1.6)
+        # The lattice is the subject of this beat: shot 4's leftovers recede.
+        self.beat(*[n.animate.move_to(q).set_opacity(0.6)
+                    for n, q in zip(needles, lattice)],
+                  pairs.animate.set_opacity(0.15),
+                  train.animate.set_opacity(0.15),
+                  train_dots.animate.set_opacity(0.12),
+                  *[s.animate(rate_func=smooth).set_opacity(0.15)
+                    for s in stamps], rt=1.6)
         self.hold(0.7)
         self.beat(*[n.animate.move_to(q) for n, q in zip(needles, rest_pos)],
                   rain.animate.set_opacity(0.45), rt=1.4)

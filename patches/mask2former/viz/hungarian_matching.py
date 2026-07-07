@@ -17,7 +17,7 @@ from tokens import ACCENT, BACKGROUND, EMBER, GOLD, GREEN, HOLLOW, MUTED, SLATE
 config.background_color = BACKGROUND
 
 DISC_C = np.array([-1.2, -0.3, 0.0])
-COIL_C = np.array([4.9, 1.6, 0.0])
+COIL_C = np.array([3.6, 1.6, 0.0])  # near the disc, so a swap visibly shortens it
 SHELF_Y = -3.15
 SHELF_X = (3.2, 6.4)
 

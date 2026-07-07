@@ -21,12 +21,14 @@ FONT_BODY = "Geist"
 BRAND = "peteramassih.com · Peter's Patches"
 
 # The site's body face, registered with Pango so Text(font=FONT_BODY) resolves.
-# The TTF is fetched by the setup steps in README.md, not committed.
+# Must be the static instance: Pango mis-tracks the variable TTF (stray gaps
+# after some glyphs). Both files come from the setup steps in README.md.
 import os as _os
 
 import manimpango as _manimpango
 
-_font_path = _os.path.join(_os.path.dirname(__file__), "fonts", "Geist-var.ttf")
+_font_path = _os.path.join(_os.path.dirname(__file__), "fonts",
+                           "Geist-Regular.ttf")
 _manimpango.register_font(_font_path)
 
 # Thin strokes match the site's restraint: 2-3 px at 1080p.

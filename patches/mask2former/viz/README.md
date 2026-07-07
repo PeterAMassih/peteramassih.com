@@ -11,14 +11,16 @@ Requires Homebrew cairo, pango, and ffmpeg (with libvpx for VP9 webm).
 ```sh
 brew install cairo pango ffmpeg
 uv venv --python 3.13 .venv
-uv pip install --python .venv/bin/python manim
+uv pip install --python .venv/bin/python manim fonttools
 mkdir -p fonts
 curl -sL -o "fonts/Geist-var.ttf" \
   "https://github.com/google/fonts/raw/main/ofl/geist/Geist%5Bwght%5D.ttf"
+.venv/bin/python -m fontTools.varLib.instancer fonts/Geist-var.ttf wght=400 \
+  -o fonts/Geist-Regular.ttf
 ```
 
-The Geist variable TTF (OFL) is registered with Pango at runtime by
-`tokens.py`; it is not committed.
+Geist (OFL) is registered with Pango at runtime by `tokens.py`; the fonts are
+not committed. The static instance matters: Pango mis-tracks the variable TTF.
 
 ## Render
 

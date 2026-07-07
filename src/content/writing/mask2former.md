@@ -1,6 +1,6 @@
 ---
 title: "Mask2Former, Dissected: One Transformer to Segment Them All"
-description: "A complete reference on Mask2Former (CVPR 2022): the lineage from FCNs to set prediction, every equation derived, proofs of the properties the design relies on, the exact training recipe, and the ablations ranked by what they bought."
+description: "A ground-up walk through Mask2Former (CVPR 2022): the lineage from FCNs to set prediction, every equation derived, the training recipe, and the ablations ranked by what they bought."
 pubDate: 2026-07-07
 tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
@@ -8,9 +8,9 @@ series: "Peter's Patches"
 part: 1
 ---
 
-> **TL;DR.** Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] made a single architecture beat the best specialized models on panoptic, instance, and semantic segmentation at the same time: 57.8 PQ and 50.1 AP on COCO, 57.7 mIoU on ADE20K. It also trained six times faster than its predecessor in a third of the memory. The mechanism is not scale. It is a rewired Transformer decoder whose cross-attention is masked to each query's own predicted foreground, a coarse-to-fine feeding schedule, three zero-cost optimization changes, and a point-sampled loss. This post is written to be the reference on the paper: the lineage of every idea, every equation derived rather than stated, short proofs of the properties the design quietly relies on, the complete recipe, and the ablations ranked by what they actually bought.
+> **TL;DR.** Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] is one architecture that handles all three segmentation tasks, panoptic, instance, and semantic, and beats the models built specially for each: 57.8 PQ and 50.1 AP on COCO, 57.7 mIoU on ADE20K, trained six times faster than its predecessor in a third of the memory. The trick is not scale. It is a rewired Transformer decoder whose cross-attention is masked to each query's own predicted foreground, a coarse-to-fine feeding schedule, three cheap optimization changes, and a point-sampled loss. This post works through the paper from the ground up: where each idea came from, the equations derived rather than stated, and the ablations ranked by what they actually bought.
 
-Claims trace to the paper (arXiv:2112.01527) and its appendices, and everything is derived on the page rather than asserted. Where a statement is my own reading, or an implementation detail from the official repository rather than the paper, I say so.
+Where a claim is my own reading, or an implementation detail from the official repository rather than the paper itself, I flag it.
 
 **Contents.** [0. Background](#0-the-background-you-need) · [1. The problem, formally](#1-the-segmentation-problem-formally) · [2. Two paradigms](#2-origins-two-paradigms) · [3. Set prediction](#3-the-set-prediction-machinery) · [4. The meta-architecture](#4-the-meta-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-losses-match-on-points-train-on-points) · [9. The recipe](#9-the-full-training-recipe) · [10. Results](#10-results-worth-remembering) · [11. Ablations, ranked](#11-what-actually-mattered) · [12. Limitations](#12-limitations-read-honestly) · [13. Lineage forward](#13-where-it-went-next) · [14. Implementation](#14-implementation-corner) · [15. Test yourself](#15-test-yourself) · [16. References](#16-references) · [17. Citation](#17-citation)
 

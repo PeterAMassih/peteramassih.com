@@ -30,7 +30,7 @@ $$
 
 so it is large and positive when the vectors point the same way, near zero when they are orthogonal, and negative when they disagree. Keep this close, because the architecture's central trick (§4) is almost embarrassingly simple. A segment's mask is nothing but the dot product between one vector and every pixel's vector, squashed into $[0,1]$.
 
-**Softmax.** Given scores $z_1, \dots, z_n$, softmax turns them into weights
+**Softmax.** Given scores $z_1, \dots, z_n$ (pre-softmax scores are called logits, a word that recurs below), softmax turns them into weights
 
 $$
 w_i = \frac{e^{z_i}}{\sum_j e^{z_j}},
@@ -42,7 +42,7 @@ which are positive and sum to 1, a probability distribution over options. Two pr
 
 **Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in a residual connection: keep what you had, add what you just learned. The decoder in this post is a stack of such layers in which 100 learned query tokens repeatedly read from the image and confer among themselves. After nine layers, each query has become a description of one segment.
 
-**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Training repeats one step: compute the gradient $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, and move every weight a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The under-appreciated consequence: a network is shaped less by its wiring than by what exactly you choose to measure. Most of this paper's cleverness lives in the measuring (§3, §8).
+**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Training repeats one step: compute the gradient $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, and move every weight a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$, where $\eta$ is the step size, the learning rate. The under-appreciated consequence: a network is shaped less by its wiring than by what exactly you choose to measure. Most of this paper's cleverness lives in the measuring (§3, §8).
 
 **IoU.** Intersection over union for two regions $A$ and $B$:
 
@@ -60,13 +60,14 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 
 | symbol | meaning |
 |---|---|
-| $I \in \mathbb{R}^{3\times H\times W}$ | input image; $H_l \times W_l$ is the size of the feature map used at decoder layer $l$ |
+| $I \in \mathbb{R}^{3\times H\times W}$ | input image. $H_l \times W_l$ is the size of the feature map used at decoder layer $l$ |
+| $C$ | shared feature dimension of queries and image features (256 in the paper) |
 | $N$ | number of object queries (100 by default, 200 for the largest models) |
 | $K$, $\varnothing$ | number of classes, and the "no object" class appended to them |
 | $(m_i, c_i)$ | prediction $i$: a soft mask $m_i \in [0,1]^{H\times W}$ and a class $c_i \in \{1,\dots,K\}\cup\{\varnothing\}$ |
 | $\hat p_i(c)$ | predicted probability that query $i$ has class $c$ |
-| $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$; $\mathbf{X}_0$ are the learnable input query features |
-| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections; $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
+| $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
+| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
 | $M_{l}$ | binarized mask predictions of layer $l$ (threshold $0.5$), resized to the layer's resolution |
 | $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$: $0$ on foreground, $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
@@ -117,7 +118,7 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 1. The gold orbs are the model's query slots, and the gray sheet is the image, holding two ducks and a dog. Each orb casts a soft gold field, its current guess at where its segment is, and the nine tick marks are the decoder layers that sharpen those fields until each one claims a whole object. The triangle is the class head acting as a prism: the tint that survives the refraction is the predicted class, teal for duck, deep gold for dog, so the field answers where and the tint answers what. The three panels at the end regroup the same claimed fields as semantic, instance, and panoptic output. Nothing re-runs. Only the grouping changes.</figcaption>
+<figcaption>Fig. 1. The gold orbs are the model's query slots, and the blue-gray sheet is the image, holding two ducks and a dog. Each orb casts a soft gold field, its current guess at where its segment is, and the nine tick marks are the decoder layers that sharpen those fields until each one claims a whole object. The triangle is the class head acting as a prism: the tint that survives the refraction is the predicted class, teal for duck, deep gold for dog, so the field answers where and the tint answers what. The three panels at the end regroup the same claimed fields as semantic, instance, and panoptic output. Nothing re-runs. Only the grouping changes.</figcaption>
 </figure>
 
 The observation that motivates the whole research program: these tasks differ only in the semantics of grouping. Yet by 2021 each had its own architecture family, its own tricks, and its own hardware optimizations. Triplicated effort, and specializations that provably do not transfer, as we see next.
@@ -132,7 +133,7 @@ $$
 \mathcal{L} = -\frac{1}{|\Omega|}\sum_{x\in\Omega}\log \hat p_x(g_x),
 $$
 
-where $g_x$ is the true class of pixel $x$. The lineage after it is a search for context: dilated convolutions and pyramid pooling in DeepLab and PSPNet [[Chen et al. 2018](#ref-chen2018), [Zhao et al. 2017](#ref-zhao2017)], self-attention variants [[Wang et al. 2018](#ref-wang2018), [Fu et al. 2019](#ref-fu2019)], and finally pure-Transformer per-pixel models like Segmenter and SegFormer [[Strudel et al. 2021](#ref-strudel2021), [Xie et al. 2021](#ref-xie2021)].
+where $\hat p_x$ is the softmax of the class scores at pixel $x$ and $g_x$ is that pixel's true class. The lineage after it is a search for context: dilated convolutions and pyramid pooling in DeepLab and PSPNet [[Chen et al. 2018](#ref-chen2018), [Zhao et al. 2017](#ref-zhao2017)], self-attention variants [[Wang et al. 2018](#ref-wang2018), [Fu et al. 2019](#ref-fu2019)], and finally pure-Transformer per-pixel models like Segmenter and SegFormer [[Strudel et al. 2021](#ref-strudel2021), [Xie et al. 2021](#ref-xie2021)].
 
 Why this family cannot do instances is worth stating precisely, because it is the formal reason universal architectures exist. A per-pixel classifier's output space is $\mathcal{C}^{\Omega}$, a fixed product of per-pixel labels. Instance segmentation outputs a set of variable size whose elements carry identities that are pure bookkeeping: swapping the names "car 1" and "car 2" gives the same answer. A function into $\mathcal{C}^\Omega$ has no variable for identity at all. Bolting on instance ids as extra channels fails, because any fixed channel-to-identity assignment is arbitrary, and the network would be punished for producing a correct answer in a different order. The disease has a name: the output is invariant under a symmetric group action, so the loss must be too, and per-pixel losses are not. Detection had solved this around 2015 with anchors plus non-maximum suppression, which imposes an artificial order and then de-duplicates. That is exactly the hand-tuned machinery DETR was built to delete.
 
@@ -163,25 +164,25 @@ This section is the mathematical heart shared by DETR, MaskFormer, and Mask2Form
 Pad the ground truth with $\varnothing$ entries up to size $N$, so predictions and targets are both $N$-element sets. Write $\text{cost}(i, j)$ for the cost of pairing prediction $i$ with target $j$:
 
 $$
-\text{cost}(i,j) = -\,\hat p_{i}(c^{\text{gt}}_j) + \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big).
+\text{cost}(i,j) = \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\!-\hat p_{i}(c^{\text{gt}}_j) + \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big).
 $$
 
-This is the DETR convention: raw probability rather than log probability for the class term, plus the same mask terms used in training, active only for real segments. Why raw probability? A log blows up as $\hat p \to 0$, so one confidently wrong class could dominate the whole cost row. The raw probability stays in $[0,1]$, which keeps the class term on the same footing as the bounded mask terms. That is DETR's stated reason, and it matters only for matching. The training loss still uses the log.
+This is the convention DETR introduced and the Mask2Former matcher implements: raw probability rather than log probability for the class term, the same mask terms used in training ($\mathcal{L}_{\text{ce}}$ and $\mathcal{L}_{\text{dice}}$, both defined in §3.2), and everything gated to real segments, so pairing with a padding slot costs exactly zero. Two footnotes on that. Why raw probability? A log blows up as $\hat p \to 0$, so one confidently wrong class could dominate a whole cost row. The raw probability stays in $[0,1]$, which keeps the class term on the same footing as the bounded mask terms. It matters only for matching, and the training loss still uses the log. And a fidelity note: the MaskFormer paper writes the class term ungated, charging $-\hat p_i(\varnothing)$ for unmatched predictions, but the released matchers (DETR's and Mask2Former's alike) build the cost matrix over real targets only, which is the gated form above.
 
-Two small facts make the padding trick legitimate. First, an assignment between the padded sets is a permutation $\sigma \in S_N$, and restricted to the real targets it is exactly an injection of ground truths into predictions, so no real segment can be dropped and no prediction can serve two targets. Second, a prediction paired with $\varnothing$ contributes only its class term $-\hat p_i(\varnothing)$, which does not depend on which padding slot it received, so the minimization is genuinely over "which predictions take the real targets" and nothing else. An assignment has total cost
+Two small facts make the padding trick legitimate. First, an assignment between the padded sets is a permutation $\sigma \in S_N$, and restricted to the real targets it is exactly an injection of ground truths into predictions, so no real segment can be dropped and no prediction can serve two targets. Second, a prediction paired with $\varnothing$ contributes zero, no matter which padding slot it received, so the minimization is genuinely over "which predictions take the real targets" and nothing else. An assignment has total cost
 
 $$
-\mathcal{C}(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
+J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} \mathcal{C}(\sigma)$. The Hungarian algorithm computes it exactly [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], in $O(N^3)$ time in the implementations behind `scipy.optimize.linear_sum_assignment`. At $N = 100$ the solve takes microseconds and is never the bottleneck. Building the cost matrix is (§8).
+and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The Hungarian algorithm computes it exactly [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], in $O(N^3)$ time in the implementations behind `scipy.optimize.linear_sum_assignment`. At $N = 100$ the solve takes well under a millisecond and is never the bottleneck. Building the cost matrix is (§8).
 
-**Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} \mathcal{C}(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
+**Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 
 **Proof.** Relabeling replaces prediction $i$ by prediction $\pi(i)$, so the cost of assignment $\sigma$ under the relabeled predictions is
 
 $$
-\sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = \mathcal{C}(\pi \circ \sigma).
+\sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = J(\pi \circ \sigma).
 $$
 
 As $\sigma$ ranges over all of $S_N$, so does $\pi \circ \sigma$, because left multiplication by a fixed $\pi$ is a bijection of the group. Minimizing over $\sigma$ on both sides gives the same value. $\blacksquare$
@@ -207,7 +208,7 @@ $$
 \qquad \lambda_{\text{ce}} = \lambda_{\text{dice}} = 5,
 $$
 
-and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}} + \lambda_{\text{cls}}\,\mathcal{L}_{\text{cls}}$ with $\lambda_{\text{cls}} = 2$ on matched queries and $0.1$ on $\varnothing$. Why these terms is best seen from their gradients.
+and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}} + \lambda_{\text{cls}}\,\mathcal{L}_{\text{cls}}$, where $\mathcal{L}_{\text{cls}} = -\log \hat p_i(c^{\text{gt}})$ is plain cross-entropy on the class head against the matched target, with $\lambda_{\text{cls}} = 2$ on matched queries and $0.1$ on $\varnothing$. Why these terms is best seen from their gradients.
 
 **BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is $\mathcal{L}_{\text{ce}} = -\big[g_x \log m_x + (1-g_x)\log(1-m_x)\big]$. Using $\frac{d}{dz}\log\sigma(z) = 1 - \sigma(z)$ and $\frac{d}{dz}\log(1-\sigma(z)) = -\sigma(z)$,
 
@@ -229,7 +230,7 @@ $$
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x} = -\,\frac{2\,g_x\,S - 2\,O}{S^2}.
 $$
 
-Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice gives a ten-pixel duckling the same voice as the sky. Its price is vanishing gradients when the overlap $O$ is near zero. Summing the two losses is the standard hedge: BCE supplies signal everywhere, Dice supplies fairness across scales.
+Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice gives a ten-pixel duckling the same voice as the sky. Its price sits one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly (its logit gradient is $\sigma(z_x) - g_x$), Dice does not. Summing the two losses is the standard hedge: BCE supplies signal everywhere, Dice supplies fairness across scales.
 
 **What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Mask2Former reverts to plain BCE at weight $5$. The paper states the change without argument. My reading, flagged as commentary: focal loss exists to fight extreme foreground-background imbalance under dense evaluation, and §8's point sampling removes most of that imbalance at the source, letting the simpler and better-conditioned loss win.
 
@@ -261,7 +262,7 @@ $$
 \tag{1}
 $$
 
-with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ linear images of the features at resolution $H_l \times W_l$. The paper writes Eq. 1 without the $1/\sqrt{d}$ temperature and the multi-head split for readability. The implementation is standard multi-head attention with both. Worth knowing before you reimplement from the paper alone.
+with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ linear images of the features at resolution $H_l \times W_l$. The paper writes Eq. 1 without the $1/\sqrt{d}$ temperature ($d$ is the per-head key dimension) and without the multi-head split, for readability. The implementation is standard multi-head attention with both. Worth knowing before you reimplement from the paper alone.
 
 Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. Mask2Former's appendix adds a blunt measurement of the end state. Even after convergence, averaged over COCO val, only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
 
@@ -304,7 +305,7 @@ $$
 
 **Proof.** With the convention $e^{-\infty} = 0$, the numerator $e^{z_i + \mathcal{M}_i}$ equals $e^{z_i}$ for $i \in S$ and $0$ otherwise. The denominator is $\sum_j e^{z_j + \mathcal{M}_j} = \sum_{j\in S} e^{z_j}$. Divide. $\blacksquare$
 
-Trivial, but it is the entire design distinction between Mask2Former and its neighbors. Zeroing weights after the softmax breaks normalization: the surviving weights sum to less than 1, so the update shrinks by whatever mass was discarded. Replacing attention with a plain average over the mask, which is K-Net's mask pooling, discards the learned ranking within the region. Masked attention keeps a proper, learned distribution over the foreground. The ablation prices these choices on COCO instance AP: plain cross-attention 37.8, SMCA's soft Gaussian prior 37.9, mask pooling 43.1, masked attention 43.7. Constraint helps enormously, 5.9 AP over none, and the renormalized, learned constraint beats uniform averaging by a further 0.6.
+Trivial, but it is the entire design distinction between Mask2Former and its neighbors. Zeroing weights after the softmax breaks normalization: the surviving weights sum to less than 1, so the update shrinks by whatever mass was discarded. Replacing attention with a plain average over the mask, which is K-Net's mask pooling, discards the learned ranking within the region. Masked attention keeps a proper, learned distribution over the foreground. The ablation prices these choices on COCO instance AP: plain cross-attention 37.8, SMCA's spatially modulated co-attention [[Gao et al. 2021](#ref-gao2021)], a fixed bell-shaped bias pulling each query toward its estimated center, 37.9, mask pooling 43.1, masked attention 43.7. Constraint helps enormously, 5.9 AP over none, and the renormalized, learned constraint beats uniform averaging by a further 0.6.
 
 **Origins of the trick.** Additive $-\infty$ masking is not new. It is the mechanism of causal masking in the original Transformer decoder [[Vaswani et al. 2017](#ref-vaswani2017)], where a fixed triangular mask hides the future. Mask2Former's contribution is what generates the mask: not a fixed structural pattern but a predicted, spatial, per-query region, refined online by the network's own output. Read recursively, equations (2) and (3) define a loop in which prediction and attention bootstrap each other nine times. The mask decides where the query reads. What it reads improves the mask. The improved mask sharpens the next read.
 
@@ -342,11 +343,13 @@ Mask2Former's answer is a schedule, not a module. Feed one scale per decoder lay
 Each scale's features must tell the layer where and which rung. Positions use DETR's 2-D sinusoidal embedding: for each axis and channel pair $i$,
 
 $$
-\text{PE}(\text{pos}, 2i) = \sin\!\big(\text{pos}/10000^{2i/(C/2)}\big),\qquad
-\text{PE}(\text{pos}, 2i{+}1) = \cos\!\big(\text{pos}/10000^{2i/(C/2)}\big),
+\begin{aligned}
+\text{PE}(\text{pos}, 2i) &= \sin\!\big(\text{pos}/10000^{2i/(C/2)}\big),\\
+\text{PE}(\text{pos}, 2i{+}1) &= \cos\!\big(\text{pos}/10000^{2i/(C/2)}\big),
+\end{aligned}
 $$
 
-computed separately for $x$ and $y$ and concatenated. The rung is a learnable scale-level embedding $e_{\text{lvl}} \in \mathbb{R}^{1\times C}$ per resolution, borrowed from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
+computed separately for $x$ and $y$ and concatenated. The intuition: each position gets a unique fingerprint of phases across many frequencies, and shifting the position rotates those phases in a predictable way, which is what lets a dot product read off relative offsets. The rung is a learnable scale-level embedding $e_{\text{lvl}} \in \mathbb{R}^{1\times C}$ per resolution, borrowed from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
 
 <figure class="viz">
 <video data-lazy autoplay loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: three resolution panes and an orb breathing coarse to fine">
@@ -364,7 +367,7 @@ $$
 \text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\phi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
 $$
 
-where $m$ indexes heads, $l$ levels, and $k$ sampling points. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\phi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$, a constant number of taps instead of $\sum_l H_lW_l$, which is what makes a Transformer pixel decoder affordable at stride 8.
+where $m$ indexes heads, $l$ levels, and $k$ sampling points, with $M$, $L$, $K$ their counts (all three local to this equation, so this $K$ is not the class count) and $W_m$, $W'_m$ the per-head output and value projections. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\phi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$, a constant number of taps instead of $\sum_l H_lW_l$, which is what makes a Transformer pixel decoder affordable at stride 8.
 
 The cross-decoder ablation quietly restates the paper's thesis in miniature. FPN scores 41.5 AP. Among classic pyramids, BiFPN is best for instance-level tasks and FaPN is best for semantic [[Tan et al. 2020](#ref-tan2020), [Huang et al. 2021](#ref-huang2021)]. Module design re-fragments by task, which is exactly the disease being cured, and only MSDeformAttn wins across all three tasks at once. A universal model doubles as a testbed: a module is not better until it is better everywhere.
 
@@ -394,7 +397,7 @@ $$
 \operatorname{Var}\big[\hat{\mathcal{L}}\big] = \frac{1}{K}\operatorname{Var}\big[\ell(x_1)\big],
 $$
 
-by linearity of expectation and independence. The estimate is unbiased, and its noise shrinks like $1/K$. At $K = 12{,}544$ on masks decoded at stride 4, it is essentially exact while touching around 5 percent of the points.
+by linearity of expectation and independence. The estimate is unbiased, its variance shrinks like $1/K$, so the typical error shrinks like $1/\sqrt{K}$. At $K = 12{,}544$ the noise is negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.
 
 ### 8.2 Two sampling rules for two jobs
 
@@ -431,10 +434,9 @@ Papers live or die on recipes, and Mask2Former's appendix is explicit enough to 
 |---|---|---|
 | optimizer | AdamW [[Loshchilov & Hutter 2019](#ref-loshchilov2019)], lr $10^{-4}$ | AdamW, lr $10^{-4}$ |
 | weight decay | $10^{-4}$ | **0.05** |
-| backbone lr multiplier | 0.1 | 0.1 |
-| schedule (COCO) | 300 epochs | **50 epochs**, lr ×0.1 at 90% and 95% of steps |
-| batch | 16 | 16 |
-| augmentation | standard scale and crop | **LSJ** [[Ghiasi et al. 2021](#ref-ghiasi2021)]: scale 0.1 to 2.0, fixed $1024^2$ crop |
+| backbone lr multiplier | 0.1 (CNN backbones) | 0.1 (CNN and Transformer backbones) |
+| schedule (COCO) | 300 epochs at batch 64 | **50 epochs** at batch 16, lr ×0.1 at 90% and 95% of steps |
+| augmentation | standard scale and crop | **LSJ** (large-scale jittering) [[Ghiasi et al. 2021](#ref-ghiasi2021)]: scale 0.1 to 2.0, fixed $1024^2$ crop |
 | mask loss | focal ($\lambda{=}20$) + dice ($\lambda{=}1$), dense | **BCE ($\lambda{=}5$) + dice ($\lambda{=}5$)** on 12,544 points |
 | $\lambda_{\text{cls}}$ | 1.0 | 2.0, with 0.1 on $\varnothing$ |
 | decoder | 6 layers, SA→CA→FFN, dropout 0.1, stride 32 only, zero-init queries | **9 layers, MA→SA→FFN, no dropout, strides {32,16,8}×3, learnable supervised queries** |
@@ -457,13 +459,13 @@ One architecture, per-task training, state of the art everywhere, for the first 
 |---|---|---|---|
 | Panoptic, COCO val | **57.8 PQ** | MaskFormer 52.7, K-Net 54.6 | +5.1 / +3.2 |
 | Instance, COCO val | **50.1 AP** (36.2 boundary AP) | Swin-HTC++ 49.5 (34.1) | +0.6 (+2.1) |
-| Semantic, ADE20K val | **57.7 mIoU** (Swin-L, FaPN, multi-scale) | BEiT 57.0 | +0.7 at roughly half the parameters |
+| Semantic, ADE20K val | **57.7 mIoU** (Swin-L, FaPN, multi-scale) | [BEiT](#ref-bao2022) 57.0 | +0.7 at roughly half the parameters |
 
 At ResNet-50 scale the story is learning efficiency: 51.9 PQ in 50 epochs against MaskFormer's 46.5 in 300, six times faster to a better place, and 43.7 instance AP in 50 epochs against 42.5 for a heavily tuned 400-epoch Mask R-CNN.
 
-Three second-order results carry more information than the headlines. On test-dev instance segmentation, large-object AP reaches 71.2, beating the challenge winner's 67.7 despite the winner's extra data and ensembling, while small-object AP is 29.1 against their 36.6. The paradigm is spectacular on large objects and clearly behind on small ones, the paper's own declared open problem. Boundary AP rises by 2.1 over HTC++ against 0.6 overall, so the stride-4 embedding map pays exactly at mask edges. And the compute-performance frontier genuinely moves, since the lightest Mask2Former beats the heaviest MaskFormer at a quarter of the FLOPs, though honesty requires the throughput footnote: the R50 panoptic model runs 8.6 fps to MaskFormer's 17.6. Multi-scale attention is not free. It is very well spent.
+Three second-order results carry more information than the headlines. On test-dev instance segmentation, large-object AP reaches 71.2, beating the challenge winner's 67.7 despite the winner's extra data and ensembling, while small-object AP is 29.1 against their 36.6. The paradigm is spectacular on large objects and clearly behind on small ones, the paper's own declared open problem. Boundary AP, the same AP computed with an overlap measure that only counts pixels near mask edges [[Cheng et al. 2021c](#ref-cheng2021biou)], rises by 2.1 over HTC++ against 0.6 overall, so the stride-4 embedding map pays exactly where masks are won and lost, at their edges. And the compute-performance frontier genuinely moves, since the lightest Mask2Former beats the heaviest MaskFormer at a quarter of the FLOPs, though honesty requires the throughput footnote: the R50 panoptic model runs 8.6 fps to MaskFormer's 17.6. Multi-scale attention is not free. It is very well spent.
 
-Generalization holds without architectural change: Cityscapes 66.6 PQ, 43.7 AP, 83.3 mIoU with Swin-L, ADE20K panoptic 46.2 PQ, Mapillary Vistas 45.5 PQ and 63.2 mIoU. Competitive with street-scene specialists on their home turf.
+Generalization holds without architectural change: Cityscapes 66.6 PQ, 43.7 AP, 83.3 mIoU with Swin-L, ADE20K panoptic 48.1 PQ, Mapillary Vistas 45.5 PQ and 63.2 mIoU. Competitive with street-scene specialists on their home turf.
 
 ## 11. What actually mattered
 
@@ -473,14 +475,14 @@ Every row is a controlled experiment on R50, across all three tasks:
 |---|---|---|---|---|
 | remove masked attention | **−5.9** | **−4.8** | −1.7 | the paper, in one number |
 | remove multi-scale high-res features | −2.2 | −1.7 | −1.1 | resolution is second, and the schedule makes it affordable |
-| point→mask matching cost | −2.7 | −0.5 | −2.4* | the sleeper: assignment quality is upstream of everything |
+| point→mask matching cost | −2.7 | −1.1 | −1.3* | the sleeper: assignment quality is upstream of everything |
 | remove query supervision | −0.8 | −0.7 | −1.8 | supervision, not learnability, is the ingredient |
 | restore dropout | −0.7 | −0.6 | 0.0 | attention maps are localization signals, do not corrupt them |
 | vanilla layer order | −0.5 | −0.3 | −0.9 | read the image before talking among queries |
 
 *at fixed point-sampled training loss. The §8.3 grid has the full two-by-two.
 
-The appendix also runs the decomposition every reviewer secretly wants: recipe against architecture. Retraining MaskFormer with Mask2Former's training parameters recovers several AP by itself, so LSJ, the reweighted BCE plus Dice, and the point losses transfer to other models. Swapping in the new decoder while holding the backbone, the FPN pixel decoder, and the recipe fixed adds several more, and the MSDeformAttn default closes the rest of the gap to 43.7. Roughly a third recipe, a third decoder, a third pixel decoder, stated where most papers would let the headline idea absorb all the credit. Steal that habit.
+The appendix also runs the decomposition every reviewer secretly wants: recipe against architecture. Retraining MaskFormer with Mask2Former's training parameters lifts it from 34.0 to 37.8 AP, so LSJ, the reweighted BCE plus Dice, and the point losses transfer to other models. Swapping in the new decoder while holding the backbone, the FPN pixel decoder, and the recipe fixed takes 37.8 to 41.5, and the MSDeformAttn default closes the rest to 43.7. My own rough accounting of those legs, flagged as commentary: about a third recipe, a third decoder, a third pixel decoder, laid out where most papers would let the headline idea absorb all the credit. Steal that habit.
 
 ## 12. Limitations, read honestly
 
@@ -490,7 +492,7 @@ The appendix also runs the decomposition every reviewer secretly wants: recipe a
 
 ## 13. Where it went next
 
-Mask2Former's decoder became infrastructure. The same group extended it unchanged to video, where masks become spatio-temporal tubes [[Cheng et al. 2021b](#ref-cheng2021vis)]. **OneFormer** [[Jain et al. 2023](#ref-jain2023)] closed the paper's own declared gap, one jointly trained model for all three tasks, by conditioning the same skeleton on a task token. **Mask DINO** [[Li et al. 2023](#ref-li2023)] unified it with DETR-style detection, letting box and mask queries help each other. The query-as-segment abstraction became the substrate for open-vocabulary segmentation, where the fixed classifier is replaced by text embeddings, and the "predict masks, classify separately" philosophy echoes in SAM's promptable, class-agnostic design [[Kirillov et al. 2023](#ref-kirillov2023)], even though SAM's goal differs. Mask2Former itself shipped in Detectron2 [[Wu et al. 2019](#ref-wu2019)] and in `transformers` as `facebook/mask2former-*`, and it remains the baseline every new segmentation paper must beat. Leaderboards have moved since 2022. The skeleton mostly has not.
+Mask2Former's decoder became infrastructure. The same group extended it unchanged to video, where masks become spatio-temporal tubes [[Cheng et al. 2021b](#ref-cheng2021vis)]. **OneFormer** [[Jain et al. 2023](#ref-jain2023)] closed the paper's own declared gap, one jointly trained model for all three tasks, by conditioning the same skeleton on a task token. **Mask DINO** [[Li et al. 2023](#ref-li2023)] unified it with DETR-style detection, letting box and mask queries help each other. The query-as-segment abstraction became the substrate for open-vocabulary segmentation, where the fixed classifier is replaced by text embeddings, and the "predict masks, classify separately" philosophy echoes in SAM's promptable, class-agnostic design [[Kirillov et al. 2023](#ref-kirillov2023)], even though SAM's goal differs. Mask2Former itself shipped in Detectron2 [[Wu et al. 2019](#ref-wu2019)] and in `transformers` as `facebook/mask2former-*`, and it remains a standard baseline for new segmentation papers. Leaderboards have moved since 2022. The skeleton mostly has not.
 
 ## 14. Implementation corner
 
@@ -580,6 +582,7 @@ Assembly: run the heads once on the learnable $\mathbf{X}_0$ before the loop, gi
 41. <a name="ref-li2023"></a>Li et al. "Mask DINO: Towards a Unified Transformer-based Framework for Object Detection and Segmentation." CVPR 2023. [arXiv:2206.02777](https://arxiv.org/abs/2206.02777)
 42. <a name="ref-kirillov2023"></a>Kirillov et al. "Segment Anything." ICCV 2023. [arXiv:2304.02643](https://arxiv.org/abs/2304.02643)
 43. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
+44. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." CVPR 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
 
 ## 17. Citation
 

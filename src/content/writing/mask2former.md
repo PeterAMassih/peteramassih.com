@@ -36,7 +36,7 @@ $$
 w_i = \frac{e^{z_i}}{\sum_j e^{z_j}},
 $$
 
-which are positive and sum to 1, a probability distribution over options. Two properties matter here, and both are visible in the formula. First, $e^{z_i} > 0$ always, so softmax never outputs an exact zero. Every option keeps a sliver of weight, however unpromising. Second, shifting every score by the same constant $c$ cancels between numerator and denominator, so only score differences matter, and whatever survives is renormalized to sum to 1. The first property causes the central pathology of this paper (§5.1). The second is exactly what the fix exploits (§5.2).
+which are positive and sum to 1, a probability distribution over options. Two properties matter here, and both are visible in the formula. First, $e^{z_i} > 0$ always, so softmax never outputs an exact zero. Every option keeps a sliver of weight, however unpromising. Second, shifting every score by the same constant $c$ cancels between numerator and denominator, so the output is identical and only score differences matter. And whatever the scores, the weights always sum to 1. The first property, never exactly zero, causes the central pathology of this paper (§5.1). The always-sums-to-1 property is what the fix exploits (§5.2): sending a forbidden entry's score to $-\infty$ drops it out, and the survivors renormalize among themselves.
 
 **Attention, in one honest paragraph.** Attention is a soft, differentiable dictionary lookup. A query asks a question. Every location in the image offers a key, which says how relevant that location is to the question, and a value, which is what the location contains. Score each location by the dot product of query and key, softmax the scores into weights $w_x$, and return the weighted average $\sum_x w_x\, v_x$ of the values. In matrices, stack the $N$ query vectors as rows of $Q \in \mathbb{R}^{N\times d}$ and the $n$ locations' keys and values as rows of $K, V \in \mathbb{R}^{n\times d}$:
 
@@ -208,7 +208,7 @@ $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The Hungarian algorithm computes it exactly [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], in $O(N^3)$ time, cubic in the set size, in the implementations behind `scipy.optimize.linear_sum_assignment`. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix is (§8).
+and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix is (§8).
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 

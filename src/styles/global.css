@@ -58,9 +58,11 @@ code {
   border-radius: 3px;
 }
 
-/* Block code (Shiki output wraps in <pre><code>) */
+/* Block code (Shiki output wraps in <pre><code>). copy-code.js wraps each <pre>
+   in a .code-block so the copy button pins to the block while the code scrolls
+   horizontally inside the <pre>. */
+.code-block { position: relative; }
 pre {
-  position: relative;
   font-family: var(--font-mono);
   font-size: 0.9375rem; /* 15px, roomier than body-sm for code */
   background: var(--color-code-bg);
@@ -92,13 +94,19 @@ pre code {
   transition: opacity var(--transition), color var(--transition);
 }
 
-pre:hover .copy-btn,
+.code-block:hover .copy-btn,
 .copy-btn:focus-visible { opacity: 1; }
 
 .copy-btn:hover { color: var(--color-text); }
 
 /* Muted text helper */
 .muted {
+  color: var(--color-text-muted);
+}
+
+/* A post's opening paragraph reads as a summary: muted, but the same size and
+   flow as the body (no quote block). */
+.body > p:first-child {
   color: var(--color-text-muted);
 }
 

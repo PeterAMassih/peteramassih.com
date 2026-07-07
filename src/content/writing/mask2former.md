@@ -42,7 +42,7 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a thermostat: a dot product sums $d$ terms, so its typical magnitude grows like $\sqrt d$, and without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax and gradients die. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
+Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a temperature: a dot product sums $d$ terms, so its typical magnitude grows like $\sqrt d$, and without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax and gradients die. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
 
 **Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in residual connections. As a function it is just two updates applied in order:
 
@@ -129,7 +129,7 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 1. Gold circles are the model's query slots; the blue-gray panel is the image, with two ducks and a dog. Each query starts with a rough guess at where its object is (the soft gold region), and the nine tick marks are the decoder layers that sharpen those guesses until each claims one object. The triangle is the class head: it takes a query, weighs the candidate classes (including a hollow one for no-object), keeps the most likely, and colors the query with it, teal for duck, deep gold for dog. So the region answers where, the color answers what. The three panels at the end regroup the same predictions as semantic, instance, and panoptic output; the model runs once, only the grouping changes.</figcaption>
+<figcaption>Fig. 1. Gold circles are the model's query slots, and the blue-gray panel is the image, with two ducks and a dog. Each query starts with a rough guess at where its object is, the soft gold region, and the nine tick marks are the decoder layers that sharpen those guesses until each claims one object. Two queries briefly contend for the same duck until one backs off, the self-attention that keeps them from colliding. The triangle is the class head: it weighs the candidate classes, including a hollow one for no-object, keeps the most likely, and colors the query with it, teal for duck, deep gold for dog. So the region answers where, the color answers what. At the end the same predictions regroup three ways: semantic merges the two ducks into one class, instance keeps them as separate identities with outlines, and panoptic adds the background as labeled stuff. The model runs once, and only the grouping changes.</figcaption>
 </figure>
 
 The observation that motivates the whole research program: these tasks differ only in the semantics of grouping. Yet by 2021 each had its own architecture family, its own tricks, and its own hardware optimizations. Triplicated effort, and specializations that provably do not transfer, as we see next.
@@ -146,7 +146,7 @@ $$
 
 where $\hat p_x$ is the softmax of the class scores at pixel $x$ and $g_x$ is that pixel's true class. The lineage after it is a search for context: dilated convolutions and pyramid pooling in DeepLab and PSPNet [[Chen et al. 2018](#ref-chen2018), [Zhao et al. 2017](#ref-zhao2017)], self-attention variants [[Wang et al. 2018](#ref-wang2018), [Fu et al. 2019](#ref-fu2019)], and finally pure-Transformer per-pixel models like Segmenter and SegFormer [[Strudel et al. 2021](#ref-strudel2021), [Xie et al. 2021](#ref-xie2021)].
 
-Why this family cannot do instances is worth stating precisely, because it is the formal reason universal architectures exist. A per-pixel classifier's output space is $\mathcal{C}^{\Omega}$, a fixed product of per-pixel labels. Instance segmentation outputs a set of variable size whose elements carry identities that are pure bookkeeping: swapping the names "car 1" and "car 2" gives the same answer. A function into $\mathcal{C}^\Omega$ has no variable for identity at all. Bolting on instance ids as extra channels fails, because any fixed channel-to-identity assignment is arbitrary, and the network would be punished for producing a correct answer in a different order. The disease has a name: the output is invariant under a symmetric group action, so the loss must be too, and per-pixel losses are not. Detection had solved this around 2015 with anchors plus non-maximum suppression, which imposes an artificial order and then de-duplicates. That is exactly the hand-tuned machinery DETR was built to delete.
+Why this family cannot do instances is worth stating precisely, because it is the formal reason universal architectures exist. A per-pixel classifier's output space is $\mathcal{C}^{\Omega}$, a fixed product of per-pixel labels. Instance segmentation outputs a set of variable size whose elements carry identities that are pure bookkeeping: swapping the names "car 1" and "car 2" gives the same answer. A function into $\mathcal{C}^\Omega$ has no variable for identity at all. Bolting on instance ids as extra channels fails, because any fixed channel-to-identity assignment is arbitrary, and the network would be punished for producing a correct answer in a different order. Stated precisely: the output is invariant under a symmetric group action, so the loss must be too, and per-pixel losses are not. Detection had solved this around 2015 with anchors plus non-maximum suppression, which imposes an artificial order and then de-duplicates. That is exactly the hand-tuned machinery DETR was built to delete.
 
 ### 2.2 Mask classification (2017 onward)
 
@@ -190,7 +190,7 @@ This section is the mathematical heart shared by DETR, MaskFormer, and Mask2Form
 
 ### 3.1 Matching as an assignment problem
 
-**In plain words.** The model always answers with 100 guesses, handed over in no particular order, like a student submitting answers on unnumbered index cards. Before you can grade, you must decide which card was meant for which question, and fairness demands the pairing that flatters the student most. That pairing is the matching. The Hungarian algorithm finds the best one. Everything afterwards is ordinary grading.
+**In plain words.** The model always returns 100 predictions in no particular order. Before the loss can score them, it has to decide which prediction is meant for which ground-truth object, and it picks the pairing with the lowest total cost. That pairing is the matching, and the Hungarian algorithm computes it. Everything after it is ordinary per-pair scoring.
 
 Pad the ground truth with $\varnothing$ entries up to size $N$, so predictions and targets are both $N$-element sets. Write $\text{cost}(i, j)$ for the cost of pairing prediction $i$ with target $j$:
 
@@ -207,6 +207,14 @@ J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
 and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix is (§8).
+
+**Aside (how the Hungarian algorithm works, skippable).** The solver rests on one fact about the cost matrix. For any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, define the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$. Because every assignment selects exactly one entry per row and per column,
+
+$$
+\sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j,
+$$
+
+so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Subtracting each row's minimum, then each column's, is the special case that first exposes zeros. The algorithm then hunts for an assignment lying entirely on zero-reduced-cost entries, and when none exists it lifts the potentials by the smallest slack that opens a new zero without driving any reduced cost negative, and repeats. This is precisely the dual of the assignment linear program, maximize $\sum_i u_i + \sum_j v_j$ subject to $\tilde c(i,j) \ge 0$, and complementary slackness forces the optimum onto the tight, zero-reduced-cost edges. Kuhn-Munkres schedules these updates to reach a full optimum in $O(N^3)$, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 
@@ -227,7 +235,7 @@ One-to-one matching, as opposed to greedy nearest-target, matters for a subtler 
 <source data-src="/assets/m2f/hungarian_matching.webm" type="video/webm">
 <source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 3. Gold shapes are the model's six predicted masks; green shapes are the three ground-truth segments. Each mask becomes a point on the dotted disc, a space where similar masks sit close together, so distance stands for dissimilarity. A line between two points is a candidate pairing, and its length is the matching cost; long red lines are poor, costly pairings. The coil on the right is the total cost of all pairings, and the Hungarian algorithm is the step that minimizes it. Unmatched predictions get hollow rings (the no-object class) on thin threads, thin because no-object carries only a 0.1 weight. When the storage order shuffles at the end, the points do not move: the loss depends on the set of predictions, not their order.</figcaption>
+<figcaption>Fig. 3. Gold shapes are the model's six predicted masks, green shapes the three ground-truth segments. They first appear in an arbitrary storage order, then each mask condenses to a point on the disc, a space where distance is matching cost, so a connecting cord's length is the cost of that pairing, reddening as it stretches, and its three strands are the three cost terms: class, BCE, Dice. The coil on the right is the total cost of the current matching, and the Hungarian algorithm is the step that shortens it to the minimum by swapping which prediction takes which target. Predictions left unmatched become no-object, drawn as hollow rings on thin threads, thin because no-object carries only a 0.1 weight. At the end the storage order shuffles again while the points hold still: the loss depends on the set of predictions, not their order.</figcaption>
 </figure>
 
 ### 3.2 The loss terms, with their gradients
@@ -247,7 +255,7 @@ $$
 \frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x} = \sigma(z_x) - g_x.
 $$
 
-Clean, well conditioned, and independent per point. That independence is also its weakness: summed over a region, the total gradient scales with the region's area, so large segments shout and small ones whisper.
+Clean, well conditioned, and independent per point. That independence is also its weakness: summed over a region, the total gradient scales with the region's area, so large segments dominate the update and small ones barely register.
 
 **Dice** [[Milletari et al. 2016](#ref-milletari2016)], in its soft form (smoothing constants dropped for clarity):
 
@@ -261,11 +269,11 @@ $$
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x} = -\,\frac{2\,g_x\,S - 2\,O}{S^2}.
 $$
 
-Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice gives a ten-pixel duckling the same voice as the sky. Its price sits one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly (its logit gradient is $\sigma(z_x) - g_x$), Dice does not. Summing the two losses is the standard hedge: BCE supplies signal everywhere, Dice supplies fairness across scales.
+Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price sits one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly (its logit gradient is $\sigma(z_x) - g_x$), Dice does not. Summing the two losses is the standard combination: BCE supplies gradient at every point, Dice makes that gradient scale-invariant.
 
 **What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Mask2Former reverts to plain BCE at weight $5$. The paper states the change without argument. My reading, flagged as commentary: focal loss exists to fight extreme foreground-background imbalance under dense evaluation, and §8's point sampling removes most of that imbalance at the source, letting the simpler and better-conditioned loss win.
 
-**The $\varnothing$ down-weighting.** With $N = 100$ queries and typically 5 to 20 real segments, "no object" outnumbers real matches by roughly 4 to 19 times. At full weight, "predict nothing" becomes the dominant gradient. The down-weighting to $0.1$ is the cheap medicine for the same disease focal loss treats in dense detectors, inherited verbatim from DETR.
+**The $\varnothing$ down-weighting.** With $N = 100$ queries and typically 5 to 20 real segments, "no object" outnumbers real matches by roughly 4 to 19 times. At full weight, "predict nothing" becomes the dominant gradient. The down-weighting to $0.1$ is the inexpensive fix for the same imbalance focal loss treats in dense detectors, inherited verbatim from DETR.
 
 **Deep supervision.** The full loss is applied at every one of the 9 decoder layers, and once more on the pre-decoder predictions from $\mathbf{X}_0$. Ten supervised heads per forward pass. In most papers auxiliary losses are an optimization nicety. Here they are structural, because intermediate masks moonlight as attention masks (§5), and "be a useful attention gate" is otherwise never optimized.
 
@@ -279,6 +287,97 @@ m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)
 $$
 
 A query is therefore a slot that becomes one segment. One vector simultaneously determines what (the class head) and where (its inner product with the embedding field). Masks are decoded at stride 4 and bilinearly upsampled. MaskFormer instantiated this skeleton with an FPN pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard Transformer decoder layers attending over a single stride-32 map. Every one of Mask2Former's contributions is a surgical change inside this fixed skeleton, which is why its ablations decompose so cleanly (§11).
+
+<figure class="viz">
+<svg class="m2f-arch" viewBox="0 0 740 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former pipeline: image, backbone, pixel decoder, a nine-layer Transformer decoder with a masked-attention loop, then per-query class and mask heads. The decoder can be opened to show its nine layers.">
+<defs>
+<style>
+.lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 15px; }
+.sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 12px; }
+.tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 11.5px; }
+.box { fill: #ffffff; stroke: #171717; stroke-width: 1.4; }
+.arr { stroke: #171717; stroke-width: 1.4; fill: none; }
+.card { fill: #ffffff; stroke: #6b6b6b; stroke-width: 1; }
+.tagx { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
+.hot { cursor: pointer; }
+.hot rect.box, .hot .lbl { transition: stroke 150ms ease, fill 150ms ease, stroke-width 150ms ease; }
+.hot:hover rect.box { stroke: #0d9488; stroke-width: 2.2; }
+.hot:hover .lbl { fill: #0d9488; }
+</style>
+<marker id="ah" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#171717"/></marker>
+<marker id="ah-s" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#64748b"/></marker>
+<marker id="ah-t" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#0d9488"/></marker>
+<marker id="ah-g" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#b8860b"/></marker>
+</defs>
+<rect x="0" y="0" width="740" height="360" rx="6" fill="#fafafa"/>
+<g class="m2f-collapsed">
+<rect class="box" x="16" y="112" width="74" height="56" rx="6"/>
+<text class="lbl" x="53" y="145" text-anchor="middle">Image</text>
+<rect class="box" x="118" y="106" width="96" height="68" rx="6"/>
+<text class="lbl" x="166" y="136" text-anchor="middle">Backbone</text>
+<text class="sub" x="166" y="154" text-anchor="middle">ResNet / Swin</text>
+<a href="#6-feeding-the-decoder" class="hot"><rect class="box" x="242" y="100" width="112" height="80" rx="6"/>
+<text class="lbl" x="298" y="134" text-anchor="middle">Pixel decoder</text>
+<text class="sub" x="298" y="152" text-anchor="middle">MSDeformAttn</text></a>
+<line class="arr" x1="90" y1="140" x2="114" y2="140" marker-end="url(#ah)"/>
+<line class="arr" x1="214" y1="140" x2="238" y2="140" marker-end="url(#ah)"/>
+<line class="arr" x1="354" y1="140" x2="432" y2="140" marker-end="url(#ah)"/>
+<text class="sub" x="393" y="114" text-anchor="middle">feature</text>
+<text class="sub" x="393" y="128" text-anchor="middle">pyramid</text>
+<g fill="#64748b"><rect x="375" y="150" width="36" height="3.2"/><rect x="379" y="155" width="28" height="3.2"/><rect x="383" y="160" width="20" height="3.2"/></g>
+<a href="#5-masked-attention" class="hot" data-m2f-open="1"><rect class="box" x="434" y="60" width="164" height="220" rx="6"/>
+<text class="lbl" x="516" y="86" text-anchor="middle">Transformer decoder</text>
+<text class="sub" x="516" y="104" text-anchor="middle">9 layers, coarse to fine</text>
+<text class="tag" x="516" y="130" text-anchor="middle" fill="#b8860b">N object queries</text>
+<g fill="#b8860b"><circle cx="462" cy="146" r="5"/><circle cx="483" cy="146" r="5"/><circle cx="504" cy="146" r="5"/><circle cx="525" cy="146" r="5"/><circle cx="546" cy="146" r="5"/><circle cx="567" cy="146" r="5"/></g>
+<rect x="450" y="176" width="132" height="34" rx="5" fill="#ffffff" stroke="#6b6b6b" stroke-width="1.2"/>
+<text class="tag" x="516" y="197" text-anchor="middle" xml:space="preserve"><tspan fill="#0d9488">MA</tspan><tspan fill="#171717"> &#8594; SA &#8594; FFN</tspan></text>
+<path d="M 450 200 C 420 208, 420 168, 450 182" stroke="#0d9488" stroke-width="1.8" fill="none" marker-end="url(#ah-t)"/>
+<text class="tag" x="437" y="228" text-anchor="middle" fill="#0d9488">mask</text>
+<text class="tagx" x="516" y="260" text-anchor="middle" fill="#0d9488">click to open the 9 layers &#9656;</text></a>
+<rect class="box" x="620" y="94" width="104" height="44" rx="6"/>
+<text class="lbl" x="672" y="114" text-anchor="middle">Class head</text>
+<text class="sub" x="672" y="130" text-anchor="middle">c&#7522; &#8712; {1..K, &#8709;}</text>
+<rect class="box" x="620" y="196" width="104" height="44" rx="6"/>
+<text class="lbl" x="672" y="216" text-anchor="middle">Mask head</text>
+<text class="sub" x="672" y="232" text-anchor="middle">m&#7522; = MLP(q&#7522;)&#183;&#949;</text>
+<text class="tag" x="672" y="86" text-anchor="middle" fill="#6b6b6b">what</text>
+<text class="tag" x="672" y="188" text-anchor="middle" fill="#6b6b6b">where</text>
+<path class="arr" d="M 598 130 C 610 122, 610 116, 620 116" marker-end="url(#ah-g)" stroke="#b8860b"/>
+<path class="arr" d="M 598 210 C 610 216, 610 218, 620 218" marker-end="url(#ah-g)" stroke="#b8860b"/>
+<path d="M 298 180 L 298 326 L 672 326 L 672 242" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#ah-s)"/>
+<text class="tag" x="485" y="318" text-anchor="middle" fill="#64748b">&#949;&#8202;pixel: per-pixel embeddings (stride 1/4)</text>
+<text class="sub" x="672" y="268" text-anchor="middle">N (class, mask) pairs</text>
+</g>
+<g class="m2f-expanded" style="display: none">
+<g style="cursor: pointer" data-m2f-close="1"><rect x="16" y="14" width="98" height="24" rx="5" fill="#ffffff" stroke="#6b6b6b" stroke-width="1"/>
+<text class="sub" x="65" y="30" text-anchor="middle">&#8249; overview</text></g>
+<text class="lbl" x="400" y="28" text-anchor="middle">Inside the Transformer decoder</text>
+<text class="sub" x="400" y="46" text-anchor="middle">9 layers, one image scale per layer, coarse to fine, the 3-scale cycle repeated 3 times</text>
+<a href="#5-masked-attention" class="hot"><rect x="248" y="64" width="304" height="30" rx="6" fill="#ffffff" stroke="#171717" stroke-width="1.1"/>
+<text class="tagx" x="400" y="83" text-anchor="middle" xml:space="preserve"><tspan fill="#6b6b6b">every layer is </tspan><tspan fill="#0d9488">masked attn</tspan><tspan fill="#171717"> &#8594; self-attn &#8594; FFN</tspan></text></a>
+<line x1="70" y1="120" x2="596" y2="120" stroke="#0d9488" stroke-width="1.4" stroke-dasharray="4 3"/>
+<g fill="none" stroke="#0d9488" stroke-width="1.4"><path d="M 95 120 L 95 132" marker-end="url(#ah-t)"/><path d="M 207 120 L 207 132" marker-end="url(#ah-t)"/><path d="M 331 120 L 331 132" marker-end="url(#ah-t)"/><path d="M 455 120 L 455 132" marker-end="url(#ah-t)"/><path d="M 567 120 L 567 132" marker-end="url(#ah-t)"/></g>
+<text class="tagx" x="333" y="112" text-anchor="middle" fill="#0d9488">masked attention: each layer's mask gates the next layer's read</text>
+<rect class="card" x="70" y="134" width="50" height="96" rx="4"/><rect x="70" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="95" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
+<rect class="card" x="126" y="134" width="50" height="96" rx="4"/><rect x="126" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="151" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
+<rect class="card" x="182" y="134" width="50" height="96" rx="4"/><rect x="182" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="207" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
+<rect class="card" x="250" y="134" width="50" height="96" rx="4"/><rect x="250" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="275" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
+<rect class="card" x="306" y="134" width="50" height="96" rx="4"/><rect x="306" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="331" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
+<rect class="card" x="362" y="134" width="50" height="96" rx="4"/><rect x="362" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="387" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
+<rect class="card" x="430" y="134" width="50" height="96" rx="4"/><rect x="430" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="455" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
+<rect class="card" x="486" y="134" width="50" height="96" rx="4"/><rect x="486" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="511" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
+<rect class="card" x="542" y="134" width="50" height="96" rx="4"/><rect x="542" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="567" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
+<line x1="44" y1="272" x2="604" y2="272" stroke="#b8860b" stroke-width="2.5" marker-end="url(#ah-g)"/>
+<g fill="#b8860b"><circle cx="30" cy="272" r="3.5"/><circle cx="30" cy="262" r="3.5"/><circle cx="30" cy="282" r="3.5"/></g>
+<text class="tagx" x="62" y="296" text-anchor="middle" fill="#b8860b">N queries in</text>
+<text class="tagx" x="626" y="268" fill="#b8860b">refined out</text>
+<text class="tagx" x="626" y="282" fill="#6b6b6b">to the heads</text>
+<text class="sub" x="333" y="328" text-anchor="middle">the color tab on each layer is the image scale it reads</text>
+</g>
+</svg>
+<figcaption>Fig. 4. The full pipeline. A backbone and a pixel decoder turn the image into a feature pyramid, together with per-pixel embeddings &#949; at stride 4. The Transformer decoder refines N object queries against that pyramid over nine layers, coarse to fine. The teal loop is masked attention (<a class="section-ref" href="#5-masked-attention">&#167;5</a>): each layer's predicted mask gates where the next layer is allowed to read. Every finished query splits into two heads, a class for what and a mask for where, the mask formed as the dot product of the query's MLP output with &#949;. The output is N (class, mask) pairs. Click the Transformer decoder to unroll its nine layers.</figcaption>
+</figure>
 
 ## 5. Masked attention
 
@@ -304,7 +403,7 @@ $$
 = \frac{1}{1 + \dfrac{n_b}{n_f}\, e^{-(\mu_f - \mu_b)}}.
 $$
 
-An object covering 2 percent of the image gives $n_b/n_f = 49$. Even with a healthy logit margin $\mu_f - \mu_b = 2$, the foreground share is $1/(1 + 49\,e^{-2}) \approx 0.13$. Softmax never outputs zero, and the background wins by headcount: thousands of individually negligible weights, integrated over a vast area, dominate the pooled value. This is a heuristic, since real logits are not two spikes, but it lands within about seven points of the measured 20 percent.
+An object covering 2 percent of the image gives $n_b/n_f = 49$. Even with a healthy logit margin $\mu_f - \mu_b = 2$, the foreground share is $1/(1 + 49\,e^{-2}) \approx 0.13$. Softmax never outputs zero, and the background dominates by sheer count: thousands of individually negligible weights, integrated over a vast area, outweigh the foreground in the pooled value. This is a heuristic, since real logits are not two spikes, but it lands within about seven points of the measured 20 percent.
 
 ### 5.2 The mechanism, and why $-\infty$ specifically
 
@@ -324,9 +423,9 @@ $$
 \tag{3}
 $$
 
-where $M_{l-1}$ is the same query's mask from the previous layer, thresholded at $0.5$ after the sigmoid and bilinearly resized to the current attention resolution. (The paper numbers this case equation (5); its own equations (3) and (4) are the mask and classification losses. It is relabeled (3) here for local continuity with equations (1) and (2) above.) $M_0$ comes from the input queries $\mathbf{X}_0$, which is only meaningful because $\mathbf{X}_0$ is learnable and directly supervised (§7).
+where $M_{l-1}$ is the same query's mask from the previous layer, thresholded at $0.5$ after the sigmoid and bilinearly resized to the current attention resolution. (The paper numbers this case equation (5), while its own equations (3) and (4) are the mask and classification losses. It is relabeled (3) here for local continuity with equations (1) and (2) above.) $M_0$ comes from the input queries $\mathbf{X}_0$, which is only meaningful because $\mathbf{X}_0$ is learnable and directly supervised (§7).
 
-Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once, which is why it is the engraving on the stencil in Fig. 4: the opaque region of the plate is this additive mask made physical, and opaque means mute. Formally:
+Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once. Formally:
 
 **Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ the allowed set, with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
 
@@ -347,7 +446,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 <source src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 4. The gold circle is one query; the blue-gray area is the image, with the warm patch the object the query is learning. Each thin strand is one image location's contribution to the query's attention: cool from background, warm from the object. Together they form a bundle whose total width is the attention mass, which always sums to 1. The plate that slides in is the query's mask from the previous layer; its label, minus infinity, is Eq. 3: adding minus infinity to a location's score sets its softmax weight to exactly zero, so the opaque part of the plate blocks those locations. The blocked strands are cut and the rest thicken, so the bundle stays exactly as wide, which is the renormalization in Eq. 2. The repeated cuts are the successive decoder layers, each sharpening the mask. The brief collapse near the end is the empty-mask guard of <a class="section-ref" href="#53-stability-gradients-and-the-guard-rail">§5.3</a>.</figcaption>
+<figcaption>Fig. 5. The gold circle is one query, and the blue-gray area is the image, with the warm patch the object the query is learning. Each thin strand is one image location's contribution to the query's attention, cool from background and warm from the object, and together they form a bundle whose total width is the attention mass, which always sums to 1. A slow pan across the image shows the many background strands outweighing the few from the object, the pathology of <a class="section-ref" href="#51-the-pathology-quantified">§5.1</a>. The plate that slides in is the query's mask from the previous layer. Its label, minus infinity, is Eq. 3: that score sends a location's softmax weight to exactly zero, so the opaque part of the plate blocks those locations. The blocked strands fall away while the survivors thicken in the same motion, so the bundle stays exactly as wide, the renormalization of Eq. 2. The stencil then tightens with each pass, the successive decoder layers sharpening the mask, and near the end it briefly seals shut and reopens, the empty-mask guard of <a class="section-ref" href="#53-stability-gradients-and-the-guard-rail">§5.3</a>. Finally the whole picture resolves into the masked-attention equation it has been illustrating.</figcaption>
 </figure>
 
 ### 5.3 Stability, gradients, and the guard rail
@@ -389,7 +488,7 @@ computed separately for $x$ and $y$ and concatenated. The intuition: each positi
 <source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 5. The three panes are the same image at the feature pyramid's three strides, each with a faint edge tint marking its level embedding. The near-opaque pane is stride 32, where the small duckling disappears because the grid is too coarse to hold it. Each pane's dots are its tokens; the count quadruples from stride 32 to 16 to 8 (a 1 to 4 to 16 ratio), so the finest pane, stride 8, has by far the most tokens and is the most expensive. The gold circle is one query, and its glow is its current mask. It reads one pane per layer, coarse to fine, three times over: the round-robin schedule. The sagging slab is the rejected alternative, using all scales at every layer, three times the tokens for no accuracy gain.</figcaption>
+<figcaption>Fig. 6. The three panes are the same image at the feature pyramid's three strides, each with a faint edge tint marking its level embedding. The near-opaque pane is stride 32, where the small duckling disappears because the grid is too coarse to hold it. Each pane's dots are its tokens, and the count quadruples from stride 32 to 16 to 8 (a 1 to 4 to 16 ratio), so the finest pane, stride 8, has by far the most tokens and is the most expensive. The gold circle is one query, and its glow is its current mask. It reads one pane per layer, coarse to fine, three times over: the round-robin schedule. The sagging slab is the rejected alternative, using all scales at every layer, three times the tokens for no accuracy gain, and it drags the query through at a crawl.</figcaption>
 </figure>
 
 ### 6.3 The pixel decoder is a free variable, and that is a finding
@@ -418,7 +517,7 @@ Three changes, zero extra FLOPs, ablated separately, jointly worth about 1.4 AP,
 
 ### 8.1 The memory problem and the estimator
 
-**In plain words.** Comparing two masks pixel by pixel is like weighing an entire beach to learn its average grain size: exact, and absurdly heavy. A few hundred well-chosen scoops give the same answer for a fraction of the effort. Surprisingly, choosing the scoops well also improves the grading itself, not just the bill.
+**In plain words.** Comparing two masks at every pixel is exact but expensive. A few thousand sampled points give essentially the same answer at a fraction of the cost. What is less obvious is that choosing those points well also improves the matching itself, not just the memory it takes.
 
 Evaluating BCE plus Dice densely for 100 predictions against all ground truths to build the cost matrix, then again for the matched pairs, across ten supervised heads, is what pinned MaskFormer at one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates all mask losses on $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points instead of full masks.
 
@@ -434,18 +533,32 @@ by linearity of expectation and independence. The estimate is unbiased, its vari
 
 ### 8.2 Two sampling rules for two jobs
 
-The genuinely clever part is that the sampling distribution differs by role.
+The sampling distribution differs by role, and it does so for a different reason in each case. For matching the reason is a variance argument. For the final loss it is a deliberate bias.
 
-**Matching cost: one shared uniform set.** All prediction and ground-truth pairs in an image are evaluated on the same uniformly sampled points. Sharing is the point. Every entry of the cost matrix is the same functional of the same sample, so entries are comparable and the argmin is not corrupted by independent sampling noise. With per-pair samples, the assignment would sometimes be decided by luck. With a shared sample, the noise shifts all entries coherently.
+**Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)] = c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the representative two-entry case $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which is the whole comparison when $\sigma$ and $\sigma'$ differ by a single swap. Then
 
-**Final loss: per-pair importance sampling.** Each matched pair gets its own points via PointRend's procedure, an official-config detail since the paper defers to the citation: oversample $3 K_{\text{pt}}$ candidates uniformly, keep the 75 percent with the most uncertain predictions, meaning mask probability closest to $0.5$, which is near boundaries, and fill the remaining 25 percent uniformly. Note what this is not. There is no importance-weight correction, so the estimator is deliberately biased toward boundaries. It is a boundary-emphasized objective by design, not a cheaper copy of the dense loss. Precision is spent where the masks actually disagree.
+$$
+\operatorname{Var}[A - B] = \operatorname{Var}[A] + \operatorname{Var}[B] - 2\operatorname{Cov}(A,B),
+\qquad
+\operatorname{Cov}(A,B)\big|_{\text{shared}} = \frac{1}{K_{\text{pt}}}\operatorname{Cov}_{x\sim U(\Omega)}\big(\ell_{ij}(x),\,\ell_{i'j'}(x)\big).
+$$
+
+The marginal terms $\operatorname{Var}[A]$ and $\operatorname{Var}[B]$ are fixed by the uniform marginal and are identical under both schemes. Only the cross term moves. Independent per-pair points give $\operatorname{Cov}(A,B)=0$, so the two noises add. Shared points give a per-point covariance that is positive in the mask-cost regime, since a pixel that lands on a hard region such as an object boundary inflates the loss contribution for many pairs at once, so the per-point costs are positively correlated across entries. A positive covariance subtracts off the part of the sampling noise common to $A$ and $B$ and leaves only the part that distinguishes them, so $\operatorname{Var}[A-B]$ is smaller under sharing. Lower difference variance means a smaller chance that noise flips the sign of a comparison, hence a more stable argmin, and the expected difference is unchanged, so a better decision is made about the same underlying quantity. The same term-by-term cancellation extends to a general assignment comparison, where the object is the difference of sums above rather than a single entry difference. Two qualifications. The cancellation is partial, not a common additive shift, because the per-point losses are only correlated across entries, not equal up to a per-pair constant. And the positive sign of the covariance is the operative structural condition, not a theorem: were two entries anticorrelated at the per-point level, sharing would raise their difference variance instead.
+
+**Final loss: per-pair importance sampling.** Each matched pair gets its own points via PointRend's procedure [[Kirillov et al. 2020](#ref-kirillov2020)], an official-config detail since the paper defers to the citation. Oversample $3K_{\text{pt}}$ candidates uniformly, keep the 75 percent with the most uncertain predictions, meaning mask probability closest to $0.5$, which sits near boundaries, and fill the remaining 25 percent uniformly. Call the resulting non-uniform sampling distribution over $\Omega$ by $q$, so the training points are drawn $x_k\sim q$ rather than uniform, and note that the estimator averages $\ell(x_k)$ with no importance weight $1/(|\Omega|\,q(x))$ to undo $q$. Its expectation is therefore
+
+$$
+\mathbb{E}_{q}\big[\hat{\mathcal{L}}\big] = \sum_{x\in\Omega} q(x)\,\ell(x) \;\neq\; \frac{1}{|\Omega|}\sum_{x\in\Omega}\ell(x) = \mathcal{L}_{\text{dense}},
+$$
+
+a $q$-weighted mean that overweights the boundary points $q$ favors. This is not the unbiased estimator of §8.1. The uncorrected reweighting makes it a boundary-emphasized objective by design, not a cheaper copy of the dense loss, and precision is spent where the masks actually disagree.
 
 <figure class="viz">
 <video data-lazy autoplay loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: probes on the shoreline of disagreement balancing a beam">
 <source data-src="/assets/m2f/shoreline_probes.webm" type="video/webm">
 <source data-src="/assets/m2f/shoreline_probes.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 6. Green is the ground-truth mask, gold is the model's predicted mask. Where they overlap they agree; where they differ, the orange band marks the error, a thin strip along the boundary since two decent masks mostly agree. The balance beam checks the loss estimate: the full dense loss loads the left pan and tips it down, then the few sampled points that land on the error band load the right pan and bring it level, showing that the small sample weighs the same as the full computation. That is the unbiased estimate of <a class="section-ref" href="#81-the-memory-problem-and-the-estimator">§8.1</a>. The split screen shows the two sampling rules of <a class="section-ref" href="#82-two-sampling-rules-for-two-jobs">§8.2</a>: for matching, the same set of points is reused on every pair; for training, the points concentrate on the boundary. The grid at the end stands in for the full sample, 112 by 112 = 12,544 points.</figcaption>
+<figcaption>Fig. 7. Green is the ground-truth mask, gold is the model's predicted mask. Where they overlap they agree. Where they differ, the orange band marks the error, a thin strip along the boundary since two decent masks mostly agree. The balance beam checks the loss estimate: the full dense loss loads the left pan and tips it down, then the few sampled points that land on the error band load the right pan and bring it level, showing that the small sample weighs the same as the full computation. That is the unbiased estimate of <a class="section-ref" href="#81-the-memory-problem-and-the-estimator">§8.1</a>. The split screen shows the two sampling rules of <a class="section-ref" href="#82-two-sampling-rules-for-two-jobs">§8.2</a>: for matching, the same set of points is reused on every pair, and for training, the points concentrate on the boundary. The lattice at the end stands in for the full sample of 112 by 112 = 12,544 points.</figcaption>
 </figure>
 
 ### 8.3 The result grid, read carefully
@@ -482,7 +595,7 @@ $$
 s_i = \hat p_i(c_i)\cdot \frac{1}{|\{x : m_i(x) > 0.5\}|}\sum_{x:\, m_i(x)>0.5} m_i(x),
 $$
 
-class confidence times average mask confidence over the foreground, because a query can be sure about what something is while sloppy about where.
+class confidence times average mask confidence over the foreground, because a query can be confident about what something is while imprecise about where.
 
 ## 10. Results worth remembering
 
@@ -557,7 +670,7 @@ Assembly: run the heads once on the learnable $\mathbf{X}_0$ before the loop, gi
 
 **Prove that adding $-\infty$ before the softmax renormalizes over the allowed set, and say precisely what post-softmax zeroing breaks.** The §5.2 proposition: $e^{z+\mathcal{M}}$ vanishes off $S$, so the weights are the restricted softmax and still sum to 1 with the learned ranking intact. Zeroing after the softmax leaves total weight below 1, so the update shrinks by the discarded mass. Mask pooling replaces the ranking with a uniform average, and the ablation prices that ranking at 0.6 AP.
 
-**Derive the foreground attention share for an object covering fraction $\rho$ of the image with logit margin $\Delta$, and evaluate it at $\rho = 0.02$, $\Delta = 2$.** Share $= 1/\big(1 + \frac{1-\rho}{\rho}e^{-\Delta}\big) = 1/(1+49e^{-2}) \approx 0.13$. That is the headcount pathology of §5.1, and it lands near the measured 20 percent.
+**Derive the foreground attention share for an object covering fraction $\rho$ of the image with logit margin $\Delta$, and evaluate it at $\rho = 0.02$, $\Delta = 2$.** Share $= 1/\big(1 + \frac{1-\rho}{\rho}e^{-\Delta}\big) = 1/(1+49e^{-2}) \approx 0.13$. That is the pathology of §5.1, and it lands near the measured 20 percent.
 
 **Show the matched loss is permutation-invariant.** §3.1: relabeling predictions turns the cost of $\sigma$ into the cost of $\pi\circ\sigma$, and left multiplication is a bijection of $S_N$, so the minimum is unchanged. Corollary: the storage order of queries is provably information-free.
 
@@ -660,5 +773,22 @@ for (const v of document.querySelectorAll('video[data-lazy]')) {
     }
   }, { rootMargin: '400px' });
   io.observe(v);
+}
+
+// Fig. 4: click the decoder to swap the pipeline map for its nine-layer view.
+// The trigger is a real <a href="#5..."> so it still navigates without JS.
+for (const svg of document.querySelectorAll('svg.m2f-arch')) {
+  const collapsed = svg.querySelector('.m2f-collapsed');
+  const expanded = svg.querySelector('.m2f-expanded');
+  const swap = (open) => {
+    collapsed.style.display = open ? 'none' : '';
+    expanded.style.display = open ? '' : 'none';
+  };
+  for (const el of svg.querySelectorAll('[data-m2f-open]')) {
+    el.addEventListener('click', (e) => { e.preventDefault(); swap(true); });
+  }
+  for (const el of svg.querySelectorAll('[data-m2f-close]')) {
+    el.addEventListener('click', (e) => { e.preventDefault(); swap(false); });
+  }
 }
 </script>

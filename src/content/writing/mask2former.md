@@ -90,7 +90,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 
 ## 1. The segmentation problem, formally
 
-Image segmentation asks which pixels belong together. The interesting part is that "belong together" admits several meanings. Fix a category set $\mathcal{C} = \mathcal{C}_{\text{th}} \sqcup \mathcal{C}_{\text{st}}$, split into countable *things* (cars, people) and amorphous *stuff* (road, sky), following [[Kirillov et al. 2019a](#ref-kirillov2019pan)]. The three tasks are three output spaces over the same pixels.
+Image segmentation asks which pixels belong together. The interesting part is that "belong together" admits several meanings. Every dataset fixes a set of categories $\mathcal{C}$, the labels it knows: car, person, road, sky. Vision researchers split those labels into two kinds, following [[Kirillov et al. 2019a](#ref-kirillov2019pan)]. *Things* are countable objects with identities, like cars and people, where "which car is this pixel part of" is a meaningful question. *Stuff* is amorphous material, like road and sky, where counting makes no sense: there is no sky number two. Writing $\mathcal{C}_{\text{th}}$ for the thing categories and $\mathcal{C}_{\text{st}}$ for the stuff categories, the full set is $\mathcal{C} = \mathcal{C}_{\text{th}} \sqcup \mathcal{C}_{\text{st}}$, where $\sqcup$ just means every category is one or the other, never both. The three tasks are then three output spaces over the same pixels, differing exactly in how they treat the two kinds.
 
 **Semantic segmentation** is a map $f: \Omega \to \mathcal{C}$ on the pixel grid $\Omega$. One label per pixel, no identities, so two adjacent cars fuse into one car region. Its metric averages region overlap per class:
 

@@ -38,9 +38,22 @@ $$
 
 which are positive and sum to 1, a probability distribution over options. Two properties matter here, and both are visible in the formula. First, $e^{z_i} > 0$ always, so softmax never outputs an exact zero. Every option keeps a sliver of weight, however unpromising. Second, shifting every score by the same constant $c$ cancels between numerator and denominator, so only score differences matter, and whatever survives is renormalized to sum to 1. The first property causes the central pathology of this paper (§5.1). The second is exactly what the fix exploits (§5.2).
 
-**Attention, in one honest paragraph.** Attention is a soft, differentiable dictionary lookup. A query asks a question. Every location in the image offers a key, which says how relevant that location is to the question, and a value, which is what the location contains. Score each location by the dot product of query and key, softmax the scores into weights $w_x$, and return the weighted average $\sum_x w_x\, v_x$ of the values. That is the whole mechanism: where to look comes from query times key, what you get back is a blend of values, and the blend weights are a probability distribution. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
+**Attention, in one honest paragraph.** Attention is a soft, differentiable dictionary lookup. A query asks a question. Every location in the image offers a key, which says how relevant that location is to the question, and a value, which is what the location contains. Score each location by the dot product of query and key, softmax the scores into weights $w_x$, and return the weighted average $\sum_x w_x\, v_x$ of the values. In matrices, stack the $N$ query vectors as rows of $Q \in \mathbb{R}^{N\times d}$ and the $n$ locations' keys and values as rows of $K, V \in \mathbb{R}^{n\times d}$:
 
-**Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in a residual connection: keep what you had, add what you just learned. The decoder in this post is a stack of such layers in which 100 learned query tokens repeatedly read from the image and confer among themselves. After nine layers, each query has become a description of one segment.
+$$
+\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
+$$
+
+Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a thermostat: a dot product sums $d$ terms, so its typical magnitude grows like $\sqrt d$, and without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax and gradients die. When queries read from the image it is called cross-attention. When a set of tokens reads from each other it is called self-attention.
+
+**Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in residual connections. As a function it is just two updates applied in order:
+
+$$
+x \,\leftarrow\, x + \operatorname{Attention}(x,\ \text{context}), \qquad
+x \,\leftarrow\, x + \operatorname{FFN}(x).
+$$
+
+Read, then think. The attention step mixes in information from wherever this layer is allowed to look (the image for cross-attention, the other queries for self-attention). The feed-forward network $\operatorname{FFN}$, a two-layer MLP applied to each token separately, digests what was just read. And because both results are added onto $x$ rather than replacing it, a layer can refine what a token knows but never erase it. The decoder in this post is a stack of such layers in which 100 learned query tokens repeatedly read from the image and confer among themselves. After nine layers, each query has become a description of one segment.
 
 **Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Training repeats one step: compute the gradient $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, and move every weight a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$, where $\eta$ is the step size, the learning rate. The under-appreciated consequence: a network is shaped less by its wiring than by what exactly you choose to measure. Most of this paper's cleverness lives in the measuring (§3, §8).
 
@@ -175,7 +188,7 @@ $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The Hungarian algorithm computes it exactly [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], in $O(N^3)$ time in the implementations behind `scipy.optimize.linear_sum_assignment`. At $N = 100$ the solve takes well under a millisecond and is never the bottleneck. Building the cost matrix is (§8).
+and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The Hungarian algorithm computes it exactly [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], in $O(N^3)$ time, cubic in the set size, in the implementations behind `scipy.optimize.linear_sum_assignment`. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix is (§8).
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 
@@ -295,6 +308,8 @@ $$
 
 where $M_{l-1}$ is the same query's mask from the previous layer, thresholded at $0.5$ after the sigmoid and bilinearly resized to the current attention resolution. $M_0$ comes from the input queries $\mathbf{X}_0$, which is only meaningful because $\mathbf{X}_0$ is learnable and directly supervised (§7).
 
+Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once, which is why it is the engraving on the stencil in Fig. 3: the opaque region of the plate is this additive mask made physical, and opaque means mute. Formally:
+
 **Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ the allowed set, with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
 
 $$
@@ -314,7 +329,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 <source src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 3. The gold orb is one query, and the blue-gray expanse below it is the image, with the warm patch as the object this query is becoming. Every thin strand is one image location's contribution to the attention read: cool strands come from background, warm strands from the object, and the braid they form is the value the query drinks, so its total width is the attention mass, which always sums to 1. The plate that slides in is the query's own mask from the previous layer, the engraved minus infinity of Eq. 3. Strands outside its hole are cut, and the survivors visibly thicken until the braid is exactly as wide as before: that conservation is the renormalization of Eq. 2. The breaths that follow are the layers, mask and understanding sharpening each other, and the one-beat collapse near the end is the empty-mask guard rail of §5.3.</figcaption>
+<figcaption>Fig. 3. The gold orb is one query, and the blue-gray expanse below it is the image, with the warm patch as the object this query is becoming. Every thin strand is one image location's contribution to the attention read: cool strands come from background, warm strands from the object, and the braid they form is the value the query drinks, so its total width is the attention mass, which always sums to 1. The plate that slides in is the query's own mask from the previous layer, and its engraving, minus infinity, is Eq. 3 verbatim: adding minus infinity to a location's score makes its softmax weight exactly zero, so opaque means mute. Strands outside the hole are cut, and the survivors visibly thicken until the braid is exactly as wide as before: that conservation is the renormalization of Eq. 2. The breaths that follow are the layers, mask and understanding sharpening each other, and the one-beat collapse near the end is the empty-mask guard rail of §5.3.</figcaption>
 </figure>
 
 ### 5.3 Stability, gradients, and the guard rail
@@ -334,7 +349,7 @@ The appendix analysis is unusually direct. Foreground attention mass rises from 
 
 ### 6.1 The cost structure
 
-Cross-attention cost per layer scales with the token count of the feature map. Building $\mathbf{Q}\mathbf{K}^\top$ and applying it to $\mathbf{V}$ is $O(N \cdot H_lW_l \cdot C)$. At a $1024^2$ input, the pyramid gives $32^2 = 1024$ tokens at stride 32, $64^2 = 4096$ at stride 16, and $128^2 = 16384$ at stride 8, a factor of 16 between coarsest and finest. MaskFormer stayed at stride 32 everywhere. A distant pedestrian at that stride is a single cell, and it shows in MaskFormer's small-object numbers.
+Cross-attention cost per layer scales with the token count of the feature map. Building $\mathbf{Q}\mathbf{K}^\top$ and applying it to $\mathbf{V}$ is $O(N \cdot H_lW_l \cdot C)$: each of the $N$ queries scores each of the $H_lW_l$ locations, and every score is a $C$-term dot product. At a $1024^2$ input, the pyramid gives $32^2 = 1024$ tokens at stride 32, $64^2 = 4096$ at stride 16, and $128^2 = 16384$ at stride 8, a factor of 16 between coarsest and finest. MaskFormer stayed at stride 32 everywhere. A distant pedestrian at that stride is a single cell, and it shows in MaskFormer's small-object numbers.
 
 ### 6.2 The schedule
 
@@ -367,7 +382,7 @@ $$
 \text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\phi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
 $$
 
-where $m$ indexes heads, $l$ levels, and $k$ sampling points, with $M$, $L$, $K$ their counts (all three local to this equation, so this $K$ is not the class count) and $W_m$, $W'_m$ the per-head output and value projections. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\phi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$, a constant number of taps instead of $\sum_l H_lW_l$, which is what makes a Transformer pixel decoder affordable at stride 8.
+where $m$ indexes heads, $l$ levels, and $k$ sampling points, with $M$, $L$, $K$ their counts (all three local to this equation, so this $K$ is not the class count) and $W_m$, $W'_m$ the per-head output and value projections. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\phi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$: $M \times L \times K$ sampled reads, each a $C$-wide vector, instead of touching all $\sum_l H_lW_l$ locations. A constant number of taps per query is what makes a Transformer pixel decoder affordable at stride 8.
 
 The cross-decoder ablation quietly restates the paper's thesis in miniature. FPN scores 41.5 AP. Among classic pyramids, BiFPN is best for instance-level tasks and FaPN is best for semantic [[Tan et al. 2020](#ref-tan2020), [Huang et al. 2021](#ref-huang2021)]. Module design re-fragments by task, which is exactly the disease being cured, and only MSDeformAttn wins across all three tasks at once. A universal model doubles as a testbed: a module is not better until it is better everywhere.
 

@@ -15,6 +15,10 @@ const writing = defineCollection({
     tags: z.array(z.string()).optional(),
     math: z.boolean().default(false),
     draft: z.boolean().default(false),
+    // Posts that belong to a named series (e.g. Peter's Patches) carry the
+    // series name and their number within it.
+    series: z.string().optional(),
+    part: z.number().int().positive().optional(),
   }).strict(),
 });
 

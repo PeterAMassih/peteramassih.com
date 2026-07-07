@@ -184,27 +184,32 @@ class ShorelineProbes(MovingCameraScene):
             for n in needles], lag_ratio=0.02), rt=2.2)
         self.hold(0.6)
 
-        # The sparks alone are swept onto the right pan.
+        # The sparks alone are swept into the right pan as a compact heap,
+        # seated low so it rests in the cup instead of floating above the rim.
         sparks = VGroup(*[n[1].copy() for n, h in zip(needles, hot_flags)
                           if h])
         self.add(sparks)
         pile_rng = np.random.default_rng(11)
-        pile = [pan_center(1) + UP * (0.18 + 0.09 * (k // 6))
-                + RIGHT * (-0.3 + 0.12 * (k % 6))
-                + RIGHT * pile_rng.uniform(-0.02, 0.02)
+        heap = [np.array([0.15 * (k % 5 - 2) + pile_rng.uniform(-0.03, 0.03),
+                          0.06 + 0.11 * (k // 5) + pile_rng.uniform(-0.02, 0.02),
+                          0.0])
                 for k in range(len(sparks))]
-        self.beat(LaggedStart(*[s.animate.move_to(q)
-                                for s, q in zip(sparks, pile)],
-                              lag_ratio=0.03), rt=1.4)
-        # The pile sits ON the pan, clearly above its rim.
-        sparks.add_updater(lambda m, pc=pan_center: m.move_to(
-            pc(1) + UP * 0.3))
-        # Equal weight from a few hundred points: the beam levels, slowly.
-        self.beat(theta.animate.set_value(0.0), rt=1.4,
+        self.beat(LaggedStart(*[s.animate.move_to(pan_center(1) + off)
+                                for s, off in zip(sparks, heap)],
+                              lag_ratio=0.03), rt=1.2)
+        # Each spark now rides the pan at its own offset, so the heap stays in
+        # the cup and travels down with it.
+        for s, off in zip(sparks, heap):
+            s.add_updater(
+                lambda m, off=off, pc=pan_center: m.move_to(pc(1) + off))
+        # Their weight is what levels the beam: equal to the dense map, so the
+        # raised right pan sinks back to level and carries the sparks down.
+        self.beat(theta.animate.set_value(0.0), rt=1.6,
                   rate_func=rate_functions.ease_in_out_sine)
         self.hold(1.0)
         the_map.suspend_updating()
-        sparks.suspend_updating()
+        for s in sparks:
+            s.suspend_updating()
         beam.suspend_updating()
 
         # ---- shot 4 (0:20-0:26): two rules for two jobs ---------------------

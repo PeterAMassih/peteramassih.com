@@ -35,6 +35,20 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
+/* Inline section cross-references (§8.1, from rehype-section-links) stay in the
+   text color with a faint underline, and only take the accent on hover, so they
+   read as quiet links rather than a field of colored numbers. */
+.section-ref {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 0.15em;
+}
+.section-ref:hover {
+  color: var(--color-accent);
+  text-decoration-color: currentColor;
+}
+
 /* Inline code */
 code {
   font-family: var(--font-mono);

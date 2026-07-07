@@ -1,18 +1,20 @@
 # patches/mask2former/viz/hungarian_matching.py
-"""Storyboard A: hungarian_matching (~48 s + 2 s hold).
+"""Storyboard A: hungarian_matching (~42 s).
 
 The model outputs a set, so the loss must pair predictions with ground truths
 by content, not order. Shot map and timings follow storyboards.md section 3.
 Every cord survives the whole scene as one object: a straight line in shot 1,
-a three-strand braid from shot 3, a spring in shot 7. Length is cost, ember
-tint is strain, and the side coil is the total cost as one physical rope.
+a three-strand braid from shot 3 (the three cost terms: class, BCE, Dice).
+Length is cost, ember tint is strain, and the side coil is the total cost as
+one physical rope.
 """
 
 import numpy as np
 from manim import *  # noqa: F403 -- manim scenes conventionally star-import
 
 from shapes import DOG, DUCK, blob, silhouette, warped
-from tokens import ACCENT, BACKGROUND, EMBER, GOLD, GREEN, HOLLOW, MUTED, SLATE
+from tokens import (ACCENT, BACKGROUND, EMBER, FONT_BODY, GOLD, GREEN, HOLLOW,
+                    MUTED, SLATE)
 
 config.background_color = BACKGROUND
 
@@ -42,7 +44,7 @@ def _bezier(a, c, b, t):
 
 class Cord:
     """A connector whose geometry is the argument. Its two ends track mobjects,
-    so it follows every shuffle, condensation, swap, and gradient pulse."""
+    so it follows every shuffle, condensation, and swap."""
 
     # Three distinguishable threads: the composite cost is class + BCE + Dice,
     # so the strands must not collapse into one rope. Muted teal keeps the third
@@ -56,7 +58,6 @@ class Cord:
         self.calm = ValueTracker(calm)
         self.taut = ValueTracker(taut)
         self.braid = ValueTracker(0.0)
-        self.spring = ValueTracker(0.0)
         self.sag = ValueTracker(0.05)
         self.dim = ValueTracker(1.0)
         self.mob = always_redraw(self._draw)
@@ -82,33 +83,30 @@ class Cord:
         mid = (a + b) / 2 + DOWN * self.sag.get_value() * (1 - 0.7 * strain)
         n = np.array([-d[1], d[0], 0.0]) / length
         braid = self.braid.get_value()
-        spring = self.spring.get_value()
-        amp = 0.085 * braid + 0.10 * spring
-        turns = max(2.0, length * 1.2) + spring * (3.5 + length * 3.0)
+        amp = 0.085 * braid
+        turns = max(2.0, length * 1.2)
         dim = self.dim.get_value()
         strands = VGroup()
         for i, base in enumerate(self.STRAND_COLORS):
             col = interpolate_color(
-                ManimColor(MUTED), ManimColor(base), max(braid, spring))
+                ManimColor(MUTED), ManimColor(base), braid)
             # Strain is a tint, not a repaint: once the cord is a braid, the
             # strand identities (class, mask, dice) must stay readable.
-            ember_mix = strain * (0.85 - 0.6 * max(braid, spring))
+            ember_mix = strain * (0.85 - 0.6 * braid)
             col = interpolate_color(col, ManimColor(EMBER), ember_mix)
             phase = i * TAU / 3
 
             def path(t, ph=phase):
                 p = _bezier(a, mid, b, t)
-                # The envelope pinches strands together at the endpoints; in
-                # spring mode it relaxes so the coil keeps its width almost to
-                # the ends instead of tapering into a drill point.
-                env = np.sin(np.pi * t) ** (1.0 - 0.6 * spring)
+                # The envelope pinches the strands together at the endpoints.
+                env = np.sin(np.pi * t)
                 off = amp * np.sin(TAU * turns * t + ph) * env
                 return p + n * off
 
-            visible = 1.0 if i == 0 else max(braid, spring)
+            visible = 1.0 if i == 0 else braid
             if visible < 0.02:
                 continue
-            width = 2.2 - 0.8 * max(braid, spring) if i == 0 else 1.5
+            width = 2.2 - 0.8 * braid if i == 0 else 1.5
             s = ParametricFunction(path, t_range=[0, 1, 1 / 72])
             s.set_stroke(col, width=width, opacity=0.9 * visible * dim)
             strands.add(s)
@@ -138,8 +136,9 @@ class Coil:
         L = sum(c.length() for c in self.cords) * 0.85 * rv
         # An Archimedean coil whose arc length equals the summed cord length:
         # turns appear and disappear as cost changes, so it reads as wound
-        # rope, never as a gauge.
-        r0, b = 0.3, 0.05
+        # rope, never as a gauge. Tight winding (small r0, b) keeps it reading
+        # as a coil even when the cost is small, instead of a stray letter.
+        r0, b = 0.16, 0.03
         theta_max = (-r0 + np.sqrt(r0 * r0 + 2 * b * L)) / b
 
         def spiral(t):
@@ -183,6 +182,12 @@ class HungarianMatching(MovingCameraScene):
     def hold(self, t):
         self.wait(t)
         self.clock += t
+
+    def caption(self, text):
+        # One quiet caption at a time, bottom-center, clear of the disc and the
+        # shelf. Two in the whole scene: the problem, then its answer.
+        return (Text(text, font=FONT_BODY, font_size=30, color=MUTED)
+                .move_to([0, -3.5, 0]).set_z_index(5))
 
     def construct(self):
         self.clock = 0.0
@@ -249,8 +254,10 @@ class HungarianMatching(MovingCameraScene):
         self.beat(*[preds[n].animate(path_arc=0.45)
                     .move_to([slot_x[s], 2.6, 0])
                     for n, s in shuffle_to.items()], rt=1.4)
-        self.hold(1.6)
-        self.beat(FadeOut(strip), rt=0.8)
+        label_a = self.caption("order is arbitrary")
+        self.beat(FadeIn(label_a), rt=0.5)
+        self.hold(1.0)
+        self.beat(FadeOut(label_a), FadeOut(strip), rt=0.8)
 
         # ---- shot 2 (0:07-0:16): masks become points ----------------------
         disc = DashedVMobject(Circle(radius=2.75).move_to(DISC_C),
@@ -405,105 +412,38 @@ class HungarianMatching(MovingCameraScene):
             th.suspend_updating()
 
         thumb_x = [-4.0, -2.4, -0.8, 0.8, 2.4, 4.0]
+        # A faint holder behind the row names it as the storage list, so the
+        # shuffle reads as reordering positions, not a second set of masks.
+        row = RoundedRectangle(width=9.4, height=1.05, corner_radius=0.14)
+        row.set_stroke(MUTED, width=1.2, opacity=0.35).set_fill(opacity=0)
+        row.move_to([0, 3.3, 0])
         thumbs = {n: preds[n].copy().scale_to_fit_height(0.5)
                   .move_to([thumb_x[i], 3.3, 0]).set_z_index(3)
                   for i, n in enumerate(pred_order)}
         for t in thumbs.values():
             t.set_fill(GOLD, opacity=0.8).set_stroke(GOLD, width=1.4,
                                                      opacity=0.95)
-        self.beat(LaggedStart(*[DrawBorderThenFill(thumbs[n])
+        self.beat(FadeIn(row),
+                  LaggedStart(*[DrawBorderThenFill(thumbs[n])
                                 for n in pred_order], lag_ratio=0.1), rt=0.9)
 
-        def reshuffle(perm, rt):
-            self.beat(*[thumbs[n].animate(path_arc=0.3 * (-1) ** i)
-                        .move_to([thumb_x[s], 3.3, 0])
-                        for i, (n, s) in enumerate(perm.items())], rt=rt)
+        # One firm reordering, not a frantic sort: positions change, and the
+        # matched pairs in segment space do not move at all.
+        reorder = {"p1": 5, "p2": 2, "p3": 3, "p4": 0, "p5": 4, "p6": 1}
+        self.beat(*[thumbs[n].animate(path_arc=0.3 * (-1) ** i)
+                    .move_to([thumb_x[s], 3.3, 0])
+                    for i, (n, s) in enumerate(reorder.items())], rt=1.1)
+        label_b = self.caption("matching ignores order")
+        self.beat(FadeIn(label_b), rt=0.5)
+        # The held frame the scene exists for: order just changed, nothing in
+        # segment space did.
+        self.hold(2.4)
+        self.beat(FadeOut(label_b), FadeOut(row),
+                  FadeOut(VGroup(*thumbs.values())), rt=0.7)
 
-        reshuffle({"p1": 3, "p2": 0, "p3": 4, "p4": 2, "p5": 5, "p6": 1},
-                  rt=0.65)
-        reshuffle({"p1": 1, "p2": 4, "p3": 0, "p4": 5, "p5": 2, "p6": 3},
-                  rt=0.4)
-        self.hold(0.55)
-        reshuffle({"p1": 5, "p2": 2, "p3": 3, "p4": 0, "p5": 4, "p6": 1},
-                  rt=0.65)
-        self.hold(0.35)
-        # THE hold: the storage list was just violently permuted, and nothing
-        # in segment space moved. Long enough to be read as deliberate.
-        self.hold(2.7)
-
-        # ---- shot 7 (0:42-0:48): gradients ride the cords ------------------
-        for c in cords.values():
-            c.mob.resume_updating()
-        coil.mob.resume_updating()
-        for th in threads:
-            th.resume_updating()
-
-        self.beat(FadeOut(VGroup(*thumbs.values())),
-                  *[c.spring.animate.set_value(1.0) for c in cords.values()],
-                  *[c.braid.animate.set_value(0.15) for c in cords.values()],
-                  rt=0.8)
-
-        pairs = [("p1", "gt2"), ("p2", "gt3"), ("p3", "gt1")]
-
-        def pulled(n, gt, f):
-            cur = preds[n].get_center()
-            return cur + (POS[gt] - cur) * f
-
-        def shelf_fade(mask_op, ring_op, thread_op):
-            return [*[preds[n].animate.set_opacity(mask_op)
-                      for n in leftovers],
-                    *[r.animate.set_stroke(opacity=ring_op) for r in rings],
-                    thread_dim.animate.set_value(thread_op)]
-
-        # Pulse 1: every matched point slides down its cord.
-        self.beat(*[preds[n].animate.move_to(pulled(n, gt, 0.3))
-                    for n, gt in pairs],
-                  *shelf_fade(0.55, 0.6, 0.7), rt=1.15)
-        self.hold(0.3)
-        # Pulse 2: two masks re-inflate mid-travel, visibly improving.
-        improved = {
-            "p3": silhouette(warped(DUCK, 0.04, 3), 0.42, GOLD,
-                             fill_opacity=0.8).scale_to_fit_height(0.7),
-            "p2": silhouette(warped(DOG, 0.05, 11), 0.40, GOLD,
-                             fill_opacity=0.8).scale_to_fit_height(0.72),
-        }
-        for m in improved.values():
-            m.set_z_index(2)
-        self.beat(preds["p1"].animate.move_to(pulled("p1", "gt2", 0.2)),
-                  Transform(preds["p3"],
-                            improved["p3"].move_to(pulled("p3", "gt1", 0.2))),
-                  Transform(preds["p2"],
-                            improved["p2"].move_to(pulled("p2", "gt3", 0.2))),
-                  *shelf_fade(0.4, 0.45, 0.5), rt=1.1)
-        self.hold(0.25)
-        # Pulse 3: nearly clean now, still readable as masks.
-        final = {
-            "p3": silhouette(DUCK, 0.30, GOLD,
-                             fill_opacity=0.8).scale_to_fit_height(0.5),
-            "p2": silhouette(DOG, 0.28, GOLD,
-                             fill_opacity=0.8).scale_to_fit_height(0.52),
-        }
-        for m in final.values():
-            m.set_z_index(2)
-        self.beat(preds["p1"].animate.move_to(pulled("p1", "gt2", 0.2)),
-                  Transform(preds["p3"],
-                            final["p3"].move_to(pulled("p3", "gt1", 0.2))),
-                  Transform(preds["p2"],
-                            final["p2"].move_to(pulled("p2", "gt3", 0.2))),
-                  *shelf_fade(0.28, 0.32, 0.35), rt=1.1)
-        # Settle: pairs nearly coincident, coil tiny, rig at rest.
-        self.beat(*[preds[n].animate.move_to(pulled(n, gt, 0.68))
-                      .scale_to_fit_height(0.3) if n != "p1"
-                    else preds[n].animate.move_to(pulled(n, gt, 0.68))
-                    for n, gt in pairs],
-                  *[c.spring.animate.set_value(0.25) for c in cords.values()],
-                  *[c.sag.animate.set_value(0.1) for c in cords.values()],
-                  rt=1.1)
-
-        for c in cords.values():
-            c.mob.suspend_updating()
-        coil.mob.suspend_updating()
-        for th in threads:
-            th.suspend_updating()
-        self.hold(2.0)
+        # ---- close (0:42-0:44): rest on the solved matching ---------------
+        # A shot 7 once rode gradients down the cords here. Gradients are the
+        # training story of the loss terms, not the matching, so the scene ends
+        # on the resolved assignment and lets that single idea land.
+        self.hold(1.5)
         print(f"scene clock: {self.clock:.2f} s")

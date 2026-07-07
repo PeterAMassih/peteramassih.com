@@ -26,6 +26,18 @@ DOG = [
 ]
 
 
+# Sitting cat facing left, clockwise from the nose: twin pointed ears with a
+# dip between them (short and wide-set, or it reads rabbit), straight back,
+# haunch, tail curled along the ground.
+CAT = [
+    (-1.00, 0.35), (-0.88, 0.52), (-0.82, 0.62), (-0.76, 0.90), (-0.58, 0.70),
+    (-0.40, 0.92), (-0.30, 0.62), (-0.10, 0.46), (0.30, 0.32), (0.66, 0.20),
+    (0.94, -0.02), (0.92, -0.48), (0.78, -0.80), (0.40, -0.94), (0.05, -0.92),
+    (-0.34, -0.94), (-0.56, -0.88), (-0.62, -0.38), (-0.78, -0.02),
+    (-0.94, 0.16),
+]
+
+
 def _pts(anchors, scale=1.0, mirror=False):
     sx = -scale if mirror else scale
     return [np.array([x * sx, y * scale, 0.0]) for x, y in anchors]

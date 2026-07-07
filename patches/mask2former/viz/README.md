@@ -51,3 +51,9 @@ The first run downloads the checkpoint (`facebook/mask2former-swin-large-coco-pa
 committed). Provenance and licensing are documented in the script header: the
 image is CC0 1.0 from Wikimedia Commons, so the figure is redistributable. The
 model runs in eval mode with no sampling, so the output is deterministic.
+
+`trace_dog_shape.py` (same extra deps, plus `opencv-python-headless`) is how the
+`DOG` silhouette in `shapes.py` was made: it runs the model on a CC0 side-profile
+dog photo and simplifies the predicted mask's contour into the point list. A
+traced outline reads as a dog where the hand-drawn one did not. Only the points
+live in the repo; re-run this to regenerate them.

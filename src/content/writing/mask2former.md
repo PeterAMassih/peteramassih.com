@@ -82,7 +82,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 | $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
 | $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
 | $M_{l}$ | binarized mask predictions of layer $l$ (threshold $0.5$), resized to the layer's resolution |
-| $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$: $0$ on foreground, $-\infty$ elsewhere |
+| $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
 | $\sigma(\cdot)$ | the logistic sigmoid |
 | $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | loss weights: $5.0$, $5.0$, $2.0$ (and $0.1$ on $\varnothing$) |

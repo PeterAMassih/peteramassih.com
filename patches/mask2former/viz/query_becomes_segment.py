@@ -251,8 +251,9 @@ class QueryBecomesSegment(Scene):
                   rt=2.2)
         self.hold(0.5)
 
-        # Same fields, regrouped in place. Left: category only (semantic).
-        # Middle: identities, stuff dimmed (instance). Right: both (panoptic).
+        # Same fields, regrouped in place. Left: every pixel labeled by
+        # category, ducks share one hue (semantic). Middle: identities, stuff
+        # dropped (instance). Right: both (panoptic).
         sem_field, sem_a, sem_b, sem_dog = (panel[0], panel[4], panel[5],
                                             panel[6])
         ins_field, ins_a, ins_b, ins_dog = (panel_mid[0], panel_mid[4],
@@ -263,7 +264,8 @@ class QueryBecomesSegment(Scene):
             # semantic: the two ducks merge into one hue, no identities
             sem_a.animate.set_fill(ACCENT), sem_b.animate.set_fill(ACCENT),
             sem_dog.animate.set_fill(GOLD_DEEP),
-            sem_field.animate.set_fill(opacity=0.05).set_stroke(SLATE, width=1.2, opacity=0.45),
+            # semantic labels stuff too: same background fill as panoptic
+            sem_field.animate.set_fill(SLATE, opacity=0.24).set_stroke(SLATE, width=1.2, opacity=0.45),
             # instance: distinct things (thin ink identity outlines), dimmed
             # stuff
             ins_a.animate.set_fill(ACCENT_DARK)

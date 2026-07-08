@@ -84,7 +84,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 | $M_{l}$ | binarized mask predictions of layer $l$ (threshold $0.5$), resized to the layer's resolution |
 | $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
-| $\sigma(\cdot)$ | the logistic sigmoid |
+| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$ |
 | $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | loss weights: $5.0$, $5.0$, $2.0$ (and $0.1$ on $\varnothing$) |
 | $K_{\text{pt}}$ | number of sampled points for mask losses: $12{,}544 = 112^2$ |
 
@@ -126,7 +126,7 @@ $$
 \end{aligned}
 $$
 
-So every matching prediction covers more than half of $g$. Now suppose two predictions $p_1, p_2$ both matched $g$. The panoptic format keeps predictions disjoint, so $p_1 \cap g$ and $p_2 \cap g$ are disjoint subsets of $g$, each larger than $\tfrac12|g|$. Together they would hold more than $|g|$ pixels inside $g$, which is impossible. So at most one prediction matches $g$. $\blacksquare$
+So every matching prediction covers more than half of $g$. Now suppose two predictions $p_1, p_2$ both matched $g$. The panoptic format keeps predictions disjoint, so $p_1 \cap g$ and $p_2 \cap g$ are disjoint subsets of $g$, each larger than $\tfrac12|g|$. Together they would hold more than $|g|$ pixels inside $g$, which is impossible. So at most one prediction matches $g$. The same argument runs the other way: since the panoptic format also keeps the ground-truth segments disjoint, and $p \subseteq p \cup g$ gives $|p \cap g| > \tfrac12|p|$, each prediction matches at most one ground truth. $\blacksquare$
 
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching is exact. Keep this in contrast with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
@@ -135,7 +135,7 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 1. Gold circles are the model's query slots, and the blue-gray panel is the image, with two ducks and a dog. Each query starts with a rough guess at where its object is, the soft gold region, and the nine tick marks are the decoder layers that sharpen those guesses until each claims one object. Two queries briefly contend for the same duck until one backs off, the self-attention that keeps them from colliding. The triangle is the class head: it weighs the candidate classes, including a hollow one for no-object, keeps the most likely, and colors the query with it, teal for duck, deep gold for dog. So the region answers where, the color answers what. At the end the same predictions regroup three ways: semantic merges the two ducks into one class, instance keeps them as separate identities with outlines, and panoptic adds the background as labeled stuff. The model runs once, and only the grouping changes.</figcaption>
+<figcaption>Fig. 1. Gold circles are the model's query slots, and the blue-gray panel is the image, with two ducks and a dog. Each query starts with a rough guess at where its object is, the soft gold region, and the nine tick marks are the decoder layers that sharpen those guesses until each claims one object. Two queries briefly contend for the same duck until one backs off, the self-attention that keeps them from colliding. The triangle is the class head: it weighs the candidate classes, including a hollow one for no-object, keeps the most likely, and colors the query with it, teal for duck, deep gold for dog. So the region answers where, the color answers what. At the end the same predictions regroup three ways: semantic labels every pixel by class, the two ducks sharing one hue, instance keeps them as separate identities with outlines but drops the background, and panoptic keeps both, the per-duck identities and the labeled background. The model runs once, and only the grouping changes.</figcaption>
 </figure>
 
 The observation that motivates the whole research program: these tasks differ only in the semantics of grouping. Yet by 2021 each had its own architecture family, its own tricks, and its own hardware optimizations. Triplicated effort, and specializations that provably do not transfer.
@@ -206,7 +206,7 @@ $$
 
 This is the convention DETR introduced and the Mask2Former matcher implements: raw probability rather than log probability for the class term, the same mask terms used in training ($\mathcal{L}_{\text{ce}}$ and $\mathcal{L}_{\text{dice}}$, both defined in §3.2), and everything gated to real segments, so pairing with a padding slot costs exactly zero. Two footnotes on that. Why raw probability? A log blows up as $\hat p \to 0$, so one confidently wrong class could dominate a whole cost row. The raw probability stays in $[0,1]$, which keeps the class term on the same footing as the bounded mask terms. It matters only for matching, and the training loss still uses the log. And a fidelity note: the MaskFormer paper writes the class term ungated, charging $-\hat p_i(\varnothing)$ for unmatched predictions, but the released matchers (DETR's and Mask2Former's alike) build the cost matrix over real targets only, which is the gated form above.
 
-Two small facts make the padding trick legitimate. First, an assignment between the padded sets is a permutation $\sigma \in S_N$, a one-to-one reordering of the $N$ indices onto themselves, where $S_N$, the symmetric group, is the set of all $N!$ such reorderings. Restricted to the real targets it is exactly an injection, a one-to-one map, of ground truths into predictions, so no real segment can be dropped and no prediction can serve two targets. Second, a prediction paired with $\varnothing$ contributes zero, no matter which padding slot it received, so the minimization is genuinely over "which predictions take the real targets" and nothing else. An assignment has total cost
+Two small facts make the padding trick legitimate. First, an assignment between the padded sets is a permutation $\sigma \in S_N$ (this $\sigma$ is the assignment, not the sigmoid of the notation table), a one-to-one reordering of the $N$ indices onto themselves, where $S_N$, the symmetric group, is the set of all $N!$ such reorderings. Restricted to the real targets it is exactly an injection, a one-to-one map, of ground truths into predictions, so no real segment can be dropped and no prediction can serve two targets. Second, a prediction paired with $\varnothing$ contributes zero, no matter which padding slot it received, so the minimization is genuinely over "which predictions take the real targets" and nothing else. An assignment has total cost
 
 $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
@@ -224,9 +224,9 @@ $$
 \textstyle\sum_j x_{ij} = 1\ (\forall i),\quad \sum_i x_{ij} = 1\ (\forall j).
 $$
 
-The relaxation lets a prediction split fractionally across targets, half to one and half to another, which no real assignment can do. The surprise is that the freedom never helps: the cheapest fractional plan is always a whole-number permutation, so solving the easy continuous problem solves the hard combinatorial one for free. That is a property of the constraint matrix, and it is worth seeing why.
+The relaxation lets a prediction split fractionally across targets, half to one and half to another, which no real assignment can do. The surprise is that the freedom never helps: an optimal plan can always be taken to be a whole-number permutation, so solving the easy continuous problem solves the hard combinatorial one for free. That is a property of the constraint matrix, and it is worth seeing why.
 
-The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s column. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*, every square submatrix having determinant $-1$, $0$, or $+1$.
+The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*, every square submatrix having determinant $-1$, $0$, or $+1$.
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
@@ -234,7 +234,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 *Base* ($k = 1$): $B$ is a single entry, $0$ or $1$, so $\det B \in \{0, 1\}$.
 
-*Step* ($k > 1$): suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column; otherwise every column holds exactly two. That gives three cases.
+*Step* ($k > 1$): suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column. Otherwise every column holds exactly two, the most any column can carry. That gives three cases.
 
 - *Zero 1s.* The column is all zeros, so $\det B = 0$.
 - *One 1,* at row $r$, column $c$ of $B$. Laplace-expand along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
@@ -242,7 +242,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
-Total unimodularity forces integrality. At a vertex of the polytope, enough constraints are tight to pin $x$ down uniquely, so $x$ solves a square system $Bx = b$ where $B$ is a nonsingular submatrix of the constraint matrix and $b$ is integral. Cramer's rule gives $x = B^{-1}b$, and $\det B = \pm 1$ makes every entry an integer. Now use the constraints: with $x \ge 0$ and every row and column summing to $1$, each row and column holds a single $1$ and the rest $0$, which is a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is attained at a vertex. At a vertex enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down: those tight constraints hold their variables at $0$, and the surviving basic variables $x_B$ are fixed by the equality constraints. Dropping the one redundant equality leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. Cramer's rule gives $x_B = B^{-1} b$, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v}\ \sum_i u_i + \sum_j v_j
@@ -332,7 +332,7 @@ and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}}
 **BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is
 
 $$
-\mathcal{L}_{\text{ce}} = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
+\ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
 The two logarithms differentiate through the sigmoid. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$,
@@ -348,14 +348,14 @@ Substitute both, then expand and cancel:
 
 $$
 \begin{aligned}
-\frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x}
+\frac{\partial \ell_{\text{ce}}}{\partial z_x}
 &= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big] && \text{substitute}\\[2pt]
 &= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big] && \text{expand}\\[2pt]
 &= \sigma(z_x) - g_x && \text{cancel, then distribute the minus}.
 \end{aligned}
 $$
 
-Clean, well conditioned, and independent per point. That independence is also its weakness: summed over a region, the total gradient scales with the region's area, so large segments dominate the update and small ones barely register.
+Clean, well conditioned, and independent per point. The mask BCE sums this over the points, $\mathcal{L}_{\text{ce}} = \sum_x \ell_{\text{ce}}(x)$, and that per-point independence is also its weakness: the total gradient then scales with the region's area, so large segments dominate the update and small ones barely register.
 
 **Dice** [[Milletari et al. 2016](#ref-milletari2016)], in its soft form (smoothing constants dropped for clarity):
 
@@ -436,7 +436,7 @@ The predicted label is the argmax $c_i = \arg\max_c \hat p_i(c)$. A query is the
 <rect class="hero" x="398" y="72" width="182" height="108" rx="8" fill="#0d9488" fill-opacity="0.05" stroke="#0d9488" stroke-width="1.4"/>
 <text class="lbl" x="489" y="96" text-anchor="middle">Transformer decoder</text>
 <text class="sub" x="489" y="113" text-anchor="middle">9 layers, coarse to fine</text>
-<g fill="#b8860b"><circle cx="438" cy="137" r="4.2"/><circle cx="459" cy="137" r="4.2"/><circle cx="480" cy="137" r="4.2"/><circle cx="501" cy="137" r="4.2"/><circle cx="522" cy="137" r="4.2"/><circle cx="543" cy="137" r="4.2"/></g>
+<g fill="#b8860b"><circle cx="468" cy="137" r="4.2"/><circle cx="489" cy="137" r="4.2"/><circle cx="510" cy="137" r="4.2"/></g>
 <rect x="427" y="158" width="124" height="20" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="1"/>
 <text class="tag" x="489" y="172" text-anchor="middle" fill="#0d9488">unfold the 9 layers &#9656;</text>
 </a>
@@ -512,7 +512,7 @@ $$
 
 with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ linear images of the features at resolution $H_l \times W_l$. The paper writes Eq. 1 without the $1/\sqrt{d}$ temperature ($d$ is the per-head key dimension) and without the multi-head split, the standard trick of running several attention operations in parallel over different slices of the channels and concatenating them. It states no such caveat, but the implementation is standard multi-head attention with both. Worth knowing before you reimplement from the paper alone.
 
-Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. Mask2Former's appendix adds a blunt measurement of the end state. Even after convergence, averaged over COCO val, only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
+Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. Mask2Former's appendix adds a blunt measurement of the end state. Even after convergence, averaged over COCO val (the validation split), only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
 
 The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is the $n_f$ foreground weights over the total. Divide numerator and denominator by $n_f\, e^{\mu_f}$:
 
@@ -584,7 +584,7 @@ $$
 \begin{aligned}
 \sum_{j=1}^{n} e^{z_j + \mathcal{M}_j}
 &= \sum_{j\in S} e^{z_j}\,e^{0} + \sum_{j\notin S} e^{z_j}\,e^{-\infty} && \text{split over } S \text{ and its complement}\\[2pt]
-&= \sum_{j\in S} e^{z_j} && \text{the second sum is } 0.
+&= \sum_{j\in S} e^{z_j} \;>\; 0 && \text{the second sum is }0,\text{ and }S\neq\varnothing\text{ makes the first positive}.
 \end{aligned}
 $$
 
@@ -605,7 +605,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 <source src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 5. The gold circle is one query, and the blue-gray area is the image, with the warm patch the object the query is learning. Each thin strand is one image location's contribution to the query's attention, cool from background and warm from the object, and together they form a bundle whose total width is the attention mass, which always sums to 1. A slow pan across the image shows the many background strands outweighing the few from the object, the pathology of <a class="section-ref" href="#51-the-pathology-quantified">§5.1</a>. The plate that slides in is the query's mask from the previous layer. Its label, minus infinity, is Eq. 3: that score sends a location's softmax weight to exactly zero, so the opaque part of the plate blocks those locations. The blocked strands fall away while the survivors thicken in the same motion, so the bundle stays exactly as wide, the renormalization of Eq. 2. The stencil then tightens with each pass, the successive decoder layers sharpening the mask, and near the end it briefly seals shut and reopens, the empty-mask guard of <a class="section-ref" href="#53-stability-gradients-and-the-guard-rail">§5.3</a>. Finally the whole picture resolves into the masked-attention equation it has been illustrating.</figcaption>
+<figcaption>Fig. 5. The gold circle is one query, and the blue-gray area is the image, with the warm patch the object the query is learning. Each thin strand is one image location's contribution to the query's attention, cool from background and warm from the object, and together they form a bundle whose total width is the attention mass, which always sums to 1. A slow pan across the image shows the many background strands outweighing the few from the object, the pathology of <a class="section-ref" href="#51-the-pathology-quantified">§5.1</a>. The plate that slides in is the query's mask from the previous layer. Its label, minus infinity, is Eq. 3: that score sends a location's softmax weight to exactly zero, so the shaded part of the plate blocks those locations. The blocked strands fall away while the survivors thicken in the same motion, so the bundle stays exactly as wide, the renormalization of Eq. 2. The stencil then tightens with each pass, the successive decoder layers sharpening the mask, and near the end it briefly seals shut and reopens, the empty-mask guard of <a class="section-ref" href="#53-stability-gradients-and-the-guard-rail">§5.3</a>. Finally the whole picture resolves into the masked-attention equation it has been illustrating.</figcaption>
 </figure>
 
 ### 5.3 Stability, gradients, and the guard rail
@@ -629,7 +629,7 @@ Cross-attention cost per layer scales with the token count of the feature map. B
 
 ### 6.2 The schedule
 
-Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation prices those extra reads at almost nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs (billions of floating-point operations per image, the standard compute proxy) against round-robin's 43.7 at 226, a 0.3 AP gain for tripling the high-resolution token visits, and it is the high resolution that pays, not the scale mixing: stride 8 alone at every layer also reaches 44.0, and still costs 239 against the round-robin's 226. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single component removal after masked attention.
+Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation prices those extra reads at almost nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs (billions of floating-point operations per image, the standard compute proxy) against round-robin's 43.7 at 226, a 0.3 AP gain for tripling the high-resolution token visits. And it is the high resolution that pays, not the scale mixing: stride 8 alone at every layer also reaches 44.0, still at 239 against the round-robin's 226. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single component removal after masked attention.
 
 Each scale's features must tell the layer where and which rung. Positions use DETR's 2-D sinusoidal embedding: for each axis and channel pair $i$,
 
@@ -647,18 +647,18 @@ computed separately for $x$ and $y$ and concatenated. The intuition: each positi
 <source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 6. The three panes are the same image at the feature pyramid's three strides, each with a faint edge tint marking its level embedding. The near-opaque pane is stride 32, where the small duckling disappears because the grid is too coarse to hold it. Each pane's dots are its tokens, and the count quadruples from stride 32 to 16 to 8 (a 1 to 4 to 16 ratio), so the finest pane, stride 8, has by far the most tokens and is the most expensive. The gold circle is one query, and its glow is its current mask. It reads one pane per layer, coarse to fine, three times over: the round-robin schedule. The sagging slab is the rejected alternative, using all scales at every layer, three times the tokens for no accuracy gain, and it drags the query through at a crawl.</figcaption>
+<figcaption>Fig. 6. The three panes are the same image at the feature pyramid's three strides, each with a faint edge tint marking its level embedding. The near-opaque pane is stride 32, where the small duckling disappears because the grid is too coarse to hold it. Each pane's dots are its tokens, and the count quadruples from stride 32 to 16 to 8 (a 1 to 4 to 16 ratio), so the finest pane, stride 8, has by far the most tokens and is the most expensive. The gold circle is one query, its glow pulsing each time it reads. It reads one pane per layer, coarse to fine, three times over: the round-robin schedule. The sagging slab is the rejected alternative, using all scales at every layer, three times the tokens for a negligible 0.3 AP, and it drags the query through at a crawl.</figcaption>
 </figure>
 
 ### 6.3 The pixel decoder is a free variable, and that is a finding
 
-Because masked attention only needs some pyramid, any pixel decoder plugs in. The default is a 6-layer multi-scale deformable attention Transformer (MSDeformAttn) over strides $1/8$, $1/16$, $1/32$, plus a lateral-connected upsample to the stride-4 embedding map. Deformable attention [[Zhu et al. 2021](#ref-zhu2021)] replaces dense attention with a learned sparse sample. For a query feature $z_q$ at reference point $\hat p_q$ (the point on the feature grid the query samples around, from which its learned offsets reach out),
+Because masked attention only needs some pyramid, any pixel decoder plugs in. The default is a 6-layer multi-scale deformable attention Transformer (MSDeformAttn) over strides $1/8$, $1/16$, $1/32$, plus an upsample fused with the stride-4 backbone features to give the per-pixel embedding map. Deformable attention [[Zhu et al. 2021](#ref-zhu2021)] replaces dense attention with a learned sparse sample. For a query feature $z_q$ at reference point $\hat p_q$ (the point on the feature grid the query samples around, from which its learned offsets reach out),
 
 $$
-\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\phi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
+\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
 $$
 
-where $m$ indexes heads, $l$ levels, and $k$ sampling points, with $M$, $L$, $K$ their counts (all three local to this equation, so this $K$ is not the class count) and $W_m$, $W'_m$ the per-head output and value projections. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\phi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$: $M \times L \times K$ sampled reads, each a $C$-wide vector, instead of touching all $\sum_l H_lW_l$ locations. A constant number of taps per query is what makes a Transformer pixel decoder affordable at stride 8.
+where $m$ indexes heads, $l$ levels, and $k$ sampling points, with $M$, $L$, $K$ their counts (all three local to this equation, so this $K$ is not the class count) and $W_m$, $W'_m$ the per-head output and value projections. The offsets $\Delta p_{mlqk}$ and the attention weights $A_{mlqk}$, normalized by softmax over $(l,k)$, are linear functions of $z_q$. The map $\psi_l$ rescales the reference point to level $l$, and bilinear interpolation reads the fractional positions. Cost per query is $O(MLK\,C)$: $M \times L \times K$ sampled reads, each a $C$-wide vector, instead of touching all $\sum_l H_lW_l$ locations. A constant number of taps per query is what makes a Transformer pixel decoder affordable at stride 8.
 
 The cross-decoder ablation quietly restates the paper's thesis in miniature. FPN scores 41.5 AP. Among classic pyramids, BiFPN is best for instance-level tasks and FaPN is best for semantic [[Tan et al. 2020](#ref-tan2020), [Huang et al. 2021](#ref-huang2021)]. Module design re-fragments by task, which is exactly the disease being cured, and only MSDeformAttn wins across all three tasks at once. A universal model doubles as a testbed: a module is not better until it is better everywhere.
 
@@ -710,7 +710,7 @@ The sampling distribution differs by role, for a different reason in each case. 
 
 **Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The reason it helps fits in a breath: the matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays unbiased. The variance argument behind it follows, and is skippable.
 
-**Aside (why sharing cancels the shared noise, skippable).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)] = c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the representative two-entry case $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which is the whole comparison when $\sigma$ and $\sigma'$ differ by a single swap. Then
+**Aside (why sharing cancels the shared noise, skippable).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)] = c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the smallest case, two entries $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which already exhibits the mechanism. Then
 
 $$
 \operatorname{Var}[A - B] = \operatorname{Var}[A] + \operatorname{Var}[B] - 2\operatorname{Cov}(A,B),

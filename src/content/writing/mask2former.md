@@ -210,7 +210,7 @@ and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigm
 
 **Aside (the Hungarian algorithm in full, skippable).** In the code the matcher is one `scipy` call, but the algorithm inside is a small classic worth meeting once, because its correctness is a clean duality argument and it is where the $O(N^3)$ came from.
 
-**As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Dropping the integrality gives a linear program,
+**As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Relaxing the integrality to $x \ge 0$ gives a linear program,
 
 $$
 \min_{x \ge 0}\ \sum_{i,j}\text{cost}(i,j)\,x_{ij}
@@ -218,7 +218,15 @@ $$
 \textstyle\sum_j x_{ij} = 1\ (\forall i),\quad \sum_i x_{ij} = 1\ (\forall j).
 $$
 
-Its constraint matrix is the incidence matrix of a bipartite graph, which is totally unimodular, so every vertex of the feasible polytope is already integral. The relaxation is therefore exact: its optimum is a genuine permutation and nothing needs rounding. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+The relaxation lets a prediction split fractionally across targets, half to one and half to another, which no real assignment can do. The surprise is that the freedom never helps: the cheapest fractional plan is always a whole-number permutation, so solving the easy continuous problem solves the hard combinatorial one for free. That is a property of the constraint matrix, and it is worth seeing why.
+
+The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s column. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*, every square submatrix having determinant $-1$, $0$, or $+1$.
+
+**Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
+
+**Proof.** Induct on the order $k$ of $B$. A $1 \times 1$ block is a lone $0$ or $1$. For $k > 1$, take any column of $B$. If it is all zeros, $\det B = 0$. If it has a single 1, expand the determinant along it: $\det B = \pm \det B'$ for a $(k-1) \times (k-1)$ minor, which lies in $\{-1,0,1\}$ by induction. Otherwise every column has exactly two 1s, one in a prediction-row and one in a target-row, so the prediction-rows of $B$ sum to the all-ones vector and the target-rows do too. Their difference is zero, the rows are linearly dependent, and $\det B = 0$. $\blacksquare$
+
+Total unimodularity is what forces integrality. A vertex of the polytope is the unique solution of $Bx = b$ for some nonsingular square submatrix $B$ and integral $b$, so Cramer's rule gives $x = B^{-1}b$ with integer entries when $\det B = \pm 1$. The equality constraints then pin each entry to $0$ or $1$, so the vertex is a permutation matrix. The relaxation is therefore exact: its optimum is a genuine assignment and nothing needs rounding. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v}\ \sum_i u_i + \sum_j v_j
@@ -250,7 +258,7 @@ So $\sum_i u_i + \sum_j v_j$ is a lower bound on the cost of every assignment, a
 
 **How it runs.** The Hungarian method builds the assignment and the potentials together, holding two invariants throughout, $\tilde c \ge 0$ and a matching that uses only tight edges.
 
-1. **Reduce.** Set $u_i = \min_j \text{cost}(i,j)$, then $v_j = \min_i \tilde c(i,j)$. Now $\tilde c \ge 0$ with a tight edge in every row and every column.
+1. **Reduce.** Set $u_i = \min_j \text{cost}(i,j)$, then $v_j = \min_i \tilde c(i,j)$: subtract each prediction's cheapest option, then each target's, so a reduced cost now reads as regret against the best available and a tight edge marks a favorite. This leaves $\tilde c \ge 0$ with a tight edge in every row and every column, and the column pass cannot wipe out a row's zero: that zero sits in a column whose minimum is already $0$, so $v_j = 0$ there and the entry survives untouched.
 2. **Match on tight edges.** Extend the matching along zero-reduced-cost edges by augmenting paths, as far as it will go.
 3. **Perfect?** If the matching reaches size $N$ it lies entirely on tight edges, so by the lemma it is optimal. Stop.
 4. **Otherwise lift the dual.** No augmenting path exists yet. Grow an alternating tree from an unmatched prediction along tight edges, reaching rows $I$ and columns $J$, and let $\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j)$. Raise $u_i$ by $\delta$ on $I$ and lower $v_j$ by $\delta$ on $J$. Reduced costs stay nonnegative, a fresh tight edge opens at the frontier so the tree grows, and because the tree holds one more row than column the dual objective $\sum_i u_i + \sum_j v_j$ rises by $\delta$. Repeat the lift until the tree touches an unmatched target, then augment along that path and return to step 2.
@@ -659,7 +667,7 @@ At ResNet-50 scale the story is learning efficiency: 51.9 PQ in 50 epochs agains
 
 Three second-order results carry more information than the headlines. On test-dev instance segmentation, large-object AP reaches 71.2, beating the challenge winner's 67.7 despite the winner's extra data and ensembling, while small-object AP is 29.1 against their 36.6. The paradigm is spectacular on large objects and clearly behind on small ones, the paper's own declared open problem. Boundary AP, the same AP computed with an overlap measure that only counts pixels near mask edges [[Cheng et al. 2021c](#ref-cheng2021biou)], rises by 2.1 over HTC++ against 0.6 overall, so the stride-4 embedding map pays exactly where masks are won and lost, at their edges. And the compute-performance frontier genuinely moves, since the lightest Mask2Former beats the heaviest MaskFormer at a quarter of the FLOPs, though honesty requires the throughput footnote: the R50 panoptic model runs 8.6 fps to MaskFormer's 17.6. Multi-scale attention is not free. It is very well spent.
 
-Generalization holds without architectural change. The same Swin-L, retrained per dataset, keeps pace with the street-scene specialists on their home turf: Cityscapes at 66.6 PQ, 43.7 AP, and 83.3 mIoU, ADE20K panoptic at 48.1 PQ, and Mapillary Vistas at 45.5 PQ and 63.2 mIoU.
+Generalization holds without architectural change. The same Swin-L, retrained per dataset, is competitive with each domain's specialists: on Cityscapes it drives all three tasks at once (66.6 PQ, 43.7 AP, 83.3 mIoU), and it carries to ADE20K panoptic (48.1 PQ) and Mapillary Vistas (45.5 PQ) without an architectural change. The point is the breadth, one decoder spanning domains that each grew a separate specialist line, not any single entry.
 
 ## 11. What actually mattered
 

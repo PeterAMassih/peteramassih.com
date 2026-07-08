@@ -206,7 +206,7 @@ $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix is (§8).
+and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix, not solving it, is the expensive part (§8).
 
 **Aside (how the Hungarian algorithm works, skippable).** The solver rests on one fact about the cost matrix. For any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, define the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$. Because every assignment selects exactly one entry per row and per column,
 
@@ -279,104 +279,109 @@ Read the denominator. Every point's gradient is normalized by the squared region
 
 ## 4. The meta-architecture
 
-Mask2Former keeps MaskFormer's three-part skeleton exactly. A **backbone** (ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)]) extracts low-resolution features. A **pixel decoder** upsamples them into a feature pyramid ending in per-pixel embeddings $\mathcal{E}_{\text{pixel}}$ at stride 4. A **Transformer decoder** processes $N$ query vectors against the image features. Each output query $q_i$ yields a class through a linear head, and a mask through a small MLP followed by a dot product with every pixel embedding:
+Mask2Former keeps MaskFormer's three-part skeleton exactly. A **backbone** (ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)]) extracts low-resolution features. A **pixel decoder** upsamples them into a feature pyramid ending in per-pixel embeddings $\mathcal{E}_{\text{pixel}}$ at stride 4. A **Transformer decoder** processes $N$ query vectors against the image features. Each output query $q_i$ yields a class distribution through a linear head, and a mask through a small MLP followed by a dot product with every pixel embedding:
 
 $$
-c_i \sim \operatorname{softmax}(W_{\text{cls}}\, q_i), \qquad
+\hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i), \qquad
 m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)\big).
 $$
 
-A query is therefore a slot that becomes one segment. One vector simultaneously determines what (the class head) and where (its inner product with the embedding field). Masks are decoded at stride 4 and bilinearly upsampled. MaskFormer instantiated this skeleton with an FPN pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard Transformer decoder layers attending over a single stride-32 map. Every one of Mask2Former's contributions is a surgical change inside this fixed skeleton, which is why its ablations decompose so cleanly (§11).
+The predicted label is the argmax $c_i = \arg\max_c \hat p_i(c)$. A query is therefore a slot that becomes one segment. One vector simultaneously determines what (the class head) and where (its inner product with the embedding field). Masks are decoded at stride 4 and bilinearly upsampled. MaskFormer instantiated this skeleton with an FPN pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard Transformer decoder layers attending over a single stride-32 map. Every one of Mask2Former's contributions is a surgical change inside this fixed skeleton, which is why its ablations decompose so cleanly (§11).
 
 <figure class="viz">
-<svg class="m2f-arch" viewBox="0 0 740 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former pipeline: image, backbone, pixel decoder, a nine-layer Transformer decoder with a masked-attention loop, then per-query class and mask heads. The decoder can be opened to show its nine layers.">
+<svg class="m2f-arch" viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former overview: image, backbone, pixel decoder, a nine-layer Transformer decoder, and per-query class and mask heads. The decoder unfolds to show its nine masked-attention layers.">
 <defs>
 <style>
-.lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 15px; }
-.sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 12px; }
-.tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 11.5px; }
-.box { fill: #ffffff; stroke: #171717; stroke-width: 1.4; }
-.arr { stroke: #171717; stroke-width: 1.4; fill: none; }
-.card { fill: #ffffff; stroke: #6b6b6b; stroke-width: 1; }
-.tagx { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
+.lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13.5px; }
+.sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
+.tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
+.box { fill: #ffffff; stroke: #d4d4d4; stroke-width: 1; }
+.flow { stroke: #9a9a9a; stroke-width: 1.3; fill: none; }
 .hot { cursor: pointer; }
-.hot rect.box, .hot .lbl { transition: stroke 150ms ease, fill 150ms ease, stroke-width 150ms ease; }
-.hot:hover rect.box { stroke: #0d9488; stroke-width: 2.2; }
-.hot:hover .lbl { fill: #0d9488; }
+.hot rect.hero { transition: stroke-width 150ms ease; }
+.hot:hover rect.hero { stroke-width: 2.2; }
 </style>
-<marker id="ah" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#171717"/></marker>
-<marker id="ah-s" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#64748b"/></marker>
-<marker id="ah-t" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#0d9488"/></marker>
-<marker id="ah-g" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#b8860b"/></marker>
+<marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
+<marker id="ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b8860b"/></marker>
+<marker id="at" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0d9488"/></marker>
+<marker id="as" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker>
 </defs>
-<rect x="0" y="0" width="740" height="360" rx="6" fill="#fafafa"/>
+<rect width="720" height="250" rx="6" fill="#fafafa"/>
 <g class="m2f-collapsed">
-<rect class="box" x="16" y="112" width="74" height="56" rx="6"/>
-<text class="lbl" x="53" y="145" text-anchor="middle">Image</text>
-<rect class="box" x="118" y="106" width="96" height="68" rx="6"/>
-<text class="lbl" x="166" y="136" text-anchor="middle">Backbone</text>
-<text class="sub" x="166" y="154" text-anchor="middle">ResNet / Swin</text>
-<a href="#6-feeding-the-decoder" class="hot"><rect class="box" x="242" y="100" width="112" height="80" rx="6"/>
-<text class="lbl" x="298" y="134" text-anchor="middle">Pixel decoder</text>
-<text class="sub" x="298" y="152" text-anchor="middle">MSDeformAttn</text></a>
-<line class="arr" x1="90" y1="140" x2="114" y2="140" marker-end="url(#ah)"/>
-<line class="arr" x1="214" y1="140" x2="238" y2="140" marker-end="url(#ah)"/>
-<line class="arr" x1="354" y1="140" x2="432" y2="140" marker-end="url(#ah)"/>
-<text class="sub" x="393" y="114" text-anchor="middle">feature</text>
-<text class="sub" x="393" y="128" text-anchor="middle">pyramid</text>
-<g fill="#64748b"><rect x="375" y="150" width="36" height="3.2"/><rect x="379" y="155" width="28" height="3.2"/><rect x="383" y="160" width="20" height="3.2"/></g>
-<a href="#5-masked-attention" class="hot" data-m2f-open="1"><rect class="box" x="434" y="60" width="164" height="220" rx="6"/>
-<text class="lbl" x="516" y="86" text-anchor="middle">Transformer decoder</text>
-<text class="sub" x="516" y="104" text-anchor="middle">9 layers, coarse to fine</text>
-<text class="tag" x="516" y="130" text-anchor="middle" fill="#b8860b">N object queries</text>
-<g fill="#b8860b"><circle cx="462" cy="146" r="5"/><circle cx="483" cy="146" r="5"/><circle cx="504" cy="146" r="5"/><circle cx="525" cy="146" r="5"/><circle cx="546" cy="146" r="5"/><circle cx="567" cy="146" r="5"/></g>
-<rect x="450" y="176" width="132" height="34" rx="5" fill="#ffffff" stroke="#6b6b6b" stroke-width="1.2"/>
-<text class="tag" x="516" y="197" text-anchor="middle" xml:space="preserve"><tspan fill="#0d9488">MA</tspan><tspan fill="#171717"> &#8594; SA &#8594; FFN</tspan></text>
-<path d="M 450 200 C 420 208, 420 168, 450 182" stroke="#0d9488" stroke-width="1.8" fill="none" marker-end="url(#ah-t)"/>
-<text class="tag" x="437" y="228" text-anchor="middle" fill="#0d9488">mask</text>
-<text class="tagx" x="516" y="260" text-anchor="middle" fill="#0d9488">click to open the 9 layers &#9656;</text></a>
-<rect class="box" x="620" y="94" width="104" height="44" rx="6"/>
-<text class="lbl" x="672" y="114" text-anchor="middle">Class head</text>
-<text class="sub" x="672" y="130" text-anchor="middle">c&#7522; &#8712; {1..K, &#8709;}</text>
-<rect class="box" x="620" y="196" width="104" height="44" rx="6"/>
-<text class="lbl" x="672" y="216" text-anchor="middle">Mask head</text>
-<text class="sub" x="672" y="232" text-anchor="middle">m&#7522; = &#963;(MLP(q&#7522;)&#183;&#949;)</text>
-<text class="tag" x="672" y="86" text-anchor="middle" fill="#6b6b6b">what</text>
-<text class="tag" x="672" y="188" text-anchor="middle" fill="#6b6b6b">where</text>
-<path class="arr" d="M 598 130 C 610 122, 610 116, 620 116" marker-end="url(#ah-g)" stroke="#b8860b"/>
-<path class="arr" d="M 598 210 C 610 216, 610 218, 620 218" marker-end="url(#ah-g)" stroke="#b8860b"/>
-<path d="M 298 180 L 298 326 L 672 326 L 672 242" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#ah-s)"/>
-<text class="tag" x="485" y="318" text-anchor="middle" fill="#64748b">&#949;&#8202;pixel: per-pixel embeddings (stride 4)</text>
-<text class="sub" x="672" y="268" text-anchor="middle">N (class, mask) pairs</text>
+<rect class="box" x="24" y="94" width="58" height="48" rx="4"/>
+<text class="lbl" x="53" y="122" text-anchor="middle">Image</text>
+<line class="flow" x1="82" y1="118" x2="108" y2="118" marker-end="url(#a)"/>
+<rect class="box" x="110" y="90" width="94" height="56" rx="4"/>
+<text class="lbl" x="157" y="114" text-anchor="middle">Backbone</text>
+<text class="sub" x="157" y="131" text-anchor="middle">ResNet / Swin</text>
+<line class="flow" x1="204" y1="118" x2="230" y2="118" marker-end="url(#a)"/>
+<rect class="box" x="232" y="90" width="110" height="56" rx="4"/>
+<text class="lbl" x="287" y="114" text-anchor="middle">Pixel decoder</text>
+<text class="sub" x="287" y="131" text-anchor="middle">MSDeformAttn</text>
+<line class="flow" x1="342" y1="118" x2="396" y2="118" marker-end="url(#a)"/>
+<a href="#5-masked-attention" class="hot" data-m2f-open="1">
+<rect class="hero" x="398" y="72" width="182" height="108" rx="8" fill="#0d9488" fill-opacity="0.05" stroke="#0d9488" stroke-width="1.4"/>
+<text class="lbl" x="489" y="96" text-anchor="middle">Transformer decoder</text>
+<text class="sub" x="489" y="113" text-anchor="middle">9 layers, coarse to fine</text>
+<g fill="#b8860b"><circle cx="438" cy="137" r="4.2"/><circle cx="459" cy="137" r="4.2"/><circle cx="480" cy="137" r="4.2"/><circle cx="501" cy="137" r="4.2"/><circle cx="522" cy="137" r="4.2"/><circle cx="543" cy="137" r="4.2"/></g>
+<rect x="427" y="158" width="124" height="20" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="1"/>
+<text class="tag" x="489" y="172" text-anchor="middle" fill="#0d9488">unfold the 9 layers &#9656;</text>
+</a>
+<text class="tag" x="647" y="76" text-anchor="middle" fill="#6b6b6b">what</text>
+<rect class="box" x="598" y="82" width="98" height="42" rx="4"/>
+<text class="lbl" x="647" y="101" text-anchor="middle">Class head</text>
+<text class="sub" x="647" y="116" text-anchor="middle">c &#8712; {1..K, &#8709;}</text>
+<text class="tag" x="647" y="144" text-anchor="middle" fill="#6b6b6b">where</text>
+<rect class="box" x="598" y="150" width="98" height="42" rx="4"/>
+<text class="lbl" x="647" y="169" text-anchor="middle">Mask head</text>
+<text class="sub" x="647" y="184" text-anchor="middle">&#963;(MLP(q)&#183;&#949;)</text>
+<path class="flow" d="M 580 108 C 590 100, 590 103, 598 103" stroke="#b8860b" marker-end="url(#ag)"/>
+<path class="flow" d="M 580 150 C 590 164, 590 171, 598 171" stroke="#b8860b" marker-end="url(#ag)"/>
+<path d="M 287 146 L 287 214 L 647 214 L 647 192" fill="none" stroke="#64748b" stroke-width="1.3" marker-end="url(#as)"/>
+<text class="tag" x="455" y="230" text-anchor="middle" fill="#64748b">&#949; per-pixel embeddings &#183; stride 4</text>
 </g>
 <g class="m2f-expanded" style="display: none">
-<g style="cursor: pointer" data-m2f-close="1"><rect x="16" y="14" width="98" height="24" rx="5" fill="#ffffff" stroke="#6b6b6b" stroke-width="1"/>
-<text class="sub" x="65" y="30" text-anchor="middle">&#8249; overview</text></g>
-<text class="lbl" x="400" y="28" text-anchor="middle">Inside the Transformer decoder</text>
-<text class="sub" x="400" y="46" text-anchor="middle">9 layers, one image scale per layer, coarse to fine, the 3-scale cycle repeated 3 times</text>
-<a href="#5-masked-attention" class="hot"><rect x="248" y="64" width="304" height="30" rx="6" fill="#ffffff" stroke="#171717" stroke-width="1.1"/>
-<text class="tagx" x="400" y="83" text-anchor="middle" xml:space="preserve"><tspan fill="#6b6b6b">every layer is </tspan><tspan fill="#0d9488">masked attn</tspan><tspan fill="#171717"> &#8594; self-attn &#8594; FFN</tspan></text></a>
-<line x1="70" y1="120" x2="596" y2="120" stroke="#0d9488" stroke-width="1.4" stroke-dasharray="4 3"/>
-<g fill="none" stroke="#0d9488" stroke-width="1.4"><path d="M 95 120 L 95 132" marker-end="url(#ah-t)"/><path d="M 207 120 L 207 132" marker-end="url(#ah-t)"/><path d="M 331 120 L 331 132" marker-end="url(#ah-t)"/><path d="M 455 120 L 455 132" marker-end="url(#ah-t)"/><path d="M 567 120 L 567 132" marker-end="url(#ah-t)"/></g>
-<text class="tagx" x="333" y="112" text-anchor="middle" fill="#0d9488">masked attention: each layer's mask gates the next layer's read</text>
-<rect class="card" x="70" y="134" width="50" height="96" rx="4"/><rect x="70" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="95" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
-<rect class="card" x="126" y="134" width="50" height="96" rx="4"/><rect x="126" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="151" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
-<rect class="card" x="182" y="134" width="50" height="96" rx="4"/><rect x="182" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="207" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
-<rect class="card" x="250" y="134" width="50" height="96" rx="4"/><rect x="250" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="275" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
-<rect class="card" x="306" y="134" width="50" height="96" rx="4"/><rect x="306" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="331" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
-<rect class="card" x="362" y="134" width="50" height="96" rx="4"/><rect x="362" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="387" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
-<rect class="card" x="430" y="134" width="50" height="96" rx="4"/><rect x="430" y="134" width="50" height="5" rx="2" fill="#404855"/><text class="tagx" x="455" y="248" text-anchor="middle" fill="#6b6b6b">1/32</text>
-<rect class="card" x="486" y="134" width="50" height="96" rx="4"/><rect x="486" y="134" width="50" height="5" rx="2" fill="#64748b"/><text class="tagx" x="511" y="248" text-anchor="middle" fill="#6b6b6b">1/16</text>
-<rect class="card" x="542" y="134" width="50" height="96" rx="4"/><rect x="542" y="134" width="50" height="5" rx="2" fill="#a8b1bd"/><text class="tagx" x="567" y="248" text-anchor="middle" fill="#6b6b6b">1/8</text>
-<line x1="44" y1="272" x2="604" y2="272" stroke="#b8860b" stroke-width="2.5" marker-end="url(#ah-g)"/>
-<g fill="#b8860b"><circle cx="30" cy="272" r="3.5"/><circle cx="30" cy="262" r="3.5"/><circle cx="30" cy="282" r="3.5"/></g>
-<text class="tagx" x="62" y="296" text-anchor="middle" fill="#b8860b">N queries in</text>
-<text class="tagx" x="626" y="268" fill="#b8860b">refined out</text>
-<text class="tagx" x="626" y="282" fill="#6b6b6b">to the heads</text>
-<text class="sub" x="333" y="328" text-anchor="middle">the color tab on each layer is the image scale it reads</text>
+<g class="hot" data-m2f-close="1">
+<rect x="20" y="16" width="92" height="24" rx="5" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<text class="sub" x="66" y="32" text-anchor="middle">&#8249; overview</text>
+</g>
+<text class="lbl" x="380" y="30" text-anchor="middle" font-size="14px">Inside the Transformer decoder</text>
+<text class="sub" x="380" y="48" text-anchor="middle">one scale per layer, coarse to fine &#183; the 3-layer block repeats &#215;3</text>
+<text class="tag" x="266" y="72" text-anchor="middle" fill="#0d9488">masked attention: each query reads only inside its own predicted mask</text>
+<path d="M 132 104 C 132 86, 266 86, 266 102" fill="none" stroke="#0d9488" stroke-width="1.5" marker-end="url(#at)"/>
+<path d="M 266 104 C 266 86, 400 86, 400 102" fill="none" stroke="#0d9488" stroke-width="1.5" marker-end="url(#at)"/>
+<g fill="#b8860b"><circle cx="40" cy="128" r="4"/><circle cx="40" cy="140" r="4"/><circle cx="40" cy="152" r="4"/></g>
+<text class="tag" x="40" y="172" text-anchor="middle" fill="#b8860b">N queries</text>
+<line class="flow" x1="54" y1="140" x2="78" y2="140" stroke="#b8860b" marker-end="url(#ag)"/>
+<rect class="box" x="80" y="104" width="104" height="76" rx="5"/>
+<rect x="80" y="104" width="104" height="6" rx="2" fill="#404855"/>
+<text class="tag" x="132" y="130" text-anchor="middle" fill="#0d9488">masked attn</text>
+<text class="tag" x="132" y="146" text-anchor="middle" fill="#171717">self-attn</text>
+<text class="tag" x="132" y="162" text-anchor="middle" fill="#171717">FFN</text>
+<text class="tag" x="132" y="176" text-anchor="middle" fill="#6b6b6b">reads 1/32</text>
+<rect class="box" x="214" y="104" width="104" height="76" rx="5"/>
+<rect x="214" y="104" width="104" height="6" rx="2" fill="#64748b"/>
+<text class="tag" x="266" y="130" text-anchor="middle" fill="#0d9488">masked attn</text>
+<text class="tag" x="266" y="146" text-anchor="middle" fill="#171717">self-attn</text>
+<text class="tag" x="266" y="162" text-anchor="middle" fill="#171717">FFN</text>
+<text class="tag" x="266" y="176" text-anchor="middle" fill="#6b6b6b">reads 1/16</text>
+<rect class="box" x="348" y="104" width="104" height="76" rx="5"/>
+<rect x="348" y="104" width="104" height="6" rx="2" fill="#a8b1bd"/>
+<text class="tag" x="400" y="130" text-anchor="middle" fill="#0d9488">masked attn</text>
+<text class="tag" x="400" y="146" text-anchor="middle" fill="#171717">self-attn</text>
+<text class="tag" x="400" y="162" text-anchor="middle" fill="#171717">FFN</text>
+<text class="tag" x="400" y="176" text-anchor="middle" fill="#6b6b6b">reads 1/8</text>
+<line class="flow" x1="184" y1="140" x2="214" y2="140" marker-end="url(#a)"/>
+<line class="flow" x1="318" y1="140" x2="348" y2="140" marker-end="url(#a)"/>
+<line class="flow" x1="452" y1="140" x2="486" y2="140" marker-end="url(#a)"/>
+<text class="lbl" x="512" y="136" text-anchor="middle">&#215; 3</text>
+<text class="sub" x="512" y="152" text-anchor="middle">9 layers</text>
+<text class="tag" x="605" y="128" text-anchor="middle" fill="#b8860b">refined, to the heads</text>
+<line class="flow" x1="544" y1="140" x2="596" y2="140" stroke="#b8860b" marker-end="url(#ag)"/>
+<text class="sub" x="360" y="216" text-anchor="middle">the tab colour on each block is the image scale it reads</text>
 </g>
 </svg>
-<figcaption>Fig. 4. The full pipeline. A backbone and a pixel decoder turn the image into a feature pyramid, together with per-pixel embeddings &#949; at stride 4. The Transformer decoder refines N object queries against that pyramid over nine layers, coarse to fine. The teal loop is masked attention (<a class="section-ref" href="#5-masked-attention">&#167;5</a>): each layer's predicted mask gates where the next layer is allowed to read. Every finished query splits into two heads, a class for what and a mask for where, the mask formed as the sigmoid of the query's MLP output dotted with &#949;. The output is N (class, mask) pairs. Click the Transformer decoder to unroll its nine layers.</figcaption>
+<figcaption>Fig. 4. The pipeline, with the decoder unfolded on demand. A backbone and a pixel decoder turn the image into a feature pyramid at strides 1/32, 1/16, and 1/8, together with per-pixel embeddings &#949; at stride 4. The Transformer decoder refines N object queries over nine layers, and each finished query splits into two heads, a class for what and a mask for where, the mask formed as the sigmoid of the query's MLP output dotted with &#949;. The one idea the layers add is masked attention: a query's cross-attention is confined to its own predicted foreground, so it reads only inside the region it currently believes its object occupies, and each layer's mask, binarized at 0.5, sets where the next layer is allowed to read. Click the decoder to unfold the nine layers, a three-scale block (1/32, 1/16, 1/8) repeated three times, coarse to fine. Full treatment in <a class="section-ref" href="#5-masked-attention">&#167;5</a>.</figcaption>
 </figure>
 
 ## 5. Masked attention

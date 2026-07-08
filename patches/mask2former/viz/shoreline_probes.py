@@ -22,7 +22,7 @@ from tokens import BACKGROUND, EMBER, GOLD, GREEN, INK, MUTED, SLATE
 config.background_color = BACKGROUND
 
 SHEET_C = np.array([-2.6, 0.6, 0.0])
-PIVOT = np.array([4.6, -1.35, 0.0])
+PIVOT = np.array([4.1, -1.0, 0.0])
 ARM = 1.8
 
 
@@ -161,11 +161,12 @@ class ShorelineProbes(MovingCameraScene):
         hot_flags = []
         for i in range(15):
             for j in range(9):
-                p = np.array([SHEET_C[0] - 2.15 + 0.307 * i
-                              + rng.uniform(-0.11, 0.11),
-                              SHEET_C[1] - 1.4 + 0.35 * j
-                              + rng.uniform(-0.11, 0.11),
-                              0.0])
+                c = np.array([SHEET_C[0] - 2.15 + 0.307 * i,
+                              SHEET_C[1] - 1.4 + 0.35 * j, 0.0])
+                if not (inside(c, poly_truth) or inside(c, poly_pred)):
+                    continue
+                p = c + np.array([rng.uniform(-0.11, 0.11),
+                                  rng.uniform(-0.11, 0.11), 0.0])
                 hot = on_shore(p)
                 line = Line(p + UP * 0.09, p + DOWN * 0.09)
                 line.set_stroke(INK, width=1.4, opacity=0.65 if hot else 0.35)
@@ -243,13 +244,21 @@ class ShorelineProbes(MovingCameraScene):
 
         # Training: needles rain, then magnetize to the shoreline.
         train_rng = np.random.default_rng(17)
-        train_dots = VGroup(*[Dot([2.4 - 1.3 + 0.28 * i
-                                   + train_rng.uniform(-0.06, 0.06),
-                                   1.7 - 0.8 + 0.33 * j
-                                   + train_rng.uniform(-0.06, 0.06), 0],
-                                  radius=0.04).set_fill(INK, opacity=0.7)
-                              .set_stroke(opacity=0)
-                              for i in range(10) for j in range(5)])
+        tt_poly = polygon_of(train_t, n=160)
+        tp_poly = polygon_of(train_p, n=160)
+        _tdots = []
+        for i in range(10):
+            for j in range(5):
+                c = np.array([2.4 - 1.3 + 0.28 * i,
+                              1.7 - 0.8 + 0.33 * j, 0.0])
+                if not (inside(c, tt_poly) or inside(c, tp_poly)):
+                    continue
+                d = Dot(c + np.array([train_rng.uniform(-0.06, 0.06),
+                                      train_rng.uniform(-0.06, 0.06), 0.0]),
+                        radius=0.04).set_fill(INK, opacity=0.7)
+                d.set_stroke(opacity=0)
+                _tdots.append(d)
+        train_dots = VGroup(*_tdots)
         train_dots.shift(UP * 2.2).set_opacity(0)
 
         self.add(train_dots)
@@ -279,9 +288,15 @@ class ShorelineProbes(MovingCameraScene):
         # The rained needles arrange themselves into a fine lattice, half a
         # beat, then relax back. The only number-shaped thing in the scene.
         rest_pos = [n.get_center() for n in needles]
-        lattice = [np.array([SHEET_C[0] - 2.15 + 0.307 * i,
-                             SHEET_C[1] - 1.32 + 0.33 * j, 0.0])
-                   for i in range(15) for j in range(9)]
+        lattice = []
+        for i in range(15):
+            for j in range(9):
+                c = np.array([SHEET_C[0] - 2.15 + 0.307 * i,
+                              SHEET_C[1] - 1.4 + 0.35 * j, 0.0])
+                if not (inside(c, poly_truth) or inside(c, poly_pred)):
+                    continue
+                lattice.append(np.array([SHEET_C[0] - 2.15 + 0.307 * i,
+                                         SHEET_C[1] - 1.32 + 0.33 * j, 0.0]))
         # The lattice is the subject of this beat: shot 4's leftovers recede.
         self.beat(*[n.animate.move_to(q).set_opacity(0.6)
                     for n, q in zip(needles, lattice)],

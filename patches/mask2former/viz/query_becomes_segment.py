@@ -109,7 +109,7 @@ class QueryBecomesSegment(Scene):
         glow_b = soft_field(soft_blob(5, 1.5, (DUCK_A + DUCK_B) / 2), GOLD)
         glow_d = soft_field(soft_blob(8, 1.4, DOG_P + np.array([-0.6, -0.7, 0])),
                             GOLD)
-        glow_x = soft_field(soft_blob(13, 1.1, np.array([2.0, 0.2, 0.0])),
+        glow_x = soft_field(soft_blob(13, 1.1, np.array([0.7, -1.8, 0.0])),
                             GOLD, base_op=0.11)
         # Each lead orb pulses as its field lands: the claim is bound to the
         # claimant by timing, not by a labeled arrow.
@@ -143,7 +143,7 @@ class QueryBecomesSegment(Scene):
                       soft_blob(9, 1.05, DOG_P + np.array([-0.2, -0.3, 0])),
                       GOLD, 0.2)),
                   Transform(glow_x, soft_field(
-                      soft_blob(14, 0.9, np.array([2.0, 0.35, 0.0])),
+                      soft_blob(14, 0.9, np.array([0.7, -1.7, 0.0])),
                       GOLD, 0.09)),
                   rt=3.2)
         self.hold(0.9)
@@ -263,24 +263,24 @@ class QueryBecomesSegment(Scene):
             # semantic: the two ducks merge into one hue, no identities
             sem_a.animate.set_fill(ACCENT), sem_b.animate.set_fill(ACCENT),
             sem_dog.animate.set_fill(GOLD_DEEP),
-            sem_field.animate.set_fill(opacity=0.05),
+            sem_field.animate.set_fill(opacity=0.05).set_stroke(SLATE, width=1.2, opacity=0.45),
             # instance: distinct things (thin ink identity outlines), dimmed
             # stuff
-            ins_a.animate.set_fill(ACCENT)
+            ins_a.animate.set_fill(ACCENT_DARK)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            ins_b.animate.set_fill(ACCENT_DARK)
+            ins_b.animate.set_fill(ACCENT_LIGHT)
             .set_stroke(INK, width=1.1, opacity=0.5),
             ins_dog.animate.set_fill(GOLD_DEEP)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            ins_field.animate.set_fill(opacity=0.04),
+            ins_field.animate.set_fill(opacity=0.04).set_stroke(SLATE, width=1.2, opacity=0.45),
             # panoptic: identities AND labeled stuff
-            pan_a.animate.set_fill(ACCENT)
+            pan_a.animate.set_fill(ACCENT_DARK)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            pan_b.animate.set_fill(ACCENT_DARK)
+            pan_b.animate.set_fill(ACCENT_LIGHT)
             .set_stroke(INK, width=1.1, opacity=0.5),
             pan_dog.animate.set_fill(GOLD_DEEP)
             .set_stroke(INK, width=1.1, opacity=0.5),
-            pan_field.animate.set_fill(SLATE, opacity=0.24),
+            pan_field.animate.set_fill(SLATE, opacity=0.24).set_stroke(SLATE, width=1.2, opacity=0.45),
             rt=3.4)
         self.hold(2.5)
         print(f"scene clock: {self.clock:.2f} s")

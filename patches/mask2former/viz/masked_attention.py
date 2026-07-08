@@ -32,7 +32,7 @@ THROAT_W = 1.1
 # The cat is the one warm thing in a cool world; everything else in the image
 # is raw slate. Derived from tokens, never an invented hex.
 WARM = interpolate_color(ManimColor(GOLD), ManimColor(MUTED), 0.22)
-MUD = interpolate_color(ManimColor(SLATE), ManimColor(WARM), 0.3)
+MUD = interpolate_color(ManimColor(SLATE), ManimColor(WARM), 0.6)
 
 TOTAL_WIDTH = 92.4  # sum of strand stroke widths, conserved across phases
 
@@ -310,7 +310,7 @@ class MaskedAttention(MovingCameraScene):
         # The stencil itself becomes the +M; the parentheses it flew into are
         # the ones that were just drawn around the strands' origin.
         self.beat(Transform(big_open, eq_open), Transform(big_close, eq_close),
-                  ReplacementTransform(plate, eq_plus_m),
+                  FadeOut(plate), FadeIn(eq_plus_m),
                   FadeOut(engraving), rt=2.0)
         self.beat(FadeIn(eq_softmax), FadeIn(eq_qk), FadeIn(eq_t),
                   FadeIn(eq_v), rt=1.0)

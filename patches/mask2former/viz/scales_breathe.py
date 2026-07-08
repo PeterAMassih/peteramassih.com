@@ -82,7 +82,7 @@ def lattice(center, cols, rows):
         fy = (j + 0.5) / rows
         for i in range(cols):
             fx = (i + 0.5) / cols
-            g.add(Dot([center[0] - PANE_W / 2 + fx * PANE_W + SHEAR * fy,
+            g.add(Dot([center[0] - PANE_W / 2 - SHEAR / 2 + fx * PANE_W + SHEAR * fy,
                        center[1] - PANE_H / 2 + fy * PANE_H, 0],
                       radius=0.028).set_fill(SLATE, opacity=0.5))
     return g
@@ -105,7 +105,7 @@ class ScalesBreathe(MovingCameraScene):
         pane32 = parallelogram(P32_C, TINT_32)
         c32 = VGroup(water_blob(1.2).move_to(P32_C + np.array([-0.5, -0.3, 0])),
                      duck_mass().move_to(P32_C + np.array([1.3, 0.15, 0])))
-        frost32 = frost(P32_C, 0.55)
+        frost32 = frost(P32_C, 0.88)   # near-opaque: the duckling truly vanishes at stride 32
 
         pane16 = parallelogram(P16_C, TINT_16)
         smudge = water_blob(0.22).move_to(P16_C + DUCKLING_LOCAL)
@@ -138,8 +138,10 @@ class ScalesBreathe(MovingCameraScene):
         # ---- shot 1 (0:00-0:07): the vanishing ------------------------------
         frame = self.camera.frame
         frame.set(width=9.2).move_to(P8_C)
-        self.beat(LaggedStart(*[FadeIn(m) for m in stack], lag_ratio=0.06),
-                  rt=1.4)
+        for i, m in enumerate(stack):
+            m.set_z_index(i)
+        self.beat(LaggedStart(*[FadeIn(m) for m in reversed(stack)],
+                              lag_ratio=0.06), rt=1.4)
         self.hold(0.3)
 
         # The dive: a traveling duckling dissolves on the way down, because at
@@ -204,9 +206,9 @@ class ScalesBreathe(MovingCameraScene):
                          for k in range(9)])
         self.add(ticks)
 
-        visit = {32: P32_C + np.array([4.6, -0.2, 0]),
-                 16: P16_C + np.array([4.6, -0.2, 0]),
-                 8: P8_C + np.array([4.6, -0.2, 0])}
+        visit = {32: P32_C + np.array([3.0, -0.2, 0]),
+                 16: P16_C + np.array([3.0, -0.2, 0]),
+                 8: P8_C + np.array([3.0, -0.2, 0])}
 
         # Each visit is a move beat then a drink beat. Fill animations are
         # built inside the drink beat: an .animate builder snapshots its

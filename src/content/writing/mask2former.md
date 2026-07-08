@@ -22,6 +22,54 @@ Start here if any of this is new. Skip to §1 if words like attention, embedding
 
 **Convolutions.** The backbone is built mostly from convolutions, the workhorse operation of vision networks. A filter is a small grid of learned weights. Slide it across the image, and at each position take the dot product of the filter with the patch of pixels beneath it. That one number becomes a pixel of the output, so a single filter sweeps the whole image and produces a new map that lights up wherever its pattern appears. A stack of many such filters is a convolutional network (CNN), and a $1\times1$ filter is the special case that mixes only the values sitting at one pixel, without looking at its neighbors.
 
+<figure class="viz">
+<svg class="m2f-conv" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One convolution step: a 3 by 3 filter of weights lines up with a 3 by 3 patch of the input, multiplies cell by cell, and sums the nine products into a single pixel of the output feature map. Here a vertical-edge filter meets a vertical edge and returns a strong 3.0.">
+<defs>
+<style>
+.cv-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13px; }
+.cv-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
+.cv-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #52525b; font-size: 11px; }
+</style>
+<marker id="cv-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
+</defs>
+<rect width="700" height="240" rx="6" fill="#fafafa"/>
+<text class="cv-lbl" x="93" y="38" text-anchor="middle">input</text>
+<rect x="28" y="52" width="130" height="130" fill="none" stroke="#9a9a9a"/>
+<line x1="54" y1="52" x2="54" y2="182" stroke="#d4d4d4"/><line x1="80" y1="52" x2="80" y2="182" stroke="#d4d4d4"/><line x1="106" y1="52" x2="106" y2="182" stroke="#d4d4d4"/><line x1="132" y1="52" x2="132" y2="182" stroke="#d4d4d4"/>
+<line x1="28" y1="78" x2="158" y2="78" stroke="#d4d4d4"/><line x1="28" y1="104" x2="158" y2="104" stroke="#d4d4d4"/><line x1="28" y1="130" x2="158" y2="130" stroke="#d4d4d4"/><line x1="28" y1="156" x2="158" y2="156" stroke="#d4d4d4"/>
+<rect x="28" y="52" width="78" height="78" fill="#b8860b" fill-opacity="0.10" stroke="#b8860b" stroke-width="2"/>
+<g class="cv-num">
+<text x="41" y="70" text-anchor="middle">0</text><text x="67" y="70" text-anchor="middle">.5</text><text x="93" y="70" text-anchor="middle">1</text>
+<text x="41" y="96" text-anchor="middle">0</text><text x="67" y="96" text-anchor="middle">.5</text><text x="93" y="96" text-anchor="middle">1</text>
+<text x="41" y="122" text-anchor="middle">0</text><text x="67" y="122" text-anchor="middle">.5</text><text x="93" y="122" text-anchor="middle">1</text>
+</g>
+<rect x="54" y="52" width="78" height="78" fill="none" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.55"/>
+<text class="cv-sub" x="145" y="200" text-anchor="middle">slide &#8594;</text>
+<text class="cv-lbl" x="275" y="38" text-anchor="middle">3&#215;3 filter</text>
+<rect x="236" y="52" width="78" height="78" fill="#b8860b" fill-opacity="0.13" stroke="#b8860b"/>
+<line x1="262" y1="52" x2="262" y2="130" stroke="#d4d4d4"/><line x1="288" y1="52" x2="288" y2="130" stroke="#d4d4d4"/>
+<line x1="236" y1="78" x2="314" y2="78" stroke="#d4d4d4"/><line x1="236" y1="104" x2="314" y2="104" stroke="#d4d4d4"/>
+<g class="cv-num">
+<text x="249" y="70" text-anchor="middle">&#8722;1</text><text x="275" y="70" text-anchor="middle">0</text><text x="301" y="70" text-anchor="middle">+1</text>
+<text x="249" y="96" text-anchor="middle">&#8722;1</text><text x="275" y="96" text-anchor="middle">0</text><text x="301" y="96" text-anchor="middle">+1</text>
+<text x="249" y="122" text-anchor="middle">&#8722;1</text><text x="275" y="122" text-anchor="middle">0</text><text x="301" y="122" text-anchor="middle">+1</text>
+</g>
+<line x1="106" y1="91" x2="234" y2="91" stroke="#9a9a9a" stroke-dasharray="4 3"/>
+<text class="cv-sub" x="388" y="66" text-anchor="middle">&#8857; then &#931;</text>
+<text class="cv-num" x="388" y="120" text-anchor="middle">sum of 9</text>
+<line x1="316" y1="91" x2="460" y2="66" stroke="#9a9a9a" marker-end="url(#cv-ar)"/>
+<text class="cv-lbl" x="501" y="38" text-anchor="middle">feature map</text>
+<rect x="462" y="52" width="78" height="78" fill="none" stroke="#9a9a9a"/>
+<line x1="488" y1="52" x2="488" y2="130" stroke="#d4d4d4"/><line x1="514" y1="52" x2="514" y2="130" stroke="#d4d4d4"/>
+<line x1="462" y1="78" x2="540" y2="78" stroke="#d4d4d4"/><line x1="462" y1="104" x2="540" y2="104" stroke="#d4d4d4"/>
+<rect x="462" y="52" width="26" height="26" fill="#0d9488"/>
+<text x="475" y="69" text-anchor="middle" fill="#ffffff" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="12px">3.0</text>
+<text class="cv-sub" x="501" y="152" text-anchor="middle">one patch &#8594; one pixel</text>
+<text class="cv-sub" x="350" y="224" text-anchor="middle">the same nine weights sweep every position, lighting up wherever the filter's pattern appears</text>
+</svg>
+<figcaption>One convolution step. The gold filter lines up with a gold patch of the input, multiplies cell by cell, and sums the nine products into a single output pixel. Slide the filter one cell over, the dashed box, and repeat to fill the whole map. This filter is a vertical-edge detector, so meeting a vertical edge in the input returns a strong response.</figcaption>
+</figure>
+
 **Embeddings and the dot product.** The summary vectors are embeddings: vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product is the similarity meter, and the intuition is one line of algebra. For vectors $u, v$ with angle $\theta$ between them,
 
 $$

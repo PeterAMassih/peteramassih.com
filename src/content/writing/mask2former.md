@@ -279,14 +279,14 @@ Read the denominator. Every point's gradient is normalized by the squared region
 
 ## 4. The meta-architecture
 
-Mask2Former keeps MaskFormer's three-part skeleton exactly. A **backbone** (ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)]) extracts low-resolution features. A **pixel decoder** upsamples them into a feature pyramid ending in per-pixel embeddings $\mathcal{E}_{\text{pixel}}$ at stride 4. A **Transformer decoder** processes $N$ query vectors against the image features. Each output query $q_i$ yields a class distribution through a linear head, and a mask through a small MLP followed by a dot product with every pixel embedding:
+Mask2Former keeps MaskFormer's three-part skeleton exactly. A **backbone** extracts low-resolution features, either ResNet [[He et al. 2016](#ref-he2016)], a deep convolutional network whose residual connections let very deep stacks train without vanishing gradients, or Swin [[Liu et al. 2021](#ref-liu2021)], a vision Transformer that keeps attention inside shifting local windows to stay affordable at high resolution. A **pixel decoder** upsamples those features into a feature pyramid ending in per-pixel embeddings $\mathcal{E}_{\text{pixel}}$ at stride 4. Its default is MSDeformAttn, a Transformer pixel decoder built on deformable attention, the sparse-sampling scheme derived in §6.3. A **Transformer decoder** processes $N$ query vectors against the image features. Each output query $q_i$ yields a class distribution through a linear head, and a mask through a small MLP followed by a dot product with every pixel embedding:
 
 $$
 \hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i), \qquad
 m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)\big).
 $$
 
-The predicted label is the argmax $c_i = \arg\max_c \hat p_i(c)$. A query is therefore a slot that becomes one segment. One vector simultaneously determines what (the class head) and where (its inner product with the embedding field). Masks are decoded at stride 4 and bilinearly upsampled. MaskFormer instantiated this skeleton with an FPN pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard Transformer decoder layers attending over a single stride-32 map. Every one of Mask2Former's contributions is a surgical change inside this fixed skeleton, which is why its ablations decompose so cleanly (§11).
+The predicted label is the argmax $c_i = \arg\max_c \hat p_i(c)$. A query is therefore a slot that becomes one segment. One vector simultaneously determines what (the class head) and where (its inner product with the embedding field). Masks are decoded at stride 4 and bilinearly upsampled. MaskFormer instantiated this skeleton with an FPN (feature pyramid network [[Lin et al. 2017b](#ref-lin2017fpn)]) pixel decoder and six standard Transformer decoder layers attending over a single stride-32 map. Every one of Mask2Former's contributions is a surgical change inside this fixed skeleton, which is why its ablations decompose so cleanly (§11).
 
 <figure class="viz">
 <svg class="m2f-arch" viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former overview: image, backbone, pixel decoder, a nine-layer Transformer decoder, and per-query class and mask heads. The decoder unfolds to show its nine masked-attention layers.">

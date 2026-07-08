@@ -214,7 +214,19 @@ $$
 \sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j,
 $$
 
-so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Subtracting each row's minimum, then each column's, is the special case that first exposes zeros. The algorithm then hunts for an assignment lying entirely on zero-reduced-cost entries, and when none exists it lifts the potentials by the smallest slack that opens a new zero without driving any reduced cost negative, and repeats. This is precisely the dual of the assignment linear program, maximize $\sum_i u_i + \sum_j v_j$ subject to $\tilde c(i,j) \ge 0$, and complementary slackness forces the optimum onto the tight, zero-reduced-cost edges. Kuhn-Munkres schedules these updates to reach a full optimum in $O(N^3)$, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
+so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Call the potentials feasible when $\tilde c(i,j) \ge 0$ everywhere, and an edge tight when $\tilde c(i,j) = 0$.
+
+**Lemma (a tight assignment is optimal).** *If feasible potentials admit an assignment $\sigma$ that uses only tight edges, then $\sigma$ minimizes $J$.*
+
+**Proof.** By the identity, every assignment $\sigma'$ satisfies
+
+$$
+J(\sigma') = \sum_{j=1}^{N} \tilde c(\sigma'(j),\, j) + \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j \;\ge\; \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j,
+$$
+
+since every $\tilde c \ge 0$. For the tight $\sigma$ the first sum vanishes, so $J(\sigma) = \sum_i u_i + \sum_j v_j$, the smallest value the bound allows. $\blacksquare$
+
+So $\sum_i u_i + \sum_j v_j$ is a lower bound on the cost of every assignment, and a full assignment sitting on tight edges is a certificate that meets it. Manufacturing that certificate is the algorithm's whole job. Subtracting each row's minimum, then each column's, is the special case that first exposes zeros. The algorithm then hunts for an assignment lying entirely on zero-reduced-cost entries, and when none exists it lifts the potentials by the smallest slack that opens a new zero without driving any reduced cost negative, and repeats. This is precisely the dual of the assignment linear program, maximize $\sum_i u_i + \sum_j v_j$ subject to $\tilde c(i,j) \ge 0$, and the lemma above is its weak-duality bound driven to equality. Kuhn-Munkres schedules these updates to reach a full optimum in $O(N^3)$, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 

@@ -208,7 +208,27 @@ $$
 
 and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix, not solving it, is the expensive part (§8).
 
-**Aside (how the Hungarian algorithm works, skippable).** The solver rests on one fact about the cost matrix. For any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, define the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$. Because every assignment selects exactly one entry per row and per column,
+**Aside (the Hungarian algorithm in full, skippable).** In the code the matcher is one `scipy` call, but the algorithm inside is a small classic worth meeting once, because its correctness is a clean duality argument and it is where the $O(N^3)$ came from.
+
+**As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Dropping the integrality gives a linear program,
+
+$$
+\min_{x \ge 0}\ \sum_{i,j}\text{cost}(i,j)\,x_{ij}
+\quad\text{s.t.}\quad
+\textstyle\sum_j x_{ij} = 1\ (\forall i),\quad \sum_i x_{ij} = 1\ (\forall j).
+$$
+
+Its constraint matrix is the incidence matrix of a bipartite graph, which is totally unimodular, so every vertex of the feasible polytope is already integral. The relaxation is therefore exact: its optimum is a genuine permutation and nothing needs rounding. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+
+$$
+\max_{u,v}\ \sum_i u_i + \sum_j v_j
+\quad\text{s.t.}\quad
+u_i + v_j \le \text{cost}(i,j)\ (\forall i,j),
+$$
+
+and dual feasibility is exactly the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ staying nonnegative everywhere.
+
+**The optimality certificate.** For row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, and because every assignment selects exactly one entry per row and per column,
 
 $$
 \sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j,
@@ -226,7 +246,16 @@ $$
 
 since every $\tilde c \ge 0$. For the tight $\sigma$ the first sum vanishes, so $J(\sigma) = \sum_i u_i + \sum_j v_j$, the smallest value the bound allows. $\blacksquare$
 
-So $\sum_i u_i + \sum_j v_j$ is a lower bound on the cost of every assignment, and a full assignment sitting on tight edges is a certificate that meets it. Manufacturing that certificate is the algorithm's whole job. Subtracting each row's minimum, then each column's, is the special case that first exposes zeros. The algorithm then hunts for an assignment lying entirely on zero-reduced-cost entries, and when none exists it lifts the potentials by the smallest slack that opens a new zero without driving any reduced cost negative, and repeats. This is precisely the dual of the assignment linear program, maximize $\sum_i u_i + \sum_j v_j$ subject to $\tilde c(i,j) \ge 0$, and the lemma above is its weak-duality bound driven to equality. Kuhn-Munkres schedules these updates to reach a full optimum in $O(N^3)$, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
+So $\sum_i u_i + \sum_j v_j$ is a lower bound on the cost of every assignment, and a full assignment sitting on tight edges is a certificate that meets it. That equality is complementary slackness: an optimal $x$ puts weight only where $\tilde c = 0$.
+
+**How it runs.** The Hungarian method builds the assignment and the potentials together, holding two invariants throughout, $\tilde c \ge 0$ and a matching that uses only tight edges.
+
+1. **Reduce.** Set $u_i = \min_j \text{cost}(i,j)$, then $v_j = \min_i \tilde c(i,j)$. Now $\tilde c \ge 0$ with a tight edge in every row and every column.
+2. **Match on tight edges.** Extend the matching along zero-reduced-cost edges by augmenting paths, as far as it will go.
+3. **Perfect?** If the matching reaches size $N$ it lies entirely on tight edges, so by the lemma it is optimal. Stop.
+4. **Otherwise lift the dual.** No augmenting path exists yet. Grow an alternating tree from an unmatched prediction along tight edges, reaching rows $I$ and columns $J$, and let $\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j)$. Raise $u_i$ by $\delta$ on $I$ and lower $v_j$ by $\delta$ on $J$. Reduced costs stay nonnegative, a fresh tight edge opens at the frontier so the tree grows, and because the tree holds one more row than column the dual objective $\sum_i u_i + \sum_j v_j$ rises by $\delta$. Repeat the lift until the tree touches an unmatched target, then augment along that path and return to step 2.
+
+Each augmentation adds one edge, so $N$ of them finish the matching, each costing $O(N^2)$, for $O(N^3)$ overall. Termination is not luck: the dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 

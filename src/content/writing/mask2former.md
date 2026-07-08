@@ -88,7 +88,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 
 ## 1. The segmentation problem, formally
 
-Image segmentation asks which pixels belong together. The interesting part is that "belong together" admits several meanings. Every dataset fixes a set of categories $\mathcal{C}$, the labels it knows: car, person, road, sky. Vision researchers split those labels into two kinds, following [[Kirillov et al. 2019a](#ref-kirillov2019pan)]. *Things* are countable objects with identities, like cars and people, where "which car is this pixel part of" is a meaningful question. *Stuff* is amorphous material, like road and sky, where counting makes no sense: there is no sky number two. Writing $\mathcal{C}_{\text{th}}$ for the thing categories and $\mathcal{C}_{\text{st}}$ for the stuff categories, the full set is $\mathcal{C} = \mathcal{C}_{\text{th}} \sqcup \mathcal{C}_{\text{st}}$, where $\sqcup$ just means every category is one or the other, never both. The three tasks are then three output spaces over the same pixels, differing exactly in how they treat the two kinds.
+Image segmentation asks which pixels belong together. The interesting part is that "belong together" admits several meanings. Every dataset fixes a set of categories $\mathcal{C}$, the labels it knows: car, person, road, sky. Vision researchers split those labels into two kinds, following [[Kirillov et al. 2019](#ref-kirillov2019pan)]. *Things* are countable objects with identities, like cars and people, where "which car is this pixel part of" is a meaningful question. *Stuff* is amorphous material, like road and sky, where counting makes no sense: there is no sky number two. Writing $\mathcal{C}_{\text{th}}$ for the thing categories and $\mathcal{C}_{\text{st}}$ for the stuff categories, the full set is $\mathcal{C} = \mathcal{C}_{\text{th}} \sqcup \mathcal{C}_{\text{st}}$, where $\sqcup$ just means every category is one or the other, never both. The three tasks are then three output spaces over the same pixels, differing exactly in how they treat the two kinds.
 
 **Semantic segmentation** is a map $f: \Omega \to \mathcal{C}$ on the pixel grid $\Omega$. One label per pixel, no identities, so two adjacent cars fuse into one car region. Its metric averages region overlap per class:
 
@@ -100,7 +100,7 @@ where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$
 
 **Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$, evaluated by mask AP. For each class, predictions are ranked by score. A prediction counts as a true positive when its mask IoU with an unclaimed ground truth exceeds a threshold $\tau$, and AP is the area under the resulting precision-recall curve, averaged over $\tau \in \{0.50, 0.55, \dots, 0.95\}$ in the COCO style [[Lin et al. 2014](#ref-lin2014)]. Note what the metric quietly demands: calibrated ranking, not just good masks. That will matter in post-processing (§9).
 
-**Panoptic segmentation** [[Kirillov et al. 2019a](#ref-kirillov2019pan)] unifies both. Every pixel receives a class and an instance id, with identities on things and plain categories on stuff. Predicted and ground-truth segments are matched, and quality is
+**Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every pixel receives a class and an instance id, with identities on things and plain categories on stuff. Predicted and ground-truth segments are matched, and quality is
 
 $$
 \text{PQ} = \frac{\sum_{(p,g)\in \mathit{TP}}\text{IoU}(p,g)}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}
@@ -114,13 +114,17 @@ where a match requires $\text{IoU} > 0.5$. The factorization into segmentation q
 
 **Lemma (matches are unique).** *If predicted segments are pairwise disjoint, as the panoptic format requires, then each ground-truth segment $g$ has $\text{IoU} > 0.5$ with at most one prediction.*
 
-**Proof.** Suppose $\text{IoU}(p, g) > \tfrac12$. Since $p \cup g \supseteq g$, we get
+**Proof.** Suppose a prediction $p$ has $\text{IoU}(p, g) > \tfrac12$. Then
 
 $$
-|p \cap g| > \tfrac12\,|p \cup g| \ge \tfrac12\,|g|.
+\begin{aligned}
+|p \cap g|
+&> \tfrac12\,|p \cup g| && \text{definition of IoU, rearranged}\\[2pt]
+&\ge \tfrac12\,|g| && \text{since } g \subseteq p \cup g.
+\end{aligned}
 $$
 
-So any matching prediction claims more than half of $g$. Two disjoint predictions $p_1, p_2$ would claim disjoint subsets of $g$, each larger than $\tfrac12|g|$, so together more than $|g|$ pixels inside $g$. That is impossible. $\blacksquare$
+So every matching prediction covers more than half of $g$. Now suppose two predictions $p_1, p_2$ both matched $g$. The panoptic format keeps predictions disjoint, so $p_1 \cap g$ and $p_2 \cap g$ are disjoint subsets of $g$, each larger than $\tfrac12|g|$. Together they would hold more than $|g|$ pixels inside $g$, which is impossible. So at most one prediction matches $g$. $\blacksquare$
 
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching is exact. Keep this in contrast with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
@@ -224,11 +228,15 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
-**Proof.** Induct on the order $k$ of $B$. For $k = 1$, $B$ is a single entry, $0$ or $1$, so $\det B \in \{0, 1\}$. For $k > 1$, pick any one column of $B$; being part of a constraint-matrix column, it holds zero, one, or two 1s.
+**Proof.** Induct on the order $k$ of $B$.
 
-- *All zeros.* A zero column makes $\det B = 0$ outright.
-- *A single 1,* in row $r$ and column $c$ of $B$. Laplace-expand along that column: only the one nonzero entry contributes, so $\det B = (-1)^{r+c}\cdot 1 \cdot \det B'$, where $B'$ deletes row $r$ and column $c$. $B'$ is a smaller square submatrix of the same constraint matrix, so $\det B' \in \{-1,0,1\}$ by the inductive hypothesis, and $\det B = \pm\det B' \in \{-1,0,1\}$.
-- *Two 1s in every column.* Each constraint-matrix column carries its two 1s in one prediction-row and one target-row, so a column of $B$ with two 1s has one in a prediction-row and one in a target-row of $B$. Let $P$ and $T$ collect the prediction-rows and target-rows of $B$. Summing the rows in $P$ picks up exactly one 1 per column, the prediction endpoint, giving the all-ones row vector $\mathbf 1$; summing the rows in $T$ gives $\mathbf 1$ the same way. Then $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 1 - \mathbf 1 = \mathbf 0$ is a nontrivial dependence among the rows, so $B$ is singular and $\det B = 0$.
+*Base* ($k = 1$): $B$ is a single entry, $0$ or $1$, so $\det B \in \{0, 1\}$.
+
+*Step* ($k > 1$): suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column; otherwise every column holds exactly two. That gives three cases.
+
+- *Zero 1s.* The column is all zeros, so $\det B = 0$.
+- *One 1,* at row $r$, column $c$ of $B$. Laplace-expand along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
+- *Two 1s in every column.* Every constraint-matrix column carries its two 1s in one prediction-row and one target-row, so each column of $B$ has one 1 among the prediction-rows $P$ and one among the target-rows $T$. Summing the rows in $P$ picks up exactly one 1 per column, giving the all-ones vector $\mathbf 1$, and summing the rows in $T$ gives $\mathbf 1$ the same way. So $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 0$, a nontrivial dependence among the rows, and $B$ is singular with $\det B = 0$.
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
@@ -242,33 +250,34 @@ $$
 
 and dual feasibility is exactly the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ staying nonnegative everywhere.
 
-**The optimality certificate.** Take any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$. Sum the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ along an assignment $\sigma$, substituting the definition term by term:
+**The optimality certificate.** Take any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, and sum the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ along an assignment $\sigma$:
 
 $$
+\begin{aligned}
 \sum_{j=1}^{N} \tilde c(\sigma(j),\, j)
-= \sum_{j=1}^{N}\big[\text{cost}(\sigma(j),\, j) - u_{\sigma(j)} - v_j\big]
-= \underbrace{\sum_{j=1}^{N}\text{cost}(\sigma(j),\, j)}_{=\,J(\sigma)} - \sum_{j=1}^{N} u_{\sigma(j)} - \sum_{j=1}^{N} v_j.
+&= \sum_{j=1}^{N}\big[\text{cost}(\sigma(j),\, j) - u_{\sigma(j)} - v_j\big] && \text{definition of } \tilde c\\[2pt]
+&= \sum_{j=1}^{N}\text{cost}(\sigma(j),\, j) - \sum_{j=1}^{N} u_{\sigma(j)} - \sum_{j=1}^{N} v_j && \text{split the sum}\\[2pt]
+&= J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j && \text{reindex the } u \text{ sum}.
+\end{aligned}
 $$
 
-Because $\sigma$ is a permutation, $j \mapsto \sigma(j)$ runs over every row index exactly once, so $\sum_{j} u_{\sigma(j)} = \sum_{i} u_i$. Hence
-
-$$
-\sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j.
-$$
-
-The two potential sums do not depend on $\sigma$, so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Call the potentials feasible when $\tilde c(i,j) \ge 0$ everywhere, and an edge tight when $\tilde c(i,j) = 0$.
+The reindexing is legitimate because $\sigma$ is a permutation: $j \mapsto \sigma(j)$ hits every row index once, so $\sum_j u_{\sigma(j)} = \sum_i u_i$. The two potential sums do not depend on $\sigma$, so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Call the potentials feasible when $\tilde c(i,j) \ge 0$ everywhere, and an edge tight when $\tilde c(i,j) = 0$.
 
 **Lemma (a tight assignment is optimal).** *If feasible potentials admit an assignment $\sigma$ that uses only tight edges, then $\sigma$ minimizes $J$.*
 
-**Proof.** By the identity, every assignment $\sigma'$ satisfies
+**Proof.** Let $\sigma'$ be any assignment. Rearranging the certificate identity,
 
 $$
-J(\sigma') = \sum_{j=1}^{N} \tilde c(\sigma'(j),\, j) + \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j \;\ge\; \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j,
+\begin{aligned}
+J(\sigma')
+&= \sum_{j=1}^{N} \tilde c(\sigma'(j),\, j) + \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j && \text{the identity above}\\[2pt]
+&\ge \sum_{i=1}^{N} u_i + \sum_{j=1}^{N} v_j && \text{since every } \tilde c \ge 0.
+\end{aligned}
 $$
 
-since every $\tilde c \ge 0$. For the tight $\sigma$ the first sum vanishes, so $J(\sigma) = \sum_i u_i + \sum_j v_j$, the smallest value the bound allows. $\blacksquare$
+So $\sum_i u_i + \sum_j v_j$ lower-bounds the cost of every assignment. The tight $\sigma$ uses only edges with $\tilde c(\sigma(j),\, j) = 0$, so its first sum vanishes and $J(\sigma) = \sum_i u_i + \sum_j v_j$. That equals the lower bound, so no assignment costs less. $\blacksquare$
 
-So $\sum_i u_i + \sum_j v_j$ is a lower bound on the cost of every assignment, and a full assignment sitting on tight edges is a certificate that meets it. That equality is complementary slackness: an optimal $x$ puts weight only where $\tilde c = 0$.
+A full assignment sitting on tight edges is a certificate that meets that bound. The equality is complementary slackness: an optimal $x$ puts weight only where $\tilde c = 0$.
 
 **How it runs.** The Hungarian method builds the assignment and the potentials together, holding two invariants throughout, $\tilde c \ge 0$ and a matching that uses only tight edges.
 
@@ -281,13 +290,19 @@ Each augmentation adds one edge, so $N$ of them finish the matching, each costin
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 
-**Proof.** Relabeling replaces prediction $i$ by prediction $\pi(i)$, so the cost of assignment $\sigma$ under the relabeled predictions is
+**Proof.** Let $\pi \in S_N$ relabel the predictions, so that position $i$ now holds the prediction originally at position $\pi(i)$. Under the relabeling, assignment $\sigma$ pairs target $j$ with the prediction originally at position $\pi(\sigma(j))$, so its cost is
 
 $$
-\sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = J(\pi \circ \sigma).
+\sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = J(\pi \circ \sigma) \qquad \text{(definition of } J\text{)}.
 $$
 
-As $\sigma$ ranges over all of $S_N$, so does $\pi \circ \sigma$, because left multiplication by a fixed $\pi$ is a bijection of the group. Minimizing over $\sigma$ on both sides gives the same value. $\blacksquare$
+Minimize over $\sigma$. As $\sigma$ ranges over $S_N$, the composite $\pi \circ \sigma$ ranges over all of $S_N$ too, because left multiplication by the fixed $\pi$ is a bijection of the group. So
+
+$$
+\min_{\sigma \in S_N} J(\pi \circ \sigma) = \min_{\tau \in S_N} J(\tau),
+$$
+
+which is $\mathcal{L}(\hat y)$ before relabeling. $\blacksquare$
 
 Two lines, but it is the load-bearing property. The storage order of queries carries no information, so the loss must not see it, and with matching it provably does not. It also explains why matching quality sits upstream of everything else. The assignment decides which ground truth each query's gradient comes from, and a wrong pairing trains a query toward the wrong target with full confidence. Hold that thought for §8, where improving only the cost estimates is worth more than 2 AP.
 
@@ -318,21 +333,24 @@ $$
 \mathcal{L}_{\text{ce}} = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
-Differentiate the two logarithms through the sigmoid, using $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$:
+The two logarithms differentiate through the sigmoid. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$,
 
 $$
-\frac{d}{dz}\log\sigma(z) = \frac{\sigma'(z)}{\sigma(z)} = \frac{\sigma(z)\big(1-\sigma(z)\big)}{\sigma(z)} = 1 - \sigma(z),
-\qquad
-\frac{d}{dz}\log\big(1-\sigma(z)\big) = \frac{-\sigma'(z)}{1-\sigma(z)} = \frac{-\sigma(z)\big(1-\sigma(z)\big)}{1-\sigma(z)} = -\sigma(z).
+\begin{aligned}
+\frac{d}{dz}\log\sigma(z) &= \frac{\sigma'(z)}{\sigma(z)} = 1 - \sigma(z) && \text{chain rule, then cancel } \sigma(z),\\[2pt]
+\frac{d}{dz}\log\big(1-\sigma(z)\big) &= \frac{-\sigma'(z)}{1-\sigma(z)} = -\sigma(z) && \text{chain rule, then cancel } 1-\sigma(z).
+\end{aligned}
 $$
 
-Substitute both into the derivative of $\mathcal{L}_{\text{ce}}$, then expand and cancel:
+Substitute both, then expand and cancel:
 
 $$
+\begin{aligned}
 \frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x}
-= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big]
-= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big]
-= \sigma(z_x) - g_x.
+&= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big] && \text{substitute the two derivatives}\\[2pt]
+&= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big] && \text{expand the bracket}\\[2pt]
+&= \sigma(z_x) - g_x && \text{cancel } g_x\sigma(z_x)\text{, then distribute the minus}.
+\end{aligned}
 $$
 
 Clean, well conditioned, and independent per point. That independence is also its weakness: summed over a region, the total gradient scales with the region's area, so large segments dominate the update and small ones barely register.
@@ -343,19 +361,21 @@ $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2\sum_x m_x g_x}{\sum_x m_x + \sum_x g_x}.
 $$
 
-Write $O = \sum_x m_x g_x$ for the overlap and $S = \sum_x m_x + \sum_x g_x$ for the size sum, so $\mathcal{L}_{\text{dice}} = 1 - 2O/S$. Both $O$ and $S$ depend on the single entry $m_x$, and every other term in each sum is constant in it, so
+Write $O = \sum_x m_x g_x$ for the overlap and $S = \sum_x m_x + \sum_x g_x$ for the size sum, so $\mathcal{L}_{\text{dice}} = 1 - 2O/S$. In the single entry $m_x$ every other term of each sum is constant, so
 
 $$
 \frac{\partial O}{\partial m_x} = g_x, \qquad \frac{\partial S}{\partial m_x} = 1.
 $$
 
-The constant $1$ drops under differentiation, and the quotient rule on $2O/S$ gives
+Then
 
 $$
+\begin{aligned}
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
-= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right)
-= -\,\frac{2\,\dfrac{\partial O}{\partial m_x}\,S - 2O\,\dfrac{\partial S}{\partial m_x}}{S^2}
-= -\,\frac{2\,g_x\,S - 2\,O}{S^2}.
+&= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right) && \text{the constant } 1 \text{ drops}\\[4pt]
+&= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule}\\[4pt]
+&= -\,\frac{2\,g_x\,S - 2\,O}{S^2} && \text{insert } \partial O/\partial m_x = g_x,\ \partial S/\partial m_x = 1.
+\end{aligned}
 $$
 
 Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price sits one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly (its logit gradient is $\sigma(z_x) - g_x$), Dice does not. Summing the two losses is the standard combination: BCE supplies gradient at every point, Dice makes that gradient scale-invariant.
@@ -492,18 +512,20 @@ with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ lin
 
 Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. Mask2Former's appendix adds a blunt measurement of the end state. Even after convergence, averaged over COCO val, only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
 
-The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is the $n_f$ foreground weights over the total. Divide numerator and denominator by $n_f\, e^{\mu_f}$ to isolate what actually drives it:
+The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is the $n_f$ foreground weights over the total. Divide numerator and denominator by $n_f\, e^{\mu_f}$:
 
 $$
+\begin{aligned}
 \frac{n_f\, e^{\mu_f}}{n_f\, e^{\mu_f} + n_b\, e^{\mu_b}}
-= \frac{1}{1 + \dfrac{n_b\, e^{\mu_b}}{n_f\, e^{\mu_f}}}
-= \frac{1}{1 + \dfrac{n_b}{n_f}\, e^{-(\mu_f - \mu_b)}}.
+&= \frac{1}{1 + \dfrac{n_b\, e^{\mu_b}}{n_f\, e^{\mu_f}}} && \text{divide through by } n_f\, e^{\mu_f}\\[6pt]
+&= \frac{1}{1 + \dfrac{n_b}{n_f}\, e^{-(\mu_f - \mu_b)}} && \text{combine the exponentials}.
+\end{aligned}
 $$
 
-Now put numbers in. An object covering 2 percent of the image has $n_f = 0.02\,|\Omega|$ and $n_b = 0.98\,|\Omega|$, so $n_b/n_f = 0.98/0.02 = 49$. With a healthy logit margin $\mu_f - \mu_b = 2$ and $e^{-2} \approx 0.135$, the foreground share is
+Now suppose the object covers 2 percent of the image, so $n_f = 0.02\,|\Omega|$, $n_b = 0.98\,|\Omega|$, and $n_b/n_f = 0.98/0.02 = 49$. With a healthy margin $\mu_f - \mu_b = 2$ and $e^{-2} \approx 0.135$,
 
 $$
-\frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{1 + 6.63} \approx 0.13.
+\frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{7.62} \approx 0.13.
 $$
 
 Softmax never outputs zero, and the background dominates by sheer count: thousands of individually negligible weights, integrated over a vast area, outweigh the foreground in the pooled value. This is a heuristic, since real logits are not two spikes, but it lands within about seven points of the measured 20 percent.
@@ -530,7 +552,7 @@ where $M_{l-1}$ is the same query's mask from the previous layer, thresholded at
 
 Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once. Formally:
 
-**Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ the allowed set, with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
+**Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ a nonempty allowed set, with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
 
 $$
 \operatorname{softmax}(z + \mathcal{M})_i = \frac{e^{z_i}\,\mathbb{1}[i\in S]}{\sum_{j\in S} e^{z_j}},
@@ -538,25 +560,39 @@ $$
 
 *which is exactly the softmax of the original logits restricted to $S$.*
 
-**Proof.** Write the $i$-th entry straight from the softmax definition:
+**Proof.** Fix an index $i$ and write its softmax entry from the definition:
 
 $$
 \operatorname{softmax}(z + \mathcal{M})_i = \frac{e^{z_i + \mathcal{M}_i}}{\sum_{j=1}^{n} e^{z_j + \mathcal{M}_j}}.
 $$
 
-Take the numerator, with the convention $e^{-\infty} = 0$. For $i \in S$ we have $\mathcal{M}_i = 0$, so $e^{z_i + \mathcal{M}_i} = e^{z_i}\,e^{0} = e^{z_i}$. For $i \notin S$ we have $\mathcal{M}_i = -\infty$, so $e^{z_i + \mathcal{M}_i} = e^{z_i}\,e^{-\infty} = e^{z_i}\cdot 0 = 0$. The two cases together are $e^{z_i}\,\mathbb{1}[i \in S]$. Now the denominator, splitting the sum over $S$ and its complement:
+Evaluate the numerator by cases, using $e^{-\infty} = 0$:
 
 $$
-\sum_{j=1}^{n} e^{z_j + \mathcal{M}_j} = \sum_{j\in S} e^{z_j}\,\underbrace{e^{0}}_{=\,1} + \sum_{j\notin S} e^{z_j}\,\underbrace{e^{-\infty}}_{=\,0} = \sum_{j\in S} e^{z_j}.
+e^{z_i + \mathcal{M}_i} =
+\begin{cases}
+e^{z_i}\,e^{0} = e^{z_i}, & i \in S \ \ (\mathcal{M}_i = 0),\\[2pt]
+e^{z_i}\,e^{-\infty} = 0, & i \notin S \ \ (\mathcal{M}_i = -\infty),
+\end{cases}
 $$
 
-Divide the numerator by the denominator:
+so in one line the numerator is $e^{z_i}\,\mathbb{1}[i \in S]$. Split the denominator at $S$:
+
+$$
+\begin{aligned}
+\sum_{j=1}^{n} e^{z_j + \mathcal{M}_j}
+&= \sum_{j\in S} e^{z_j}\,e^{0} + \sum_{j\notin S} e^{z_j}\,e^{-\infty} && \text{split over } S \text{ and its complement}\\[2pt]
+&= \sum_{j\in S} e^{z_j} && \text{the second sum is } 0.
+\end{aligned}
+$$
+
+Divide numerator by denominator:
 
 $$
 \operatorname{softmax}(z + \mathcal{M})_i = \frac{e^{z_i}\,\mathbb{1}[i \in S]}{\sum_{j\in S} e^{z_j}},
 $$
 
-which is the softmax of the original logits restricted to $S$. $\blacksquare$
+the softmax of the original logits restricted to $S$. $\blacksquare$
 
 Trivial, but it is the entire design distinction between Mask2Former and its neighbors. Zeroing weights after the softmax breaks normalization: the surviving weights sum to less than 1, so the update shrinks by whatever mass was discarded. Replacing attention with a plain average over the mask, which is K-Net's mask pooling, discards the learned ranking within the region. Masked attention keeps a proper, learned distribution over the foreground. The ablation prices these choices on COCO instance AP. Plain cross-attention scores 37.8, and SMCA's spatially modulated co-attention [[Gao et al. 2021](#ref-gao2021)], a predicted Gaussian bias pulling each query toward its estimated center, barely moves it to 37.9, so a soft spatial prior buys almost nothing. The gain comes from a hard constraint: mask pooling reaches 43.1 and masked attention 43.7, 5.9 AP over none, and the renormalized, learned constraint beats uniform averaging by a further 0.6.
 
@@ -591,7 +627,7 @@ Cross-attention cost per layer scales with the token count of the feature map. B
 
 ### 6.2 The schedule
 
-Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation prices those extra reads at almost nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs (billions of floating-point operations per image, the standard compute proxy) against round-robin's 43.7 at 226, a 0.3 AP gain for tripling the high-resolution token visits, and it is the high resolution that pays, not the scale mixing: stride 8 alone at every layer also reaches 44.0, and still costs 239 against the round-robin's 226. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single factor after masked attention.
+Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation prices those extra reads at almost nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs (billions of floating-point operations per image, the standard compute proxy) against round-robin's 43.7 at 226, a 0.3 AP gain for tripling the high-resolution token visits, and it is the high resolution that pays, not the scale mixing: stride 8 alone at every layer also reaches 44.0, and still costs 239 against the round-robin's 226. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single component removal after masked attention.
 
 Each scale's features must tell the layer where and which rung. Positions use DETR's 2-D sinusoidal embedding: for each axis and channel pair $i$,
 
@@ -642,24 +678,26 @@ Three changes, zero extra FLOPs, ablated separately, jointly worth about 1.4 AP,
 
 Evaluating BCE plus Dice densely for 100 predictions against all ground truths to build the cost matrix, then again for the matched pairs, across ten supervised heads, is what pinned MaskFormer at one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates all mask losses on $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points instead of full masks.
 
-The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)$ has, by linearity of expectation and then the fact that each $x_k$ is uniform on $\Omega$,
+The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)$ has mean
 
 $$
+\begin{aligned}
 \mathbb{E}\big[\hat{\mathcal{L}}\big]
-= \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\mathbb{E}\big[\ell(x_k)\big]
-= \frac{1}{K_{\text{pt}}}\cdot K_{\text{pt}}\,\mathbb{E}\big[\ell(x_1)\big]
-= \mathbb{E}\big[\ell(x_1)\big]
-= \sum_{x\in\Omega}\frac{1}{|\Omega|}\,\ell(x)
-= \mathcal{L}_{\text{dense}}.
+&= \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\mathbb{E}\big[\ell(x_k)\big] && \text{linearity of expectation}\\[2pt]
+&= \mathbb{E}\big[\ell(x_1)\big] && \text{the } x_k \text{ are identically distributed}\\[2pt]
+&= \sum_{x\in\Omega}\frac{1}{|\Omega|}\,\ell(x) = \mathcal{L}_{\text{dense}} && \text{each } x_k \text{ uniform on } \Omega.
+\end{aligned}
 $$
 
-For the variance, the $x_k$ are independent, so the variance of the sum is the sum of the variances:
+For the variance, pull out the constant, then use independence:
 
 $$
+\begin{aligned}
 \operatorname{Var}\big[\hat{\mathcal{L}}\big]
-= \frac{1}{K_{\text{pt}}^2}\sum_{k=1}^{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_k)\big]
-= \frac{1}{K_{\text{pt}}^2}\cdot K_{\text{pt}}\operatorname{Var}\big[\ell(x_1)\big]
-= \frac{1}{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_1)\big].
+&= \frac{1}{K_{\text{pt}}^2}\operatorname{Var}\Big[\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)\Big] && \operatorname{Var}[cX] = c^2\operatorname{Var}[X]\\[2pt]
+&= \frac{1}{K_{\text{pt}}^2}\sum_{k=1}^{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_k)\big] && \text{independence}\\[2pt]
+&= \frac{1}{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_1)\big] && \text{identically distributed}.
+\end{aligned}
 $$
 
 The estimate is unbiased, its variance shrinks like $1/K_{\text{pt}}$, so the typical error shrinks like $1/\sqrt{K_{\text{pt}}}$. At $K_{\text{pt}} = 12{,}544$ the noise is negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.

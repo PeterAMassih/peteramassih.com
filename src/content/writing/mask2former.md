@@ -224,7 +224,13 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
-**Proof.** Induct on the order $k$ of $B$. A $1 \times 1$ block is a lone $0$ or $1$. For $k > 1$, take any column of $B$. If it is all zeros, $\det B = 0$. If it has a single 1, expand the determinant along it: $\det B = \pm \det B'$ for a $(k-1) \times (k-1)$ minor, which lies in $\{-1,0,1\}$ by induction. Otherwise every column has exactly two 1s, one in a prediction-row and one in a target-row, so the prediction-rows of $B$ sum to the all-ones vector and the target-rows do too. Their difference is zero, the rows are linearly dependent, and $\det B = 0$. $\blacksquare$
+**Proof.** Induct on the order $k$ of $B$. For $k = 1$, $B$ is a single entry, $0$ or $1$, so $\det B \in \{0, 1\}$. For $k > 1$, pick any one column of $B$; being part of a constraint-matrix column, it holds zero, one, or two 1s.
+
+- *All zeros.* A zero column makes $\det B = 0$ outright.
+- *A single 1,* in row $r$ and column $c$ of $B$. Laplace-expand along that column: only the one nonzero entry contributes, so $\det B = (-1)^{r+c}\cdot 1 \cdot \det B'$, where $B'$ deletes row $r$ and column $c$. $B'$ is a smaller square submatrix of the same constraint matrix, so $\det B' \in \{-1,0,1\}$ by the inductive hypothesis, and $\det B = \pm\det B' \in \{-1,0,1\}$.
+- *Two 1s in every column.* Each constraint-matrix column carries its two 1s in one prediction-row and one target-row, so a column of $B$ with two 1s has one in a prediction-row and one in a target-row of $B$. Let $P$ and $T$ collect the prediction-rows and target-rows of $B$. Summing the rows in $P$ picks up exactly one 1 per column, the prediction endpoint, giving the all-ones row vector $\mathbf 1$; summing the rows in $T$ gives $\mathbf 1$ the same way. Then $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 1 - \mathbf 1 = \mathbf 0$ is a nontrivial dependence among the rows, so $B$ is singular and $\det B = 0$.
+
+Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
 Total unimodularity is what forces integrality. A vertex of the polytope is the unique solution of $Bx = b$ for some nonsingular square submatrix $B$ and integral $b$, so Cramer's rule gives $x = B^{-1}b$ with integer entries when $\det B = \pm 1$. The equality constraints then pin each entry to $0$ or $1$, so the vertex is a permutation matrix. The relaxation is therefore exact: its optimum is a genuine assignment and nothing needs rounding. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
@@ -236,13 +242,21 @@ $$
 
 and dual feasibility is exactly the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ staying nonnegative everywhere.
 
-**The optimality certificate.** For row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, and because every assignment selects exactly one entry per row and per column,
+**The optimality certificate.** Take any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$. Sum the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ along an assignment $\sigma$, substituting the definition term by term:
 
 $$
-\sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j,
+\sum_{j=1}^{N} \tilde c(\sigma(j),\, j)
+= \sum_{j=1}^{N}\big[\text{cost}(\sigma(j),\, j) - u_{\sigma(j)} - v_j\big]
+= \underbrace{\sum_{j=1}^{N}\text{cost}(\sigma(j),\, j)}_{=\,J(\sigma)} - \sum_{j=1}^{N} u_{\sigma(j)} - \sum_{j=1}^{N} v_j.
 $$
 
-so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Call the potentials feasible when $\tilde c(i,j) \ge 0$ everywhere, and an edge tight when $\tilde c(i,j) = 0$.
+Because $\sigma$ is a permutation, $j \mapsto \sigma(j)$ runs over every row index exactly once, so $\sum_{j} u_{\sigma(j)} = \sum_{i} u_i$. Hence
+
+$$
+\sum_{j=1}^{N} \tilde c(\sigma(j),\, j) = J(\sigma) - \sum_{i=1}^{N} u_i - \sum_{j=1}^{N} v_j.
+$$
+
+The two potential sums do not depend on $\sigma$, so the potentials shift every assignment's total by the same constant, and $\arg\min_\sigma$ is unchanged. Call the potentials feasible when $\tilde c(i,j) \ge 0$ everywhere, and an edge tight when $\tilde c(i,j) = 0$.
 
 **Lemma (a tight assignment is optimal).** *If feasible potentials admit an assignment $\sigma$ that uses only tight edges, then $\sigma$ minimizes $J$.*
 
@@ -298,10 +312,27 @@ $$
 
 and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}} + \lambda_{\text{cls}}\,\mathcal{L}_{\text{cls}}$, where $\mathcal{L}_{\text{cls}} = -\log \hat p_i(c^{\text{gt}})$ is plain cross-entropy on the class head against the matched target, with $\lambda_{\text{cls}} = 2$ on matched queries and $0.1$ on $\varnothing$. Why these terms is best seen from their gradients.
 
-**BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is $\mathcal{L}_{\text{ce}} = -\big[g_x \log m_x + (1-g_x)\log(1-m_x)\big]$. Using $\frac{d}{dz}\log\sigma(z) = 1 - \sigma(z)$ and $\frac{d}{dz}\log(1-\sigma(z)) = -\sigma(z)$,
+**BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is
 
 $$
-\frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x} = \sigma(z_x) - g_x.
+\mathcal{L}_{\text{ce}} = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
+$$
+
+Differentiate the two logarithms through the sigmoid, using $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$:
+
+$$
+\frac{d}{dz}\log\sigma(z) = \frac{\sigma'(z)}{\sigma(z)} = \frac{\sigma(z)\big(1-\sigma(z)\big)}{\sigma(z)} = 1 - \sigma(z),
+\qquad
+\frac{d}{dz}\log\big(1-\sigma(z)\big) = \frac{-\sigma'(z)}{1-\sigma(z)} = \frac{-\sigma(z)\big(1-\sigma(z)\big)}{1-\sigma(z)} = -\sigma(z).
+$$
+
+Substitute both into the derivative of $\mathcal{L}_{\text{ce}}$, then expand and cancel:
+
+$$
+\frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x}
+= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big]
+= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big]
+= \sigma(z_x) - g_x.
 $$
 
 Clean, well conditioned, and independent per point. That independence is also its weakness: summed over a region, the total gradient scales with the region's area, so large segments dominate the update and small ones barely register.
@@ -312,10 +343,19 @@ $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2\sum_x m_x g_x}{\sum_x m_x + \sum_x g_x}.
 $$
 
-Differentiate with the quotient rule, writing $S = \sum_x m_x + \sum_x g_x$ and $O = \sum_x m_x g_x$:
+Write $O = \sum_x m_x g_x$ for the overlap and $S = \sum_x m_x + \sum_x g_x$ for the size sum, so $\mathcal{L}_{\text{dice}} = 1 - 2O/S$. Both $O$ and $S$ depend on the single entry $m_x$, and every other term in each sum is constant in it, so
 
 $$
-\frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x} = -\,\frac{2\,g_x\,S - 2\,O}{S^2}.
+\frac{\partial O}{\partial m_x} = g_x, \qquad \frac{\partial S}{\partial m_x} = 1.
+$$
+
+The constant $1$ drops under differentiation, and the quotient rule on $2O/S$ gives
+
+$$
+\frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
+= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right)
+= -\,\frac{2\,\dfrac{\partial O}{\partial m_x}\,S - 2O\,\dfrac{\partial S}{\partial m_x}}{S^2}
+= -\,\frac{2\,g_x\,S - 2\,O}{S^2}.
 $$
 
 Read the denominator. Every point's gradient is normalized by the squared region size, so the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in the following sense: tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price sits one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly (its logit gradient is $\sigma(z_x) - g_x$), Dice does not. Summing the two losses is the standard combination: BCE supplies gradient at every point, Dice makes that gradient scale-invariant.
@@ -452,14 +492,21 @@ with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ lin
 
 Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. Mask2Former's appendix adds a blunt measurement of the end state. Even after convergence, averaged over COCO val, only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
 
-The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is
+The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is the $n_f$ foreground weights over the total. Divide numerator and denominator by $n_f\, e^{\mu_f}$ to isolate what actually drives it:
 
 $$
 \frac{n_f\, e^{\mu_f}}{n_f\, e^{\mu_f} + n_b\, e^{\mu_b}}
+= \frac{1}{1 + \dfrac{n_b\, e^{\mu_b}}{n_f\, e^{\mu_f}}}
 = \frac{1}{1 + \dfrac{n_b}{n_f}\, e^{-(\mu_f - \mu_b)}}.
 $$
 
-An object covering 2 percent of the image gives $n_b/n_f = 49$. Even with a healthy logit margin $\mu_f - \mu_b = 2$, the foreground share is $1/(1 + 49\,e^{-2}) \approx 0.13$. Softmax never outputs zero, and the background dominates by sheer count: thousands of individually negligible weights, integrated over a vast area, outweigh the foreground in the pooled value. This is a heuristic, since real logits are not two spikes, but it lands within about seven points of the measured 20 percent.
+Now put numbers in. An object covering 2 percent of the image has $n_f = 0.02\,|\Omega|$ and $n_b = 0.98\,|\Omega|$, so $n_b/n_f = 0.98/0.02 = 49$. With a healthy logit margin $\mu_f - \mu_b = 2$ and $e^{-2} \approx 0.135$, the foreground share is
+
+$$
+\frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{1 + 6.63} \approx 0.13.
+$$
+
+Softmax never outputs zero, and the background dominates by sheer count: thousands of individually negligible weights, integrated over a vast area, outweigh the foreground in the pooled value. This is a heuristic, since real logits are not two spikes, but it lands within about seven points of the measured 20 percent.
 
 ### 5.2 The mechanism, and why $-\infty$ specifically
 
@@ -491,7 +538,25 @@ $$
 
 *which is exactly the softmax of the original logits restricted to $S$.*
 
-**Proof.** With the convention $e^{-\infty} = 0$, the numerator $e^{z_i + \mathcal{M}_i}$ equals $e^{z_i}$ for $i \in S$ and $0$ otherwise. The denominator is $\sum_j e^{z_j + \mathcal{M}_j} = \sum_{j\in S} e^{z_j}$. Divide. $\blacksquare$
+**Proof.** Write the $i$-th entry straight from the softmax definition:
+
+$$
+\operatorname{softmax}(z + \mathcal{M})_i = \frac{e^{z_i + \mathcal{M}_i}}{\sum_{j=1}^{n} e^{z_j + \mathcal{M}_j}}.
+$$
+
+Take the numerator, with the convention $e^{-\infty} = 0$. For $i \in S$ we have $\mathcal{M}_i = 0$, so $e^{z_i + \mathcal{M}_i} = e^{z_i}\,e^{0} = e^{z_i}$. For $i \notin S$ we have $\mathcal{M}_i = -\infty$, so $e^{z_i + \mathcal{M}_i} = e^{z_i}\,e^{-\infty} = e^{z_i}\cdot 0 = 0$. The two cases together are $e^{z_i}\,\mathbb{1}[i \in S]$. Now the denominator, splitting the sum over $S$ and its complement:
+
+$$
+\sum_{j=1}^{n} e^{z_j + \mathcal{M}_j} = \sum_{j\in S} e^{z_j}\,\underbrace{e^{0}}_{=\,1} + \sum_{j\notin S} e^{z_j}\,\underbrace{e^{-\infty}}_{=\,0} = \sum_{j\in S} e^{z_j}.
+$$
+
+Divide the numerator by the denominator:
+
+$$
+\operatorname{softmax}(z + \mathcal{M})_i = \frac{e^{z_i}\,\mathbb{1}[i \in S]}{\sum_{j\in S} e^{z_j}},
+$$
+
+which is the softmax of the original logits restricted to $S$. $\blacksquare$
 
 Trivial, but it is the entire design distinction between Mask2Former and its neighbors. Zeroing weights after the softmax breaks normalization: the surviving weights sum to less than 1, so the update shrinks by whatever mass was discarded. Replacing attention with a plain average over the mask, which is K-Net's mask pooling, discards the learned ranking within the region. Masked attention keeps a proper, learned distribution over the foreground. The ablation prices these choices on COCO instance AP. Plain cross-attention scores 37.8, and SMCA's spatially modulated co-attention [[Gao et al. 2021](#ref-gao2021)], a predicted Gaussian bias pulling each query toward its estimated center, barely moves it to 37.9, so a soft spatial prior buys almost nothing. The gain comes from a hard constraint: mask pooling reaches 43.1 and masked attention 43.7, 5.9 AP over none, and the renormalized, learned constraint beats uniform averaging by a further 0.6.
 
@@ -577,15 +642,27 @@ Three changes, zero extra FLOPs, ablated separately, jointly worth about 1.4 AP,
 
 Evaluating BCE plus Dice densely for 100 predictions against all ground truths to build the cost matrix, then again for the matched pairs, across ten supervised heads, is what pinned MaskFormer at one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates all mask losses on $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points instead of full masks.
 
-The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k}\ell(x_k)$ satisfies
+The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)$ has, by linearity of expectation and then the fact that each $x_k$ is uniform on $\Omega$,
 
 $$
-\mathbb{E}\big[\hat{\mathcal{L}}\big] = \mathbb{E}\big[\ell(x_1)\big] = \frac{1}{|\Omega|}\sum_{x\in\Omega}\ell(x) = \mathcal{L}_{\text{dense}},
-\qquad
-\operatorname{Var}\big[\hat{\mathcal{L}}\big] = \frac{1}{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_1)\big],
+\mathbb{E}\big[\hat{\mathcal{L}}\big]
+= \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\mathbb{E}\big[\ell(x_k)\big]
+= \frac{1}{K_{\text{pt}}}\cdot K_{\text{pt}}\,\mathbb{E}\big[\ell(x_1)\big]
+= \mathbb{E}\big[\ell(x_1)\big]
+= \sum_{x\in\Omega}\frac{1}{|\Omega|}\,\ell(x)
+= \mathcal{L}_{\text{dense}}.
 $$
 
-by linearity of expectation and independence. The estimate is unbiased, its variance shrinks like $1/K_{\text{pt}}$, so the typical error shrinks like $1/\sqrt{K_{\text{pt}}}$. At $K_{\text{pt}} = 12{,}544$ the noise is negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.
+For the variance, the $x_k$ are independent, so the variance of the sum is the sum of the variances:
+
+$$
+\operatorname{Var}\big[\hat{\mathcal{L}}\big]
+= \frac{1}{K_{\text{pt}}^2}\sum_{k=1}^{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_k)\big]
+= \frac{1}{K_{\text{pt}}^2}\cdot K_{\text{pt}}\operatorname{Var}\big[\ell(x_1)\big]
+= \frac{1}{K_{\text{pt}}}\operatorname{Var}\big[\ell(x_1)\big].
+$$
+
+The estimate is unbiased, its variance shrinks like $1/K_{\text{pt}}$, so the typical error shrinks like $1/\sqrt{K_{\text{pt}}}$. At $K_{\text{pt}} = 12{,}544$ the noise is negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.
 
 ### 8.2 Two sampling rules for two jobs
 

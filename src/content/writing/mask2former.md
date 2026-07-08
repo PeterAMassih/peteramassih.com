@@ -240,7 +240,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
-Total unimodularity is what forces integrality. A vertex of the polytope is the unique solution of $Bx = b$ for some nonsingular square submatrix $B$ and integral $b$, so Cramer's rule gives $x = B^{-1}b$ with integer entries when $\det B = \pm 1$. The equality constraints then pin each entry to $0$ or $1$, so the vertex is a permutation matrix. The relaxation is therefore exact: its optimum is a genuine assignment and nothing needs rounding. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+Total unimodularity forces integrality. At a vertex of the polytope, enough constraints are tight to pin $x$ down uniquely, so $x$ solves a square system $Bx = b$ where $B$ is a nonsingular submatrix of the constraint matrix and $b$ is integral. Cramer's rule gives $x = B^{-1}b$, and $\det B = \pm 1$ makes every entry an integer. Now use the constraints: with $x \ge 0$ and every row and column summing to $1$, each row and column holds a single $1$ and the rest $0$, which is a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v}\ \sum_i u_i + \sum_j v_j
@@ -347,9 +347,9 @@ Substitute both, then expand and cancel:
 $$
 \begin{aligned}
 \frac{\partial \mathcal{L}_{\text{ce}}}{\partial z_x}
-&= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big] && \text{substitute the two derivatives}\\[2pt]
-&= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big] && \text{expand the bracket}\\[2pt]
-&= \sigma(z_x) - g_x && \text{cancel } g_x\sigma(z_x)\text{, then distribute the minus}.
+&= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big] && \text{substitute}\\[2pt]
+&= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big] && \text{expand}\\[2pt]
+&= \sigma(z_x) - g_x && \text{cancel, then distribute the minus}.
 \end{aligned}
 $$
 
@@ -372,9 +372,9 @@ Then
 $$
 \begin{aligned}
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
-&= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right) && \text{the constant } 1 \text{ drops}\\[4pt]
+&= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right) && \text{drop the } 1\\[4pt]
 &= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule}\\[4pt]
-&= -\,\frac{2\,g_x\,S - 2\,O}{S^2} && \text{insert } \partial O/\partial m_x = g_x,\ \partial S/\partial m_x = 1.
+&= -\,\frac{2\,g_x\,S - 2\,O}{S^2} && \text{insert the partials}.
 \end{aligned}
 $$
 

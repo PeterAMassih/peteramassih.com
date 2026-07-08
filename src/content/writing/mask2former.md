@@ -100,7 +100,15 @@ $$
 
 where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$ [[Everingham et al. 2015](#ref-everingham2015)].
 
-**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$, evaluated by mask AP. For each class, predictions are ranked by score. A prediction counts as a true positive when its mask IoU with an unclaimed ground truth exceeds a threshold $\tau$, and a false positive otherwise. Precision is the fraction of kept predictions that are true positives, recall the fraction of ground truths recovered, and the precision-recall curve plots one against the other as the score threshold sweeps from high to low. AP is the area under that curve, averaged over $\tau \in \{0.50, 0.55, \dots, 0.95\}$ in the COCO style [[Lin et al. 2014](#ref-lin2014)]. Note what the metric quietly demands: calibrated ranking, not just good masks. That will matter in post-processing (§9).
+**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$, evaluated by mask AP. For each class, predictions are ranked by score. A prediction counts as a true positive when its mask IoU with an unclaimed ground truth exceeds a threshold $\tau$, and a false positive otherwise. Precision is the fraction of kept predictions that are true positives, recall the fraction of ground truths recovered, and the precision-recall curve plots one against the other as the score threshold sweeps from high to low. AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
+
+$$
+P = \frac{|\mathit{TP}|}{|\mathit{TP}| + |\mathit{FP}|}, \qquad
+R = \frac{|\mathit{TP}|}{|G|}, \qquad
+\text{AP} = \frac{1}{|\mathcal{T}|}\sum_{\tau\in\mathcal{T}} \int_0^1 p_\tau(r)\,\mathrm{d}r,
+$$
+
+where $|G|$ is the number of ground-truth masks in the class, $\mathcal{T} = \{0.50, 0.55, \dots, 0.95\}$ is the threshold sweep, and $p_\tau(r)$ is the precision at recall $r$ under threshold $\tau$. Note what the metric quietly demands: calibrated ranking, not just good masks. That will matter in post-processing (§9).
 
 **Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every pixel receives a class and an instance id, with identities on things and plain categories on stuff. Predicted and ground-truth segments are matched, writing $\mathit{TP}$ for the matched pairs (true positives), $\mathit{FP}$ for predictions that match nothing (false positives), and $\mathit{FN}$ for ground-truth segments left unmatched (false negatives). Quality is
 

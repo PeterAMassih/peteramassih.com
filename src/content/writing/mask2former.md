@@ -114,7 +114,7 @@ $$
 
 where a match requires $\text{IoU} > 0.5$. The factorization into segmentation quality (SQ), the average IoU over the matched pairs, and recognition quality (RQ), the share of segments correctly detected at all, is immediate (multiply and divide by $|\mathit{TP}|$). The matching rule hides a small theorem that makes PQ well defined in the first place.
 
-**Lemma (matches are unique).** *If predicted segments are pairwise disjoint, as the panoptic format requires, then each ground-truth segment $g$ has $\text{IoU} > 0.5$ with at most one prediction.*
+**Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one: each ground-truth segment matches at most one prediction, and each prediction at most one ground truth.*
 
 **Proof.** Suppose a prediction $p$ has $\text{IoU}(p, g) > \tfrac12$. Then
 
@@ -512,7 +512,7 @@ $$
 
 with $\mathbf{Q}_l = f_Q(\mathbf{X}_{l-1})$ and $\mathbf{K}_l, \mathbf{V}_l$ linear images of the features at resolution $H_l \times W_l$. Eq. 1 above omits the $1/\sqrt{d}$ temperature ($d$ is the per-head key dimension) and the multi-head split, the standard trick of running several attention operations in parallel over different slices of the channels and concatenating them. The real thing uses both, worth knowing if you reimplement from the equation alone.
 
-Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. And the end state is just as blunt: even after convergence, averaged over COCO val (the validation split), only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
+Nothing restricts where a query looks, and two convergence studies of DETR had already indicted exactly this [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]: it takes hundreds of epochs for cross-attention to learn to localize. And the end state is no better: even after convergence, averaged over COCO val (the validation split), only about 20 percent of attention mass lands on the foreground of the segment each query predicts.
 
 The mechanism deserves a short derivation, because it recurs across deep learning. Model the logits as two spikes: $n_f$ foreground locations at $\mu_f$ and $n_b$ background locations at $\mu_b$. The softmax mass on the foreground is the $n_f$ foreground weights over the total. Divide numerator and denominator by $n_f\, e^{\mu_f}$:
 
@@ -670,7 +670,7 @@ Three changes, zero extra FLOPs, ablated separately, jointly worth about 1.4 AP,
 
 **Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises the masks decoded from it before the decoder runs, which is also what makes $M_0$ a meaningful first gate. The ablation is pointed: learnable without supervision scores the same as zero-init (42.9 AP), and with supervision 43.7. Supervision is the ingredient, not learnability. Functionally, the supervised $\mathbf{X}_0$ is a region-proposal network [[Ren et al. 2015](#ref-ren2015)] reborn, the front stage of a two-stage detector that emits class-agnostic candidate regions, and the decoder is an iterative proposal refiner.
 
-**Dropout is removed**, for 0.7 AP. The paper reports the effect without theory. My commentary: attention maps here moonlight as localization signals that gate the next layer's reads, and randomly zeroing them injects noise into exactly the pathway the architecture depends on.
+**Dropout is removed**, for 0.7 AP. Attention maps here moonlight as localization signals that gate the next layer's reads, and randomly zeroing them injects noise into exactly the pathway the architecture depends on.
 
 ## 8. Losses: match on points, train on points
 
@@ -745,7 +745,7 @@ a $q$-weighted mean that overweights the boundary points $q$ favors. This is not
 | points | masks | 43.1 | 51.4 | 47.3 | 18 GB |
 | **points** | **points** | **43.7** | **51.9** | **47.2** | **6 GB** |
 
-Point-sampling the training loss is the memory story: a threefold reduction at zero accuracy cost, confirming that even the boundary-biased sampler of §8.2 loses nothing against dense training. The unbiasedness argument of §8.1 belongs to the uniform matching cost, not this training row. Point-sampling the matching cost is an accuracy story: over 2 AP, on top of everything else. It helps because dense low-resolution cost matrices are dominated by easy interior and background agreement, near-saturated terms that blur the distinctions between candidate assignments, while a shared sparse sample yields a sharper cost surface. And by the proposition of §3.1, assignment quality sits upstream of every gradient. Either way, the memorable form is that the cheap version is also the better version.
+Point-sampling the training loss is the memory story: a threefold reduction at zero accuracy cost, confirming that even the boundary-biased sampler of §8.2 loses nothing against dense training. The unbiasedness argument of §8.1 belongs to the uniform matching cost, not this training row. Point-sampling the matching cost is an accuracy story: over 2 AP, on top of everything else. It likely helps because dense low-resolution cost matrices are dominated by easy interior and background agreement, near-saturated terms that blur the distinctions between candidate assignments, while a shared sparse sample yields a sharper cost surface. And by the proposition of §3.1, assignment quality sits upstream of every gradient. Either way, the memorable form is that the cheap version is also the better version.
 
 ## 9. The full training recipe
 

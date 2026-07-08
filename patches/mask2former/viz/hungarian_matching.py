@@ -23,19 +23,22 @@ COIL_C = np.array([3.6, 1.6, 0.0])  # near the disc, so a swap visibly shortens 
 SHELF_Y = -3.15
 SHELF_X = (3.2, 6.4)
 
-# Positions in segment space, absolute. Lookalikes are deliberately close:
-# distance on the disc must read as dissimilarity.
-POS = {
-    "gt1": DISC_C + np.array([-1.55, 0.95, 0]),   # duck A
-    "gt2": DISC_C + np.array([1.65, 0.85, 0]),    # duck B
-    "gt3": DISC_C + np.array([0.15, -1.75, 0]),   # dog
-    "p1": DISC_C + np.array([0.75, 1.65, 0]),     # duck-B-like
-    "p2": DISC_C + np.array([1.15, -1.05, 0]),    # dog-like
-    "p3": DISC_C + np.array([-0.75, 1.75, 0]),    # duck-A-like, good
-    "p4": DISC_C + np.array([-2.55, -0.05, 0]),   # duck-A-like, worse
-    "p5": DISC_C + np.array([-2.30, -1.20, 0]),   # garbage
-    "p6": DISC_C + np.array([2.50, -0.90, 0]),    # garbage
+# Offsets in segment space from the disc center. Lookalikes are deliberately
+# close: distance on the disc must read as dissimilarity. The 0.88 factor pulls
+# the farthest garbage predictions in so their shapes clear the dashed rim
+# (radius 2.75) instead of poking past it.
+_OFFSET = {
+    "gt1": [-1.55, 0.95],   # duck A
+    "gt2": [1.65, 0.85],    # duck B
+    "gt3": [0.15, -1.75],   # dog
+    "p1": [0.75, 1.65],     # duck-B-like
+    "p2": [1.15, -1.05],    # dog-like
+    "p3": [-0.75, 1.75],    # duck-A-like, good
+    "p4": [-2.55, -0.05],   # duck-A-like, worse
+    "p5": [-2.30, -1.20],   # garbage
+    "p6": [2.50, -0.90],    # garbage
 }
+POS = {k: DISC_C + 0.88 * np.array([x, y, 0.0]) for k, (x, y) in _OFFSET.items()}
 
 
 def _bezier(a, c, b, t):

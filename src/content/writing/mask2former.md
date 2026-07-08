@@ -162,7 +162,7 @@ $$
 
 and the three tasks fall out by interpretation: segments as categories (semantic), segments as things with identity (instance), or both (panoptic). One architecture, one loss, three annotation schemes.
 
-**Concretely.** Take the puppy in the figure below. The model's whole answer for it is one pair: the class $c_i = \texttt{dog}$, and the mask $m_i$, a grid the size of the image holding one number per pixel, near $1$ inside the dog and near $0$ everywhere else. Coarsen that grid to a handful of cells, as in the right panel, and it is a matrix:
+**Concretely.** Take the puppy in the figure below. The model's whole answer for it is one pair: the class $c_i = \texttt{dog}$, and the mask $m_i$, a grid the size of the image holding one number per pixel, near $1$ inside the dog and near $0$ everywhere else. Coarsen that grid, as the right panel does, and it becomes a matrix of one number per cell. Shrink that down to a handful of cells and it reads:
 
 $$
 c_i = \texttt{dog}, \qquad
@@ -340,13 +340,13 @@ A query is therefore a slot that becomes one segment. One vector simultaneously 
 <text class="sub" x="672" y="130" text-anchor="middle">c&#7522; &#8712; {1..K, &#8709;}</text>
 <rect class="box" x="620" y="196" width="104" height="44" rx="6"/>
 <text class="lbl" x="672" y="216" text-anchor="middle">Mask head</text>
-<text class="sub" x="672" y="232" text-anchor="middle">m&#7522; = MLP(q&#7522;)&#183;&#949;</text>
+<text class="sub" x="672" y="232" text-anchor="middle">m&#7522; = &#963;(MLP(q&#7522;)&#183;&#949;)</text>
 <text class="tag" x="672" y="86" text-anchor="middle" fill="#6b6b6b">what</text>
 <text class="tag" x="672" y="188" text-anchor="middle" fill="#6b6b6b">where</text>
 <path class="arr" d="M 598 130 C 610 122, 610 116, 620 116" marker-end="url(#ah-g)" stroke="#b8860b"/>
 <path class="arr" d="M 598 210 C 610 216, 610 218, 620 218" marker-end="url(#ah-g)" stroke="#b8860b"/>
 <path d="M 298 180 L 298 326 L 672 326 L 672 242" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#ah-s)"/>
-<text class="tag" x="485" y="318" text-anchor="middle" fill="#64748b">&#949;&#8202;pixel: per-pixel embeddings (stride 1/4)</text>
+<text class="tag" x="485" y="318" text-anchor="middle" fill="#64748b">&#949;&#8202;pixel: per-pixel embeddings (stride 4)</text>
 <text class="sub" x="672" y="268" text-anchor="middle">N (class, mask) pairs</text>
 </g>
 <g class="m2f-expanded" style="display: none">
@@ -376,7 +376,7 @@ A query is therefore a slot that becomes one segment. One vector simultaneously 
 <text class="sub" x="333" y="328" text-anchor="middle">the color tab on each layer is the image scale it reads</text>
 </g>
 </svg>
-<figcaption>Fig. 4. The full pipeline. A backbone and a pixel decoder turn the image into a feature pyramid, together with per-pixel embeddings &#949; at stride 4. The Transformer decoder refines N object queries against that pyramid over nine layers, coarse to fine. The teal loop is masked attention (<a class="section-ref" href="#5-masked-attention">&#167;5</a>): each layer's predicted mask gates where the next layer is allowed to read. Every finished query splits into two heads, a class for what and a mask for where, the mask formed as the dot product of the query's MLP output with &#949;. The output is N (class, mask) pairs. Click the Transformer decoder to unroll its nine layers.</figcaption>
+<figcaption>Fig. 4. The full pipeline. A backbone and a pixel decoder turn the image into a feature pyramid, together with per-pixel embeddings &#949; at stride 4. The Transformer decoder refines N object queries against that pyramid over nine layers, coarse to fine. The teal loop is masked attention (<a class="section-ref" href="#5-masked-attention">&#167;5</a>): each layer's predicted mask gates where the next layer is allowed to read. Every finished query splits into two heads, a class for what and a mask for where, the mask formed as the sigmoid of the query's MLP output dotted with &#949;. The output is N (class, mask) pairs. Click the Transformer decoder to unroll its nine layers.</figcaption>
 </figure>
 
 ## 5. Masked attention
@@ -470,7 +470,7 @@ Cross-attention cost per layer scales with the token count of the feature map. B
 
 ### 6.2 The schedule
 
-Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation shows it buys nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs, round-robin 43.7 at 226, single-scale stride 8 everywhere 44.0 at 239. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single factor after masked attention.
+Mask2Former's answer is a schedule, not a module. Feed one scale per decoder layer, coarse to fine: layer 1 sees $1/32$, layer 2 sees $1/16$, layer 3 sees $1/8$, and the three-layer pattern repeats $L = 3$ times for nine layers. Count token-layer pairs per forward pass. The round-robin touches $3 \times (1024 + 4096 + 16384) = 64{,}512$. Feeding all scales to every layer touches $9 \times 21{,}504 = 193{,}536$, exactly three times more, and the ablation prices those extra reads at almost nothing: naive multi-scale reaches 44.0 AP at 247 GFLOPs against round-robin's 43.7 at 226, a 0.3 AP gain for tripling the high-resolution token visits, while feeding stride 8 alone to every layer also lands at 44.0, at 239. The schedule keeps essentially all of the benefit while touching high-resolution tokens in a third of the layers. Removing high-resolution features altogether costs 2.2 AP, the second-largest single factor after masked attention.
 
 Each scale's features must tell the layer where and which rung. Positions use DETR's 2-D sinusoidal embedding: for each axis and channel pair $i$,
 

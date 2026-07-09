@@ -97,7 +97,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     border-bottom: 1px solid var(--color-border);
     text-align: left;
   }
-  .body :global(figure.viz) { margin: var(--space-8) 0; }
+  .body :global(figure.viz) { margin: var(--space-8) 0; overflow-x: auto; }
   .body :global(figure.viz video),
   .body :global(figure.viz img),
   .body :global(figure.viz svg) {

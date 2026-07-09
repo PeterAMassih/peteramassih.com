@@ -133,7 +133,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 | $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
 | $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$ |
-| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | loss weights: $5.0$, $5.0$, $2.0$ (and $0.1$ on $\varnothing$) |
+| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | weights on the BCE, Dice, and classification losses: $\lambda_{\text{ce}} = \lambda_{\text{dice}} = 5.0$ and $\lambda_{\text{cls}} = 2.0$ ($0.1$ for the no-object class $\varnothing$) |
 | $K_{\text{pt}}$ | number of sampled points for mask losses: $12{,}544 = 112^2$ |
 
 ## 1. The segmentation problem, formally

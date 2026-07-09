@@ -76,7 +76,7 @@ $$
 u^\top v = \sum_k u_k v_k = \|u\|\,\|v\|\cos\theta,
 $$
 
-so it is large and positive when the vectors point the same way, near zero when they are orthogonal, and negative when they disagree. Keep this close, because the architecture's central trick (§4) is almost embarrassingly simple. A segment's mask is nothing but the dot product between one vector and every pixel's vector, squashed into $[0,1]$.
+so it is large and positive when the vectors point the same way, exactly zero when they are orthogonal, and negative when they disagree. Keep this close, because the architecture's central trick (§4) is almost embarrassingly simple. A segment's mask is nothing but the dot product between one vector and every pixel's vector, squashed into $[0,1]$.
 
 **Softmax.** Given scores $z_1, \dots, z_n$ (pre-softmax scores are called logits, a word that recurs below), softmax turns them into weights
 

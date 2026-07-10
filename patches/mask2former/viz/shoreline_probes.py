@@ -82,6 +82,9 @@ class ShorelineProbes(MovingCameraScene):
         self.add(truth, pred)
         self.beat(truth.animate.shift(RIGHT * 7),
                   pred.animate.shift(LEFT * 7), rt=1.8)
+        # Let the overlap sit: green truth, gold prediction, agreement where
+        # they stack. The viewer needs this state before the band names it.
+        self.hold(2.0)
         shore.set_fill(opacity=0).set_stroke(opacity=0)
         self.add(shore)
         # Agreement stays quiet; disagreement ignites.
@@ -89,8 +92,10 @@ class ShorelineProbes(MovingCameraScene):
 
         frame = self.camera.frame
         frame.save_state()
-        self.beat(frame.animate.set(width=5.2)
-                  .move_to(SHEET_C + np.array([1.3, 0.9, 0])), rt=1.6)
+        # Close-up on the shoreline: center on the sheet so the whole band
+        # stays in frame, and rest at the apex long enough to read it.
+        self.beat(frame.animate.set(width=5.2).move_to(SHEET_C), rt=1.6)
+        self.hold(2.0)
         self.beat(Restore(frame), rt=1.2)
 
         # ---- shot 2 (0:06-0:12): weighing everything ------------------------
@@ -278,8 +283,10 @@ class ShorelineProbes(MovingCameraScene):
                 anims.append(d.animate.set_opacity(0.22))
             else:
                 q = shore_poly[keep[magnet_rng.integers(0, len(keep))]]
-                anims.append(d.animate.move_to(q).set_fill(EMBER,
-                                                           opacity=0.9))
+                # Ink rim keeps the ember dot legible on the ember band.
+                anims.append(d.animate.move_to(q)
+                             .set_fill(EMBER, opacity=0.9)
+                             .set_stroke(INK, width=1.2, opacity=0.9))
         self.beat(*anims, rt=1.2)
         self.hold(0.8)
         self.hold(1.0)

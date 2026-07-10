@@ -272,17 +272,11 @@ class HungarianMatching(MovingCameraScene):
                   rt=1.2)
 
         def condense(mask, target, height, rt):
-            # The ghost keeps its fill and drains away: outline-only is the
-            # void class's look and must not appear here.
-            ghost = mask.copy()
-            ghost.set_fill(mask.get_fill_color(), opacity=0.4)
-            ghost.set_stroke(mask.get_stroke_color(), width=1.2, opacity=0.35)
-            self.add(ghost)
-            return AnimationGroup(
-                mask.animate(path_arc=0.35).move_to(target)
-                    .scale_to_fit_height(height),
-                FadeOut(ghost, run_time=rt),
-                run_time=rt)
+            # No residue at the slot: a fading copy left behind read as the
+            # same mask twice once the moving one departed. The mask itself
+            # is the only body its identity has, on every frame.
+            return (mask.animate(path_arc=0.35, run_time=rt)
+                    .move_to(target).scale_to_fit_height(height))
 
         self.beat(condense(preds["p3"], POS["p3"], 0.30, 2.0), rt=2.0)
         rest = ["gt1", "p1", "gt2", "p2", "gt3", "p4", "p5", "p6"]

@@ -193,6 +193,10 @@ class ScalesBreathe(MovingCameraScene):
         # delta in one play. Group parentage plus standalone member animation
         # desyncs the family; this cannot.
         orb_parts = [orb, halo, f_water, f_duck, f_ducklet]
+        # The query rides above every frost overlay: frost encodes each pane's
+        # resolution and must never wash out the reader doing the reading.
+        for m in orb_parts:
+            m.set_z_index(len(stack) + 1)
         self.beat(*[FadeIn(m, scale=0.85) for m in orb_parts], rt=0.6)
 
         def orb_move(target, extra=(), rt=0.6):
@@ -254,14 +258,19 @@ class ScalesBreathe(MovingCameraScene):
 
         slab.target.apply_function(bow)
         delta_sag = (visit[16] + DOWN * 0.55) - orb.get_center()
+        # Under the slab the ring dims to half: burdened, but never buried.
         self.beat(MoveToTarget(slab),
-                  *[m.animate.shift(delta_sag) for m in orb_parts], rt=1.1)
+                  orb.animate.shift(delta_sag).set_stroke(opacity=0.5),
+                  *[m.animate.shift(delta_sag) for m in orb_parts[1:]],
+                  rt=1.1)
         self.beat(*[m.animate.shift(LEFT * 1.6) for m in orb_parts], rt=2.2,
                   rate_func=rate_functions.ease_in_out_sine)
         # The panes separate; the breath resumes, light.
         delta_res = visit[8] - orb.get_center()
         self.beat(*[Restore(m) for m in stack],
-                  *[m.animate.shift(delta_res) for m in orb_parts], rt=1.5)
+                  orb.animate.shift(delta_res).set_stroke(opacity=1.0),
+                  *[m.animate.shift(delta_res) for m in orb_parts[1:]],
+                  rt=1.5)
         orb_move(visit[32], rt=0.8)
         self.beat(halo.animate(rate_func=there_and_back)
                   .set_stroke(opacity=0.45), rt=0.3)

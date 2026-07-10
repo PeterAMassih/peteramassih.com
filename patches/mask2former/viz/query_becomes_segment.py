@@ -15,7 +15,8 @@ import numpy as np
 from manim import *  # noqa: F403 -- manim scenes conventionally star-import
 
 from shapes import DOG, DUCK, silhouette
-from tokens import ACCENT, BACKGROUND, GOLD, INK, SLATE
+from tokens import (ACCENT, BACKGROUND, FONT_BODY, GOLD, HOLLOW, INK, MUTED,
+                    SLATE)
 
 config.background_color = BACKGROUND
 
@@ -148,21 +149,25 @@ class QueryBecomesSegment(Scene):
                   rt=3.2)
         self.hold(0.9)
 
-        # Two orbs contest the same duck: one spark of self-attention.
-        spark_pts = [orbs[0].get_center(), orbs[0].get_center()
-                     + np.array([0.13, 0.18, 0]), orbs[1].get_center()
-                     + np.array([-0.13, -0.14, 0]), orbs[1].get_center()]
-        spark = VMobject().set_points_as_corners(spark_pts)
-        spark.set_stroke(GOLD, width=3.0, opacity=0.9)
-        self.beat(Create(spark),
-                  orbs[0].animate(rate_func=there_and_back).scale(1.3),
-                  orbs[1].animate(rate_func=there_and_back).scale(1.3),
-                  rt=0.35)
-        self.hold(0.65)
-        self.beat(FadeOut(spark),
+        # Two orbs contest the same duck: self-attention as a short
+        # negotiation. An arc joins the claimants while they and their
+        # overlapping fields pulse in step; then one of them yields.
+        arc = ArcBetweenPoints(orbs[0].get_top() + UP * 0.04,
+                               orbs[1].get_top() + UP * 0.04, angle=-PI / 2)
+        arc.set_stroke(GOLD, width=2.2, opacity=0.85)
+        self.beat(Create(arc),
+                  orbs[0].animate(rate_func=there_and_back).scale(1.35),
+                  orbs[1].animate(rate_func=there_and_back).scale(1.35),
+                  glow_a.animate(rate_func=there_and_back)
+                  .set_fill(opacity=0.3),
+                  glow_b.animate(rate_func=there_and_back)
+                  .set_fill(opacity=0.3),
+                  rt=0.9)
+        self.hold(0.4)
+        self.beat(FadeOut(arc),
                   Transform(glow_b, soft_field(
                       soft_blob(7, 1.0, DUCK_B + np.array([0.2, 0.3, 0])),
-                      GOLD, 0.2)), rt=1.25)
+                      GOLD, 0.2)), rt=0.95)
 
         # Gates 4-9: the yielded orb claims the unclaimed duck; every field
         # snaps to a crisp silhouette.
@@ -184,14 +189,17 @@ class QueryBecomesSegment(Scene):
         # the field, what arrives as color. Gates leave first: they are done.
         self.beat(FadeOut(gates), rt=0.6)
 
-        prism_c = np.array([0.0, 1.55, 0.0])
+        prism_c = np.array([0.0, 1.9, 0.0])
         prism = Polygon([-0.46, -0.38, 0], [0.46, -0.38, 0], [0.0, 0.5, 0])
         prism.set_stroke(SLATE, width=2.2, opacity=0.85)
         prism.set_fill(INK, opacity=0.05).move_to(prism_c)
         self.beat(Create(prism), rt=0.8)
 
-        def wedge(color, ang, op, hollow=False, L=1.45):
-            w = Polygon([0, 0, 0], [L, 0.26, 0], [L, -0.26, 0])
+        def wedge(color, ang, op, hollow=False):
+            # Outer wedges shorten with angle so the fan clears the image
+            # panel below and the orb file above.
+            L = 1.45 - 0.011 * abs(ang)
+            w = Polygon([0, 0, 0], [L, 0.18 * L, 0], [L, -0.18 * L, 0])
             if hollow:  # the void class: outline only, the series' empty-set mark
                 w.set_stroke(SLATE, width=1.4, opacity=0.5).set_fill(opacity=0)
             else:
@@ -228,7 +236,8 @@ class QueryBecomesSegment(Scene):
                       rt=0.55 if wide else 0.4)
             exit_p = fan[keep].get_center_of_mass()
             self.beat(orb.animate.scale(1 / 0.7).move_to(exit_p)
-                      .set_stroke(tint), glow.animate.set_fill(tint),
+                      .set_stroke(tint).set_fill(tint),
+                      glow.animate.set_fill(tint),
                       rt=0.7 if wide else 0.5)
             self.beat(orb.animate.move_to(slot), FadeOut(fan[keep]),
                       rt=0.55 if wide else 0.45)
@@ -236,30 +245,76 @@ class QueryBecomesSegment(Scene):
         refract(orbs[0], glow_a, ACCENT, wide=True)
         refract(orbs[1], glow_b, ACCENT, wide=False)
         refract(orbs[2], glow_d, GOLD_DEEP, wide=False)
-        self.hold(0.4)
+
+        # Classification is over for the matched slots; the rest drop to
+        # neutral gray so the class tints are the only colors on the file.
+        tail = (0.7, 0.45, 0.25)
+        fades = [1.0 if i < 7 else tail[i - 7] for i in range(10)]
+        self.beat(*[orbs[i].animate
+                    .set_stroke(MUTED, opacity=0.6 * fades[i])
+                    .set_fill(MUTED, opacity=0.15 * fades[i])
+                    for i in range(3, 10)], rt=0.7)
+        self.hold(0.3)
+
+        # One leftover slot rides through the head so the fifth wedge gets
+        # its owner: no object. The orb keeps the hollow outline; an empty
+        # slot is a prediction too.
+        o_void = orbs[3]
+        void_slot = o_void.get_center()
+        self.beat(o_void.animate.move_to(prism_c + LEFT * 0.85), rt=0.4)
+        self.beat(o_void.animate.scale(0.7).move_to(prism_c), rt=0.3)
+        void_specs = [(ACCENT, 24, 0.13, False), (GOLD_DEEP, 2, 0.13, False),
+                      (SLATE, -22, 0.0, True)]
+        void_fan = VGroup(*[wedge(c, a, o, hollow=h)
+                            for c, a, o, h in void_specs])
+        self.beat(LaggedStart(*[GrowFromPoint(f, prism_c) for f in void_fan],
+                              lag_ratio=0.1), rt=0.4)
+        self.beat(*[f.animate.scale(0.12).move_to(prism_c).set_opacity(0)
+                    for f in void_fan[:2]],
+                  void_fan[2].animate.set_stroke(HOLLOW, opacity=0.9),
+                  rt=0.35)
+        self.beat(o_void.animate.scale(1 / 0.7)
+                  .move_to(void_fan[2].get_center_of_mass())
+                  .set_stroke(HOLLOW, opacity=0.9).set_fill(opacity=0),
+                  rt=0.4)
+        self.beat(o_void.animate.move_to(void_slot), FadeOut(void_fan[2]),
+                  rt=0.4)
+        self.hold(0.5)
 
         # ---- shot 4 (0:22-0:35): one machine, three tasks -------------------
-        self.beat(FadeOut(orbs), FadeOut(prism), rt=0.9)
+        # The soft fields settle into the objects as flat fills before the
+        # panels multiply: the final panels hold only fills and outlines.
+        self.beat(FadeOut(orbs), FadeOut(prism),
+                  FadeOut(glow_a), FadeOut(glow_b), FadeOut(glow_d),
+                  FadeOut(glow_x),
+                  duck_a.animate.set_fill(ACCENT, 0.8),
+                  duck_b.animate.set_fill(ACCENT, 0.8),
+                  dog.animate.set_fill(GOLD_DEEP, 0.8), rt=0.9)
 
-        panel = VGroup(field, duck_a, duck_b, dog, glow_a, glow_b, glow_d)
+        panel = VGroup(field, duck_a, duck_b, dog)
         panel_mid = panel.copy()
         panel_right = panel.copy()
         self.add(panel_mid, panel_right)
+        labels = VGroup(*[Text(s, font=FONT_BODY, font_size=28, color=MUTED)
+                          .move_to([x, -1.55, 0])
+                          for s, x in [("semantic", -4.55), ("instance", 0.0),
+                                       ("panoptic", 4.55)]])
         self.beat(panel.animate.scale(0.38).move_to([-4.55, -0.4, 0]),
                   panel_mid.animate.scale(0.38).move_to([0, -0.4, 0]),
                   panel_right.animate.scale(0.38).move_to([4.55, -0.4, 0]),
+                  FadeIn(labels),
                   rt=2.2)
         self.hold(0.5)
 
         # Same fields, regrouped in place. Left: every pixel labeled by
         # category, ducks share one hue (semantic). Middle: identities, stuff
         # dropped (instance). Right: both (panoptic).
-        sem_field, sem_a, sem_b, sem_dog = (panel[0], panel[4], panel[5],
-                                            panel[6])
-        ins_field, ins_a, ins_b, ins_dog = (panel_mid[0], panel_mid[4],
-                                            panel_mid[5], panel_mid[6])
-        pan_field, pan_a, pan_b, pan_dog = (panel_right[0], panel_right[4],
-                                            panel_right[5], panel_right[6])
+        sem_field, sem_a, sem_b, sem_dog = (panel[0], panel[1], panel[2],
+                                            panel[3])
+        ins_field, ins_a, ins_b, ins_dog = (panel_mid[0], panel_mid[1],
+                                            panel_mid[2], panel_mid[3])
+        pan_field, pan_a, pan_b, pan_dog = (panel_right[0], panel_right[1],
+                                            panel_right[2], panel_right[3])
         self.beat(
             # semantic: the two ducks merge into one hue, no identities
             sem_a.animate.set_fill(ACCENT), sem_b.animate.set_fill(ACCENT),

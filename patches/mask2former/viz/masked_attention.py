@@ -202,13 +202,24 @@ class MaskedAttention(MovingCameraScene):
         hole1 = Ellipse(width=2 * 0.85 * 1.45, height=2 * 0.68 * 1.45)
         hole1.move_to(CAT_C + np.array([0.25, 0.14, 0.0]))
         plate = self.make_plate(hole1)
-        engraving = Text("−∞", font=FONT_BODY, font_size=64, color=MUTED)
-        engraving.scale(0.5).move_to([3.6, -1.5, 0]).set_opacity(0.0)
-        self.add(engraving)
+        # The engraving is the caption's link to Eq. 3, so it must read at a
+        # glance: equation ink, above the strand layer, on a plate-colored
+        # backing so crossing strands never touch the glyph.
+        engraving = Text("−∞", font=FONT_BODY, font_size=96, color=INK)
+        engraving.move_to([3.6, -1.5, 0])
+        plate_face = interpolate_color(
+            interpolate_color(ManimColor(BACKGROUND), ManimColor(SLATE), 0.16),
+            ManimColor(INK), 0.09)
+        backing = RoundedRectangle(corner_radius=0.1,
+                                   width=engraving.width + 0.34,
+                                   height=engraving.height + 0.24)
+        backing.move_to(engraving).set_fill(plate_face, opacity=1.0)
+        backing.set_stroke(width=0)
+        plaque = VGroup(backing, engraving).set_opacity(0.0)
         plate.shift(LEFT * 13)
-        self.add(plate)
+        self.add(plate, plaque)
         self.beat(plate.animate.shift(RIGHT * 13),
-                  engraving.animate.set_opacity(0.5), rt=2.2)
+                  plaque.animate.set_opacity(0.9), rt=2.2)
 
         alive1 = [i for i in range(84)
                   if i < 14 or in_ellipse(self.origins[i], 1.45,
@@ -257,22 +268,37 @@ class MaskedAttention(MovingCameraScene):
         # ---- shot 5 (0:26-0:32): the failsafe ------------------------------
         # One breath goes wrong: the hole closes entirely.
         dead = self.phase_targets([])
-        self.beat(Transform(plate, self.make_plate(None)),
+        # The hole shrinks concentrically over the cat (down to a speck, then
+        # a between-frames cut to none) so the seal never reads as the
+        # silhouette sliding off; the cat dims under the sealed plate so
+        # "everything blocked" cannot read as "plate removed".
+        hole_tiny = silhouette(CAT, CAT_SCALE * 0.05, INK, fill_opacity=1)
+        hole_tiny.move_to(CAT_C)
+        self.beat(Transform(plate, self.make_plate(hole_tiny)),
                   *[Transform(self.strands[i], dead[i]) for i in range(84)],
+                  cat.animate.set_fill(WARM, opacity=0.25)
+                  .set_stroke(WARM, opacity=0.18),
                   orb.animate.set_fill(GOLD, opacity=0.12), rt=1.4)
+        plate.become(self.make_plate(None))
         # For that layer the stencil simply dissolves: one open drink.
         open_targets = self.phase_targets(range(84))
         self.beat(plate.animate.set_fill(opacity=0.0)
                   .set_stroke(opacity=0.0),
-                  engraving.animate.set_opacity(0.0), rt=0.8)
+                  plaque.animate.set_opacity(0.0),
+                  cat.animate.set_fill(WARM, opacity=0.65)
+                  .set_stroke(WARM, opacity=0.5), rt=0.8)
         self.beat(*[Transform(self.strands[i], open_targets[i])
                     for i in range(84)],
                   orb.animate.set_fill(MUD, opacity=0.8), rt=1.2)
         self.hold(0.4)
-        # Recover: redraw the stencil and cut again. Transform interpolates
-        # style too, so the dissolved plate fades back in as it reshapes.
+        # Recover: redraw the stencil and cut again. The hole grows back
+        # concentrically from a speck over the cat, mirroring the seal, and
+        # Transform interpolates style too, so the dissolved plate fades back
+        # in as it reshapes.
+        plate.become(self.make_plate(hole_tiny))
+        plate.set_fill(opacity=0.0).set_stroke(opacity=0.0)
         self.beat(Transform(plate, self.make_plate(hole3)),
-                  engraving.animate.set_opacity(0.5), rt=1.0)
+                  plaque.animate.set_opacity(0.9), rt=1.0)
         targets3 = self.phase_targets(alive3)
         self.beat(*[Transform(self.strands[i], targets3[i])
                     for i in range(84)],
@@ -294,24 +320,28 @@ class MaskedAttention(MovingCameraScene):
 
         eq_softmax = small("softmax")
         eq_open = small("(")
+        eq_m_plus = small("M +")
         eq_qk = small("QK")
         eq_t = small("T", size=36)
-        eq_plus_m = small("+ M")
         eq_close = small(")")
         eq_v = small("V")
         eq_softmax.move_to([-1.9, -3.68, 0])
         eq_open.next_to(eq_softmax, RIGHT, buff=0.06)
-        eq_qk.next_to(eq_open, RIGHT, buff=0.08)
+        eq_m_plus.next_to(eq_open, RIGHT, buff=0.08)
+        eq_qk.next_to(eq_m_plus, RIGHT, buff=0.1).align_to(eq_m_plus, DOWN)
         eq_t.next_to(eq_qk, UR, buff=0.01).shift(DOWN * 0.12 + LEFT * 0.02)
-        eq_plus_m.next_to(eq_t, RIGHT, buff=0.1).align_to(eq_qk, DOWN)
-        eq_close.next_to(eq_plus_m, RIGHT, buff=0.08)
+        eq_close.next_to(eq_t, RIGHT, buff=0.08).align_to(eq_open, DOWN)
         eq_v.next_to(eq_close, RIGHT, buff=0.08)
 
-        # The stencil itself becomes the +M; the parentheses it flew into are
-        # the ones that were just drawn around the strands' origin.
+        # The stencil itself becomes the M, written first as in Eq. 2; the
+        # parentheses it flew into are the ones that were just drawn around
+        # the strands' origin. The mask label fades in only after the
+        # travelling parens have settled, so the glyphs never collide.
         self.beat(Transform(big_open, eq_open), Transform(big_close, eq_close),
-                  FadeOut(plate), FadeIn(eq_plus_m),
-                  FadeOut(engraving), rt=2.0)
+                  FadeOut(plate),
+                  FadeIn(eq_m_plus,
+                         rate_func=squish_rate_func(smooth, 0.8, 1.0)),
+                  FadeOut(plaque), rt=2.0)
         self.beat(FadeIn(eq_softmax), FadeIn(eq_qk), FadeIn(eq_t),
                   FadeIn(eq_v), rt=1.0)
         self.hold(3.1)

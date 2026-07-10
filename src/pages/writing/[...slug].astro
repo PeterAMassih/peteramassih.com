@@ -78,6 +78,20 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     border-left: 2px solid var(--color-border);
     color: var(--color-text-muted);
   }
+  /* Proof folds: closed by default so the story reads without the machinery.
+     Native details/summary, the marker arrow is the whole affordance. */
+  .body :global(details.proof) {
+    margin-top: var(--space-4);
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border);
+  }
+  .body :global(details.proof summary) {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    transition: color 150ms;
+  }
+  .body :global(details.proof summary:hover) { color: var(--color-text); }
   /* Wide math and tables scroll inside their own box; the page never
      scrolls horizontally on narrow screens. */
   .body :global(.katex-display) {

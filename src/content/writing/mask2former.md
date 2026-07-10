@@ -192,7 +192,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 
 **Sets versus lists.** A list has an order. A set does not. The model's 100 guesses come out in arbitrary order, and a fair grader must not care about that order. This innocent-sounding fact forces all of the machinery in §3.
 
-**How to read this post.** Every heavy section opens in plain words before any symbol appears. Proofs are short, boxed off, and skippable on a first pass. Read it twice, once for the story and once for the math.
+**How to read this post.** Every heavy section opens in plain words before any symbol appears. Proofs and the two heaviest asides sit in folding blocks marked with an arrow, closed by default, and nothing outside a fold depends on reading inside one. Read it twice, once for the story and once for the math.
 
 ## Notation
 
@@ -250,6 +250,9 @@ where a match requires $\text{IoU} > 0.5$. PQ is computed per class this way, th
 
 **Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one: each ground-truth segment matches at most one prediction, and each prediction at most one ground truth.*
 
+<details class="proof">
+<summary>Proof</summary>
+
 **Proof.** Suppose a prediction $p$ has $\text{IoU}(p, g) > \tfrac12$. Then
 
 $$
@@ -261,6 +264,8 @@ $$
 $$
 
 So every matching prediction covers more than half of $g$. Now suppose two predictions $p_1, p_2$ both matched $g$. The panoptic format keeps predictions disjoint, so $p_1 \cap g$ and $p_2 \cap g$ are disjoint subsets of $g$, each larger than $\tfrac12|g|$. Together they would hold more than $|g|$ pixels inside $g$, which is impossible. So at most one prediction matches $g$. The same argument runs the other way. Since the panoptic format also keeps the ground-truth segments disjoint, and $p \subseteq p \cup g$ gives $|p \cap g| > \tfrac12|p|$, each prediction matches at most one ground truth. $\blacksquare$
+
+</details>
 
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching, pairing segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
@@ -348,7 +353,10 @@ $$
 
 and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix, not solving it, is the expensive part (§8).
 
-**Aside (the Hungarian algorithm in full, skippable).** In the code the matcher is one `scipy` call, but the algorithm inside is a small classic. Its correctness is a clean duality argument, and it is where the $O(N^3)$ came from.
+**Aside (the Hungarian algorithm in full).** In the code the matcher is one `scipy` call, but the algorithm inside is a small classic. Its correctness is a clean duality argument, and it is where the $O(N^3)$ came from. The full development folds out below.
+
+<details class="proof">
+<summary>The linear program, the duality proof, and a worked 3&#215;3 run</summary>
 
 **As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Relaxing the integrality to $x \ge 0$ gives a linear program,
 
@@ -459,7 +467,12 @@ $$
 
 Each augmentation adds one edge, so $N$ of them finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. The implementation keeps, for every column outside the tree, its current slack $\min_{i\in I}\tilde c(i,j)$, updated in $O(N)$ whenever a row joins the tree, so each $\delta$ is read off the slacks instead of rescanned and one augmentation's lifts total $O(N^2)$. That gives $O(N^3)$ overall. Termination is not luck. The dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
+</details>
+
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
+
+<details class="proof">
+<summary>Proof</summary>
 
 **Proof.** Let $\pi \in S_N$ relabel the predictions, so that position $i$ now holds the prediction originally at position $\pi(i)$. Under the relabeling, assignment $\sigma$ pairs target $j$ with the prediction originally at position $\pi(\sigma(j))$, so its cost is
 
@@ -475,7 +488,9 @@ $$
 
 which is $\mathcal{L}(\hat y)$ before relabeling. $\blacksquare$
 
-Two lines, but it is the load-bearing property. The storage order of queries carries no information, so the loss must not see it, and with matching it provably does not. It also explains why matching quality sits upstream of everything else. The assignment decides which ground truth each query's gradient comes from, and a wrong pairing trains a query toward the wrong target with full confidence. Hold that thought for §8, where improving only the cost estimates is worth more than 2 AP.
+</details>
+
+The proof is two lines, but the property is load-bearing. The storage order of queries carries no information, so the loss must not see it, and with matching it provably does not. It also explains why matching quality sits upstream of everything else. The assignment decides which ground truth each query's gradient comes from, and a wrong pairing trains a query toward the wrong target with full confidence. Hold that thought for §8, where improving only the cost estimates is worth more than 2 AP.
 
 One-to-one matching, as opposed to greedy nearest-target, matters for a subtler reason. Greedy lets two queries claim the same object and leaves another object orphaned. The global assignment forbids duplicate claims by construction, and that is what lets the trained model drop non-maximum suppression entirely.
 
@@ -731,6 +746,9 @@ $$
 
 *which is exactly the softmax of the original logits restricted to $S$.*
 
+<details class="proof">
+<summary>Proof</summary>
+
 **Proof.** Fix an index $i$ and write its softmax entry from the definition:
 
 $$
@@ -764,6 +782,8 @@ $$
 $$
 
 the softmax of the original logits restricted to $S$. $\blacksquare$
+
+</details>
 
 Trivial, but it is the entire design distinction between Mask2Former and its neighbors. Zeroing weights after the softmax breaks normalization. The surviving weights sum to less than 1, so the update shrinks by whatever mass was discarded. Replacing attention with a plain average over the mask, which is K-Net's mask pooling, discards the learned ranking within the region. Masked attention keeps a proper, learned distribution over the foreground. The ablation prices these choices on COCO instance AP. Plain cross-attention scores 37.8, and SMCA's spatially modulated co-attention [[Gao et al. 2021](#ref-gao2021)], a predicted Gaussian bias pulling each query toward its estimated center, barely moves it to 37.9, so a soft spatial prior buys almost nothing. The gain comes from a hard constraint. Mask pooling reaches 43.1 and masked attention 43.7, 5.9 AP over none, and the renormalized, learned constraint beats uniform averaging by a further 0.6.
 
@@ -879,9 +899,12 @@ The estimate is unbiased and its variance shrinks like $1/K_{\text{pt}}$, so the
 
 The sampling distribution differs by role, for a different reason in each case. For matching the reason is a variance argument. For the final loss it is a deliberate bias.
 
-**Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays essentially unbiased. The hedge is for Dice, since the argument of §8.1 is exact for per-point losses like BCE, but Dice is a ratio of point sums, and a sampled ratio picks up a bias of order $1/K_{\text{pt}}$, negligible at 12,544 points. The variance argument behind the stability follows, and is skippable.
+**Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays essentially unbiased. The hedge is for Dice, since the argument of §8.1 is exact for per-point losses like BCE, but Dice is a ratio of point sums, and a sampled ratio picks up a bias of order $1/K_{\text{pt}}$, negligible at 12,544 points. The variance argument behind the stability folds out below.
 
-**Aside (why sharing cancels the shared noise, skippable).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)]$ equals the dense cost $c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the smallest case, two entries $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which already exhibits the mechanism. For the shared-points covariance, expand it as a double sum over point indices. Terms with $k \ne k'$ vanish because distinct points are independent, leaving $K_{\text{pt}}$ equal same-index terms of $\tfrac{1}{K_{\text{pt}}^2}\operatorname{Cov}_x$. Then
+<details class="proof">
+<summary>Why sharing cancels the shared noise</summary>
+
+**Aside (why sharing cancels the shared noise).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)]$ equals the dense cost $c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the smallest case, two entries $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which already exhibits the mechanism. For the shared-points covariance, expand it as a double sum over point indices. Terms with $k \ne k'$ vanish because distinct points are independent, leaving $K_{\text{pt}}$ equal same-index terms of $\tfrac{1}{K_{\text{pt}}^2}\operatorname{Cov}_x$. Then
 
 $$
 \operatorname{Var}[A - B] = \operatorname{Var}[A] + \operatorname{Var}[B] - 2\operatorname{Cov}(A,B),
@@ -890,6 +913,8 @@ $$
 $$
 
 The marginal terms $\operatorname{Var}[A]$ and $\operatorname{Var}[B]$ are fixed by the uniform marginal and are identical under both schemes. Only the cross term moves. Independent per-pair points give $\operatorname{Cov}(A,B)=0$, so the two noises add. Shared points give a per-point covariance that is positive in the mask-cost regime, since a pixel that lands on a hard region such as an object boundary inflates the loss contribution for many pairs at once, so the per-point costs are positively correlated across entries. A positive covariance subtracts off the part of the sampling noise common to $A$ and $B$ and leaves only the part that distinguishes them, so $\operatorname{Var}[A-B]$ is smaller under sharing. Lower difference variance means a smaller chance that noise flips the sign of a comparison, hence a more stable argmin, and the expected difference is unchanged, so a better decision is made about the same underlying quantity. The same term-by-term cancellation extends to a general assignment comparison, where the object is the difference of sums above rather than a single entry difference. Two qualifications. The cancellation is partial, not a common additive shift, because the per-point losses are only correlated across entries, not equal up to a per-pair constant. And the positive sign of the covariance is the operative structural condition, not a theorem. Were two entries anticorrelated at the per-point level, sharing would raise their difference variance instead.
+
+</details>
 
 **Final loss: per-pair importance sampling.** Each matched pair gets its own points via PointRend's procedure [[Kirillov et al. 2020](#ref-kirillov2020)], spelled out in the official config rather than the paper. Oversample $3K_{\text{pt}}$ candidates uniformly, keep the $0.75\,K_{\text{pt}}$ most uncertain, meaning mask probability closest to $0.5$, which sits near boundaries, and draw the remaining $0.25\,K_{\text{pt}}$ points uniformly. Write $q$ for the resulting non-uniform sampling distribution over $\Omega$, so the training points are drawn $x_k\sim q$ rather than uniform, and the estimator averages $\ell(x_k)$ with no importance weight $1/(|\Omega|\,q(x))$ to undo $q$. Its expectation is therefore
 

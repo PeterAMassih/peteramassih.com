@@ -233,7 +233,7 @@ $$
 
 where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$ [[Everingham et al. 2015](#ref-everingham2015)].
 
-**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$, one triple per detected object. The mask $m_i$ says which pixels, the class $c_i$ says what the object is, and the score $s_i \in [0,1]$ says how confident the model is in this detection. The metric is mask AP, average precision, built up over the next few sentences. For each class, predictions are ranked by score and walked in that order. Each is compared against the ground-truth masks by the IoU of §0, written pointwise on binary masks. It joins the true positives when its best match among the still-unclaimed ground truths clears the threshold:
+**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$, one triple per detected object. The mask $m_i$ says which pixels, the class $c_i$ says what the object is, and the score $s_i \in [0,1]$ says how confident the model is in this detection. The metric is mask AP, average precision, built up over the next few sentences. For each class, predictions are ranked by score and processed one at a time, best score first. Each is compared against the ground-truth masks by the IoU of §0, written pointwise on binary masks. It joins the true positives when its best match among the still-unclaimed ground truths clears the threshold:
 
 $$
 \begin{gathered}
@@ -242,7 +242,7 @@ i \in \mathit{TP} \iff \max_{g \in \mathcal{G}_i} \text{IoU}(\bar m_i, g) \ge \t
 \end{gathered}
 $$
 
-where $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask, the numerator counts the pixels both masks claim, the denominator the pixels either mask claims, and $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all $|G|$ of them for the top-scoring prediction. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Now fix a score cutoff and keep only the predictions above it. Precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff from strict to loose traces the precision-recall curve, and AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
+where $x$ runs over the pixel grid $\Omega$, $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask at pixel $x$, the numerator counts the pixels both masks claim, the denominator the pixels either mask claims, and $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all $|G|$ of them for the top-scoring prediction. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Now fix a score cutoff and keep only the predictions above it. Precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff from strict to loose traces the precision-recall curve, and AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
 
 $$
 P = \frac{|\mathit{TP}|}{|\mathit{TP}| + |\mathit{FP}|}, \qquad

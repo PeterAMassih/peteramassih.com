@@ -67,7 +67,7 @@ Start here if any of this is new. Skip to §1 if words like attention, embedding
 <text class="cv-sub" x="501" y="152" text-anchor="middle">one patch &#8594; one pixel</text>
 <text class="cv-sub" x="350" y="224" text-anchor="middle">the same nine weights sweep every position, lighting up wherever the filter's pattern appears</text>
 </svg>
-<figcaption>Fig. 0. One convolution step. The gold filter lines up with a gold patch of the input, multiplies cell by cell, and sums the nine products into a single output pixel. Slide the filter one cell over, to the dashed box, and repeat to fill the whole map. This filter is a vertical-edge detector, so meeting a vertical edge in the input returns a strong response.</figcaption>
+<figcaption>Fig. 0a. One convolution step. The gold filter lines up with a gold patch of the input, multiplies cell by cell, and sums the nine products into a single output pixel. Slide the filter one cell over, to the dashed box, and repeat to fill the whole map. This filter is a vertical-edge detector, so meeting a vertical edge in the input returns a strong response.</figcaption>
 </figure>
 
 **Embeddings and the dot product.** The summary vectors are embeddings, vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product measures how similar two of them are, and the intuition is one line of algebra. For vectors $u, v$ with angle $\theta$ between them,
@@ -92,7 +92,84 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a temperature. A dot product sums $d$ terms, so its typical magnitude grows like $\sqrt d$, and without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax (all the weight on the single highest score) and gradients die. When queries read from the image it is called cross-attention, with $Q$ built from the queries and $K, V$ from the image. When one set of tokens reads from itself it is called self-attention, with $Q = XW_Q$, $K = XW_K$, $V = XW_V$ all linear views of the same tokens $X$ through three learned matrices, so every token's update is a weighted average of the others, the weights set by their mutual dot products.
+Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a temperature. A dot product sums $d$ terms of roughly unit size and random sign, and the random signs mostly cancel, so the sum's typical magnitude grows like $\sqrt d$ rather than $d$. Without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax (all the weight on the single highest score) and gradients die. When queries read from the image it is called cross-attention, with $Q$ built from the queries and $K, V$ from the image. When one set of tokens reads from itself it is called self-attention, with $Q = XW_Q$, $K = XW_K$, $V = XW_V$ all linear views of the same tokens $X$ through three learned matrices, so every token's update is a weighted average of the others, the weights set by their mutual dot products.
+
+<figure class="viz">
+<svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup: a query vector is scored against every location's key by dot product, softmax turns the four scores 2.0, minus 0.6, minus 2.2, 1.1 into weights 0.67, 0.05, 0.01, 0.27 that sum to 1, and the output is the weighted average of the location values under those weights.">
+<defs>
+<style>
+.av-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13px; }
+.av-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
+.av-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #52525b; font-size: 11px; }
+</style>
+<marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
+</defs>
+<rect width="700" height="270" rx="6" fill="#fafafa"/>
+<text class="av-lbl" x="208" y="44" text-anchor="middle">keys</text>
+<text class="av-lbl" x="296" y="44" text-anchor="middle">values</text>
+<text class="av-lbl" x="372" y="44" text-anchor="middle">score q&#183;k/&#8730;d</text>
+<text class="av-lbl" x="525" y="44" text-anchor="middle">weights</text>
+<text class="av-sub" x="525" y="58" text-anchor="middle">sum to 1</text>
+<text class="av-lbl" x="70" y="120" text-anchor="middle">query q</text>
+<rect x="30" y="130" width="80" height="20" fill="#b8860b" fill-opacity="0.13" stroke="#b8860b"/>
+<line x1="50" y1="130" x2="50" y2="150" stroke="#d4d4d4"/><line x1="70" y1="130" x2="70" y2="150" stroke="#d4d4d4"/><line x1="90" y1="130" x2="90" y2="150" stroke="#d4d4d4"/>
+<text class="av-sub" x="70" y="168" text-anchor="middle">the question</text>
+<line x1="112" y1="140" x2="166" y2="74" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
+<line x1="112" y1="140" x2="166" y2="118" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
+<line x1="112" y1="140" x2="166" y2="162" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
+<line x1="112" y1="140" x2="166" y2="206" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
+<g>
+<rect x="170" y="64" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
+<rect x="170" y="108" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
+<rect x="170" y="152" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
+<rect x="170" y="196" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
+<line x1="189" y1="64" x2="189" y2="84" stroke="#d4d4d4"/><line x1="208" y1="64" x2="208" y2="84" stroke="#d4d4d4"/><line x1="227" y1="64" x2="227" y2="84" stroke="#d4d4d4"/>
+<line x1="189" y1="108" x2="189" y2="128" stroke="#d4d4d4"/><line x1="208" y1="108" x2="208" y2="128" stroke="#d4d4d4"/><line x1="227" y1="108" x2="227" y2="128" stroke="#d4d4d4"/>
+<line x1="189" y1="152" x2="189" y2="172" stroke="#d4d4d4"/><line x1="208" y1="152" x2="208" y2="172" stroke="#d4d4d4"/><line x1="227" y1="152" x2="227" y2="172" stroke="#d4d4d4"/>
+<line x1="189" y1="196" x2="189" y2="216" stroke="#d4d4d4"/><line x1="208" y1="196" x2="208" y2="216" stroke="#d4d4d4"/><line x1="227" y1="196" x2="227" y2="216" stroke="#d4d4d4"/>
+</g>
+<g>
+<rect x="258" y="64" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
+<rect x="258" y="108" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
+<rect x="258" y="152" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
+<rect x="258" y="196" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
+<line x1="277" y1="64" x2="277" y2="84" stroke="#d4d4d4"/><line x1="296" y1="64" x2="296" y2="84" stroke="#d4d4d4"/><line x1="315" y1="64" x2="315" y2="84" stroke="#d4d4d4"/>
+<line x1="277" y1="108" x2="277" y2="128" stroke="#d4d4d4"/><line x1="296" y1="108" x2="296" y2="128" stroke="#d4d4d4"/><line x1="315" y1="108" x2="315" y2="128" stroke="#d4d4d4"/>
+<line x1="277" y1="152" x2="277" y2="172" stroke="#d4d4d4"/><line x1="296" y1="152" x2="296" y2="172" stroke="#d4d4d4"/><line x1="315" y1="152" x2="315" y2="172" stroke="#d4d4d4"/>
+<line x1="277" y1="196" x2="277" y2="216" stroke="#d4d4d4"/><line x1="296" y1="196" x2="296" y2="216" stroke="#d4d4d4"/><line x1="315" y1="196" x2="315" y2="216" stroke="#d4d4d4"/>
+</g>
+<g class="av-num">
+<text x="372" y="78" text-anchor="middle">2.0</text>
+<text x="372" y="122" text-anchor="middle">&#8722;0.6</text>
+<text x="372" y="166" text-anchor="middle">&#8722;2.2</text>
+<text x="372" y="210" text-anchor="middle">1.1</text>
+</g>
+<line x1="402" y1="140" x2="456" y2="140" stroke="#9a9a9a" marker-end="url(#av-ar)"/>
+<text class="av-sub" x="429" y="130" text-anchor="middle">softmax</text>
+<g fill="#b8860b" fill-opacity="0.75">
+<rect x="470" y="68" width="94" height="12"/>
+<rect x="470" y="112" width="7" height="12"/>
+<rect x="470" y="156" width="2.5" height="12"/>
+<rect x="470" y="200" width="38" height="12"/>
+</g>
+<g class="av-num">
+<text x="570" y="78">0.67</text>
+<text x="483" y="122">0.05</text>
+<text x="479" y="166">0.01</text>
+<text x="514" y="210">0.27</text>
+</g>
+<line x1="600" y1="74" x2="616" y2="136" stroke="#b8860b" stroke-width="1.3" opacity="0.85"/>
+<line x1="600" y1="118" x2="616" y2="139" stroke="#b8860b" stroke-width="1.3" opacity="0.3"/>
+<line x1="600" y1="162" x2="616" y2="141" stroke="#b8860b" stroke-width="1.3" opacity="0.2"/>
+<line x1="600" y1="206" x2="616" y2="144" stroke="#b8860b" stroke-width="1.3" opacity="0.55"/>
+<text class="av-lbl" x="651" y="120" text-anchor="middle">output</text>
+<rect x="618" y="130" width="66" height="20" fill="#0d9488" fill-opacity="0.15" stroke="#0d9488"/>
+<line x1="635" y1="130" x2="635" y2="150" stroke="#d4d4d4"/><line x1="651" y1="130" x2="651" y2="150" stroke="#d4d4d4"/><line x1="668" y1="130" x2="668" y2="150" stroke="#d4d4d4"/>
+<text class="av-sub" x="350" y="234" text-anchor="middle">each row is one image location, its key matched against the query, its value carrying what the location contains</text>
+<text class="av-sub" x="350" y="252" text-anchor="middle">output = 0.67&#183;v&#8321; + 0.05&#183;v&#8322; + 0.01&#183;v&#8323; + 0.27&#183;v&#8324;, one row of softmax(QK&#7488;/&#8730;d)V</text>
+</svg>
+<figcaption>Fig. 0b. One attention lookup, end to end. The query is scored against every location's key by a dot product, softmax turns the four scores into positive weights that sum to 1, and the output is the weighted average of the values under those weights. Two locations barely matter here, yet their weights are not zero. Softmax keeps every option alive, and §5 is about forcing chosen weights to exactly zero.</figcaption>
+</figure>
 
 **Transformers and decoders.** A Transformer layer is attention plus a small per-token network, wrapped in residual connections. As a function it is just two updates applied in order:
 
@@ -223,7 +300,7 @@ $$
 \{(m_i, c_i)\}_{i=1}^{N}, \qquad m_i \in [0,1]^{H\times W},\quad c_i \in \{1,\dots,K\}\cup\{\varnothing\},
 $$
 
-and the three tasks fall out by interpretation: segments as categories (semantic), segments as things with identity (instance), or both (panoptic). One architecture, one loss, three annotation schemes.
+and the three tasks fall out by interpretation: segments as categories (semantic), segments as things with identity (instance), or both (panoptic). One architecture, one loss, three annotation schemes. Concretely, only the targets change between tasks. Semantic training converts the per-pixel label map into one binary mask per class present in the image, a handful of large targets. Instance training supplies one mask per object, and panoptic one per segment, stuff regions included. The architecture and the loss never hear which task they are serving.
 
 **Concretely.** Take the puppy in the figure below. The model's whole answer for it is one pair: the class $c_i = \texttt{dog}$, and the mask $m_i$, a grid the size of the image holding one number per pixel, near $1$ inside the dog and near $0$ everywhere else. Coarsen that grid, as the right panel does, and it becomes a matrix of one number per cell. Shrink that down to a handful of cells and it reads:
 
@@ -242,7 +319,7 @@ The matrix says where, the single label says what, and the two never mix. The mo
 
 <figure class="viz">
 <img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="Left: a photograph of a French bulldog puppy on a blanket, the puppy filled with a translucent gold overlay tracing the model's predicted mask. Right: the same mask drawn as a coarse grid, gold cells where a pixel belongs to the dog and blank cells elsewhere.">
-<figcaption>Fig. 2. A single prediction from the trained model. Left: a photograph, where the gold region is the model's own predicted mask for one query, so gold is what the model asserts. Right: that same mask coarsened to a grid, gold where a pixel belongs to the dog and blank where it does not, which is all a binary mask ever is. The model read the whole image in one pass and returned two pairs, the dog as a thing and the blanket behind it as stuff, exactly the split of <a class="section-ref" href="#1-the-segmentation-problem-formally">§1</a>. Photograph public domain (CC0). Segmentation by Mask2Former with a Swin-L backbone on COCO panoptic.</figcaption>
+<figcaption>Fig. 2. A single prediction from the trained model. Left: a photograph, where the gold region is the model's own predicted mask for one query, so gold is what the model asserts. Right: that same mask coarsened to a grid, gold where a pixel belongs to the dog and blank where it does not, which is all a binary mask ever is. The model read the whole image in one pass and returned two pairs, the dog as a thing and the blanket behind it as stuff (only the dog's mask is drawn, for clarity), exactly the split of <a class="section-ref" href="#1-the-segmentation-problem-formally">§1</a>. Photograph public domain (CC0). Segmentation by Mask2Former with a Swin-L backbone on COCO panoptic.</figcaption>
 </figure>
 
 So by late 2021 universal architectures existed, and an awkward fact sat in the Mask2Former introduction. Researchers kept building specialists anyway. Three numbers explain why. Accuracy: the best universal instance result trailed the best specialist by over 9 AP (MaskFormer 40.1 against 49.5 for Swin-HTC++, the Hybrid Task Cascade instance specialist on a Swin backbone [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]). Compute: MaskFormer needed 300 epochs (full passes over the training set) where HTC++ needed 72 to do better. Memory: full-resolution mask losses meant one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
@@ -299,7 +376,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
-Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is attained at a vertex. At a vertex, enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down. Those tight constraints hold their variables at $0$, and the surviving basic variables $x_B$ are fixed by the equality constraints. Dropping the one redundant equality (one is redundant because the prediction constraints and the target constraints each sum to the same equation $\sum_{i,j} x_{ij} = N$, so any single constraint follows from the other $2N-1$) leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. Cramer's rule gives $x_B = B^{-1} b$, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is attained at a vertex. Attainment at a vertex is standard. A bounded polyhedron is the convex hull of its finitely many vertices, and a linear objective on a mix $x = \sum_t \theta_t v_t$ equals the same mix of the vertex values, so no point can beat the best vertex. At a vertex, enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down. Those tight constraints hold their variables at $0$, and the surviving basic variables $x_B$ are fixed by the equality constraints. Dropping the one redundant equality (one is redundant because the prediction constraints and the target constraints each sum to the same equation $\sum_{i,j} x_{ij} = N$, so any single constraint follows from the other $2N-1$) leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. Cramer's rule gives $x_B = B^{-1} b$, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v}\ \sum_i u_i + \sum_j v_j
@@ -345,7 +422,7 @@ A full assignment sitting on tight edges is a certificate that meets that bound.
 3. **Perfect?** If the matching reaches size $N$ it lies entirely on tight edges, so by the lemma it is optimal. Stop.
 4. **Otherwise lift the dual.** No augmenting path exists yet. Grow an alternating tree from an unmatched prediction along tight edges, reaching rows $I$ and columns $J$, and let $\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j)$. Raise $u_i$ by $\delta$ on $I$ and lower $v_j$ by $\delta$ on $J$. Reduced costs stay nonnegative, a fresh tight edge opens at the frontier so the tree grows, and because the tree holds one more row than column (every column the tree reaches is matched, otherwise the path would already augment, and each matched column brings its row into the tree, so only the root row lacks a partner column) the dual objective $\sum_i u_i + \sum_j v_j$ rises by $\delta$. Repeat the lift until the tree touches an unmatched target, then augment along that path and return to step 2.
 
-Each augmentation adds one edge, so $N$ of them finish the matching, each costing $O(N^2)$, for $O(N^3)$ overall. Termination is not luck. The dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
+Each augmentation adds one edge, so $N$ of them finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. The implementation keeps, for every column outside the tree, its current slack $\min_{i\in I}\tilde c(i,j)$, updated in $O(N)$ whenever a row joins the tree, so each $\delta$ is read off the slacks instead of rescanned and one augmentation's lifts total $O(N^2)$. That gives $O(N^3)$ overall. Termination is not luck. The dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*
 
@@ -392,7 +469,7 @@ $$
 \ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
-The two logarithms differentiate through the sigmoid. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$,
+The two logarithms differentiate through the sigmoid. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$ (differentiate $\sigma(z) = (1+e^{-z})^{-1}$ and factor the result),
 
 $$
 \begin{aligned}
@@ -667,12 +744,14 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 
 ### 5.3 Stability, gradients, and the guard rail
 
-Three properties keep the recursion stable. First, the residual path in (2) preserves the pre-read state, so one bad read from a wrong region cannot erase a query. Second, masks are re-predicted and re-supervised at every layer, so the attendable region can move. Deep supervision (§3.2) is what trains masks to be good gates, and it has to be, because the gate itself is non-differentiable. Thresholding kills gradients through $\mathcal{M}$, so the learning signal for mask quality arrives only through the per-layer auxiliary losses. Third is a detail that lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
+Three properties keep the recursion stable. First, the residual path in (2) preserves the pre-read state, so one bad read from a wrong region cannot erase a query. Second, masks are re-predicted and re-supervised at every layer, so the attendable region can move. Deep supervision (§3.2) is what trains masks to be good gates, and it has to be, because the gate itself is non-differentiable. Thresholding kills gradients through $\mathcal{M}$, so the learning signal for mask quality arrives only through the per-layer auxiliary losses. That proxy is the right objective, not just the available one. The mask loss is minimized exactly at $m = g$, pointwise for BCE, and for soft Dice because $2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x$ with equality only at $m = g$, and thresholding the true mask at $0.5$ gives precisely the region §5.2's hypothesis wants the query to read. Better, the gate is already exactly right once every point's error $|m_x - g_x|$ falls below $0.5$, well before the mask itself converges, which is why imperfect intermediate masks already make good gates. Third is a detail that lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
 
 ```python
 attn_mask = (mask_logits.sigmoid() < 0.5).flatten(2)   # True = forbidden
 attn_mask[attn_mask.all(dim=-1)] = False               # the guard rail
 ```
+
+One poisoned row would not stay contained. The following self-attention averages all $N$ queries together, so a single NaN spreads to every query in one step, then into the loss and every gradient behind it. The guard is also what keeps the §5.2 proposition's hypothesis true, since flipping the row to fully unmasked makes the allowed set $S$ the whole grid instead of empty.
 
 ### 5.4 Did it work?
 
@@ -697,7 +776,7 @@ $$
 \end{aligned}
 $$
 
-computed separately for $x$ and $y$ and concatenated. The intuition is that each position gets a unique fingerprint of phases across many frequencies, and shifting the position rotates those phases in a predictable way, which is what lets a dot product read off relative offsets. The rung is a learnable scale-level embedding $e_{\text{lvl}} \in \mathbb{R}^{1\times C}$ per resolution, borrowed from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
+computed separately for $x$ and $y$ and concatenated. Here $\text{pos}$ is the cell's coordinate on that axis, $i$ indexes the frequency, each frequency filling one sine and one cosine channel, and the exponent's $C/2$ is there because each axis gets half of the $C$ channels. The intuition is that each position gets a unique fingerprint of phases across many frequencies, and shifting the position rotates those phases in a predictable way, which is what lets a dot product read off relative offsets. The rung is a learnable scale-level embedding $e_{\text{lvl}} \in \mathbb{R}^{1\times C}$ per resolution, borrowed from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
 
 <figure class="viz">
 <video data-lazy autoplay loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: three resolution panes and an orb breathing coarse to fine">
@@ -709,7 +788,7 @@ computed separately for $x$ and $y$ and concatenated. The intuition is that each
 
 ### 6.3 The pixel decoder is a free variable, and that is a finding
 
-Because masked attention only needs some pyramid, any pixel decoder plugs in. The default is a 6-layer multi-scale deformable attention Transformer (MSDeformAttn) over strides $1/8$, $1/16$, $1/32$, plus an upsample fused with the stride-4 backbone features to give the per-pixel embedding map. Deformable attention [[Zhu et al. 2021](#ref-zhu2021)] replaces dense attention with a learned sparse sample. For a query feature $z_q$ at reference point $\hat p_q$ (the point on the feature grid the query samples around, from which its learned offsets reach out),
+Because masked attention only needs some pyramid, any pixel decoder plugs in. The default is a 6-layer multi-scale deformable attention Transformer (MSDeformAttn) over strides $1/8$, $1/16$, $1/32$, plus an upsample fused with the stride-4 backbone features to give the per-pixel embedding map. Deformable attention [[Zhu et al. 2021](#ref-zhu2021)] replaces dense attention with a learned sparse sample. One reorientation first. Inside the pixel decoder the queries are not the 100 object queries, which do not exist yet at this stage of the pipeline. Every location of the pyramid acts as its own query, refining its feature by sampling a few points from all three levels, and its reference point is its own coordinates. For a query feature $z_q$ at reference point $\hat p_q$ (the point on the feature grid the query samples around, from which its learned offsets reach out),
 
 $$
 \text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
@@ -759,7 +838,7 @@ $$
 \end{aligned}
 $$
 
-The estimate is unbiased and its variance shrinks like $1/K_{\text{pt}}$, so the typical error shrinks like $1/\sqrt{K_{\text{pt}}}$. At $K_{\text{pt}} = 12{,}544$ the noise is negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.
+The estimate is unbiased and its variance shrinks like $1/K_{\text{pt}}$, so the typical error shrinks like $1/\sqrt{K_{\text{pt}}}$. At $K_{\text{pt}} = 112^2$ the typical error is the per-point loss's spread divided by 112, under one percent of it and negligible in practice, while the loss touches 12,544 of the 65,536 points a $1024^2$ crop leaves at stride 4, about a fifth of the grid the dense loss used to visit, for every prediction-target pair, at every one of the ten supervised heads.
 
 ### 8.2 Two sampling rules for two jobs
 
@@ -767,7 +846,7 @@ The sampling distribution differs by role, for a different reason in each case. 
 
 **Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays essentially unbiased. The hedge is for Dice, since the argument of §8.1 is exact for per-point losses like BCE, but Dice is a ratio of point sums, and a sampled ratio picks up a bias of order $1/K_{\text{pt}}$, negligible at 12,544 points. The variance argument behind the stability follows, and is skippable.
 
-**Aside (why sharing cancels the shared noise, skippable).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)]$ equals the dense cost $c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the smallest case, two entries $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which already exhibits the mechanism. Then
+**Aside (why sharing cancels the shared noise, skippable).** Write the point-sampled cost of pairing prediction $i$ with target $j$ as $\hat c(i,j) = \frac{1}{K_{\text{pt}}}\sum_{k}\ell_{ij}(x_k)$, where $\ell_{ij}(x)$ is the per-point cost contribution at pixel $x$ and the points $x_1,\dots,x_{K_{\text{pt}}}$ are shared across all pairs. Sharing does not change any single entry. Each $x_k$ is still uniform on $\Omega$, so $\mathbb{E}[\hat c(i,j)]$ equals the dense cost $c(i,j)$ under shared or independent sampling alike, and each entry has the same marginal variance either way. What sharing changes is the joint distribution across entries, and that is exactly what the Hungarian algorithm reads. The algorithm never uses the absolute level of a cost. To prefer one assignment $\sigma$ over another $\sigma'$ it compares $J(\sigma) - J(\sigma') = \sum_j\big[\hat c(\sigma(j),j) - \hat c(\sigma'(j),j)\big]$, a difference of sums of entries, and the noise that can flip its sign lives in the variance of entry differences. Take the smallest case, two entries $A = \hat c(i,j)$ and $B = \hat c(i',j')$, which already exhibits the mechanism. For the shared-points covariance, expand it as a double sum over point indices. Terms with $k \ne k'$ vanish because distinct points are independent, leaving $K_{\text{pt}}$ equal same-index terms of $\tfrac{1}{K_{\text{pt}}^2}\operatorname{Cov}_x$. Then
 
 $$
 \operatorname{Var}[A - B] = \operatorname{Var}[A] + \operatorname{Var}[B] - 2\operatorname{Cov}(A,B),
@@ -823,7 +902,7 @@ Three terms from that table need a gloss. AdamW is Adam, an adaptive per-paramet
 
 Inference on COCO follows the Mask R-CNN protocol: shorter side 800, longer side at most 1333. Queries are 100 everywhere, except 200 for the largest panoptic and instance models, trained 100 epochs. The query ablation shows 100 is best for instance and semantic, 200 helps only panoptic (52.2 against 51.9 PQ, since panoptic scenes hold more segments), and 1000 actively hurts (40.3 AP against the 43.7 that 100 queries reach). Per dataset, Cityscapes [[Cordts et al. 2016](#ref-cordts2016)] uses 90k iterations (gradient steps, counted instead of epochs) at 512×1024 crops, ADE20K [[Zhou et al. 2017](#ref-zhou2017)] uses $640^2$ crops for panoptic and instance (the semantic crop size varies by backbone, $512^2$ up to Swin-S), and Mapillary Vistas [[Neuhold et al. 2017](#ref-neuhold2017)] uses 300k iterations at $1024^2$ crops.
 
-Post-processing is inherited from MaskFormer. Semantic output is the per-pixel argmax of class-probability-weighted masks, $\arg\max_c \sum_i \hat p_i(c)\, m_i(x)$. Panoptic works the same way, with low-confidence filtering to resolve overlaps into a partition. Instance segmentation needs the calibrated ranking AP demands (§1), so the score is
+Post-processing is inherited from MaskFormer. Semantic output is the per-pixel argmax of class-probability-weighted masks, $\arg\max_c \sum_i \hat p_i(c)\, m_i(x)$. Panoptic cannot reuse that argmax, because maximizing over classes would fuse adjacent same-class instances back into one region, exactly the failure §1 used to tell the tasks apart. Each pixel instead goes to a query. Among the kept queries, the one with the highest $\hat p_i(c_i)\,m_i(x)$ claims the pixel, so identities survive. Kept means two filters, both $0.8$ in the released config. A query is dropped before the assignment when its class confidence falls below the threshold, and a segment is dropped after it when it ends up holding less than 80 percent of its thresholded mask's area. Instance segmentation needs the calibrated ranking AP demands (§1), so the score is
 
 $$
 s_i = \hat p_i(c_i)\cdot \frac{1}{|\{x : m_i(x) > 0.5\}|}\sum_{x:\, m_i(x)>0.5} m_i(x),
@@ -841,7 +920,7 @@ One architecture, per-task training, state of the art everywhere, for the first 
 | Instance, COCO val | **50.1 AP** (36.2 boundary AP) | Swin-HTC++ 49.5 (34.1) | +0.6 (+2.1) |
 | Semantic, ADE20K val | **57.7 mIoU** (Swin-L, FaPN, multi-scale inference) | [BEiT](#ref-bao2022) 57.0 | +0.7 at less than half the parameters |
 
-Boundary AP in the table is mask AP scored only on pixels near the mask edges [[Cheng et al. 2021c](#ref-cheng2021biou)], the sharpest test of boundary precision. Multi-scale in the semantic row is a test-time trick, averaging predictions over several input resolutions, not §6's decoder schedule.
+Boundary AP in the table is mask AP scored only on pixels near the mask edges [[Cheng et al. 2021c](#ref-cheng2021biou)], the sharpest test of boundary precision. Multi-scale in the semantic row is a test-time trick, averaging predictions over several input resolutions, not §6's decoder schedule. The FaPN in that row is a swap too, trading the MSDeformAttn default for §6.3's best semantic pixel decoder, the one per-task specialization in the headline table.
 
 At ResNet-50 scale the story is learning efficiency. Mask2Former reaches 51.9 PQ in 50 epochs against MaskFormer's 46.5 in 300, six times fewer epochs to a higher score, and 43.7 instance AP in 50 epochs against 42.5 for a heavily tuned 400-epoch Mask R-CNN.
 
@@ -864,7 +943,7 @@ Every row is a controlled experiment on R50, across all three tasks:
 
 *at fixed point-sampled training loss. The §8.3 grid has the full two-by-two.
 
-There is also the decomposition every reviewer secretly wants, recipe against architecture. Retraining MaskFormer with Mask2Former's training parameters lifts it from 34.0 to 37.8 AP, so LSJ, the reweighted BCE plus Dice, and the point losses transfer to other models. Swapping in the new decoder while holding the backbone, the FPN pixel decoder, and the recipe fixed takes 37.8 to 41.5, and the MSDeformAttn default closes the rest to 43.7. That is roughly forty percent recipe, forty percent decoder, and twenty percent pixel decoder, laid out where most papers would let the headline idea absorb all the credit. Steal that habit.
+There is also the decomposition every reviewer secretly wants, recipe against architecture. Retraining MaskFormer with Mask2Former's training parameters lifts it from 34.0 to 37.8 AP (R50 numbers), so LSJ, the reweighted BCE plus Dice, and the point losses transfer to other models. Swapping in the new decoder while holding the backbone, the FPN pixel decoder, and the recipe fixed takes 37.8 to 41.5, and the MSDeformAttn default closes the rest to 43.7. That is roughly forty percent recipe, forty percent decoder, and twenty percent pixel decoder, laid out where most papers would let the headline idea absorb all the credit. Steal that habit.
 
 ## 12. Limitations, read honestly
 
@@ -878,7 +957,7 @@ Mask2Former's decoder became infrastructure. The same group extended it unchange
 
 ## 14. Implementation corner
 
-The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former), and its configs reproduce every table above. The core, one decoder layer with the two details people miss, in PyTorch-flavored pseudocode:
+The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former), and its configs reproduce every table above. For fine-tuning, the practical entry point is `Mask2FormerForUniversalSegmentation` in `transformers`, whose image processor ships `post_process_semantic_segmentation`, `post_process_instance_segmentation`, and `post_process_panoptic_segmentation`, the post-processing of §9 as three calls. The core, one decoder layer with the two details people miss, in PyTorch-flavored pseudocode:
 
 ```python
 def decoder_layer(x, feats_l, pos_l, lvl_emb, query_pos, prev_mask_logits, layer):
@@ -920,7 +999,7 @@ Assembly: run the heads once on the learnable $\mathbf{X}_0$ before the loop, gi
 
 **Why did instance segmentation gain the most from masked attention and semantic the least?** The failure it fixes, attention mass leaking onto other instances and the background, is what blurs identical-class neighbors together. Semantic segmentation has no identity ambiguity and tolerates broad context.
 
-**Your Mask2Former outputs overlapping soft masks, but panoptic requires a partition. What reconciles them?** Post-processing (§9): a per-pixel argmax over class-weighted mask scores, plus low-confidence filtering. The raw output is a set. Exclusivity is imposed afterwards.
+**Your Mask2Former outputs overlapping soft masks, but panoptic requires a partition. What reconciles them?** Post-processing (§9). Semantic takes a per-pixel argmax over classes, and panoptic an argmax over kept queries, each pixel claimed by the query with the highest $\hat p_i(c_i)\,m_i(x)$, plus the two $0.8$ filters. The raw output is a set. Exclusivity is imposed afterwards.
 
 **Why can PQ evaluation use greedy matching while training cannot?** The §1 lemma: with non-overlapping segments and IoU above 0.5, matches are provably unique, so no assignment problem exists. Training-time predictions overlap freely with soft costs, and there the Hungarian step is genuinely needed.
 

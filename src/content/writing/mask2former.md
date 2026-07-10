@@ -76,7 +76,7 @@ the nine products and one sum of Fig. 0a, with $(i,j)$ the output position and $
 <figcaption>Fig. 0a. One convolution step. The gold filter lines up with a gold patch of the input, multiplies cell by cell, and sums the nine products into a single output pixel. Slide the filter one cell over, to the dashed box, and repeat to fill the whole map. This filter is a vertical-edge detector, so meeting a vertical edge in the input returns a strong response.</figcaption>
 </figure>
 
-**Embeddings and the dot product.** The summary vectors are embeddings, vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product measures how similar two of them are, and the intuition is one line of algebra. For vectors $u, v$ with angle $\theta$ between them,
+**Embeddings and the dot product.** The summary vectors are embeddings, vectors whose geometry encodes meaning, arranged so similar things point in similar directions. The dot product measures how similar two of them are, and the intuition is [one line of algebra](https://en.wikipedia.org/wiki/Dot_product#Equivalence_of_the_definitions). For vectors $u, v$ with angle $\theta$ between them,
 
 $$
 u^\top v = \sum_k u_k v_k = \|u\|\,\|v\|\cos\theta,
@@ -98,7 +98,7 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a temperature. A dot product sums $d$ terms of roughly unit size and random sign, and the random signs mostly cancel, so the sum's typical magnitude grows like $\sqrt d$ rather than $d$. Without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax (all the weight on the single highest score) and gradients die. When queries read from the image it is called cross-attention, with $Q$ built from the queries and $K, V$ from the image. When one set of tokens reads from itself it is called self-attention, with $Q = XW_Q$, $K = XW_K$, $V = XW_V$ all linear views of the same tokens $X$ through three learned matrices, so every token's update is a weighted average of the others, the weights set by their mutual dot products.
+Read it factor by factor. $QK^\top$ is an $N \times n$ table of every question dotted with every key. The softmax runs along each row, turning it into a probability distribution over locations. Multiplying by $V$ then takes each row's weighted average of the value vectors. The $\sqrt d$ is a temperature. A dot product sums $d$ terms of roughly unit size and random sign, and the random signs mostly cancel, so the sum's typical magnitude grows like $\sqrt d$ rather than $d$ (independent terms of mean $0$ and variance $1$ add their variances, so the $d$-term sum has variance $d$ and typical size $\sqrt d$). Without the division long vectors would push the softmax into saturation, where it behaves like a hard argmax (all the weight on the single highest score) and gradients die, each weight responding to its own score at rate $w_i(1-w_i)$, which vanishes as the weights pin to $0$ or $1$. When queries read from the image it is called cross-attention, with $Q$ built from the queries and $K, V$ from the image. When one set of tokens reads from itself it is called self-attention, with $Q = XW_Q$, $K = XW_K$, $V = XW_V$ all linear views of the same tokens $X$ through three learned matrices, so every token's update is a weighted average of the others, the weights set by their mutual dot products.
 
 <figure class="viz">
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup: a query vector is scored against every location's key by a scaled dot product, softmax turns the four scores 2.0, minus 0.6, minus 2.2, 1.1 into weights 0.67, 0.05, 0.01, 0.27 that sum to 1, and the output is the weighted average of the location values under those weights.">
@@ -217,6 +217,7 @@ which is 1 when they are identical and 0 when they are disjoint. This is the sta
 | $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
 | $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$ |
+| $\mathbb{1}[\cdot]$ | the indicator: $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
 | $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | weights on the BCE, Dice, and classification losses: $\lambda_{\text{ce}} = \lambda_{\text{dice}} = 5.0$ and $\lambda_{\text{cls}} = 2.0$ ($0.1$ for the no-object class $\varnothing$) |
 | $K_{\text{pt}}$ | number of sampled points for mask losses: $12{,}544 = 112^2$ |
 
@@ -252,7 +253,7 @@ $$
 \underbrace{\frac{|\mathit{TP}|}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}}_{\text{RQ}},
 $$
 
-where a match requires $\text{IoU} > 0.5$. PQ is computed per class this way, then averaged over the categories in $\mathcal{C}$, the same class averaging mIoU uses. The factorization into segmentation quality (SQ), the average IoU over the matched pairs, and recognition quality (RQ), the share of segments correctly detected at all, is immediate (multiply and divide by $|\mathit{TP}|$). The matching rule hides a small theorem that makes PQ well defined in the first place.
+where a match requires $\text{IoU} > 0.5$. PQ is computed per class this way, then averaged over the categories in $\mathcal{C}$, the same class averaging mIoU uses. The factorization into segmentation quality (SQ), the average IoU over the matched pairs, and recognition quality (RQ), the share of segments correctly detected at all, is immediate (multiply and divide by $|\mathit{TP}|$, for a class holding at least one match). With $|\mathit{TP}| = 0$ the numerator is an empty sum, so PQ is $0$ whenever anything remains in the denominator, and the split is moot. The matching rule hides a small theorem that makes PQ well defined in the first place.
 
 **Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one: each ground-truth segment matches at most one prediction, and each prediction at most one ground truth.*
 
@@ -357,14 +358,14 @@ $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call `scipy.optimize.linear_sum_assignment`, which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix, not solving it, is the expensive part (§8).
+and training uses the optimal assignment $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. It is solved exactly in $O(N^3)$ time, cubic in the set size. The classic solver is the Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)], and the released matchers call [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modern equivalent, the Jonker-Volgenant algorithm, exact and cubic all the same. At $N = 100$ that is on the order of $100^3 = 10^6$ elementary operations, well under a millisecond on a CPU, and never the bottleneck. Building the cost matrix, not solving it, is the expensive part (§8).
 
 **Aside (the Hungarian algorithm in full).** In the code the matcher is one `scipy` call, but the algorithm inside is a small classic. Its correctness is a clean duality argument, and it is where the $O(N^3)$ came from. The full development folds out below.
 
 <details class="proof">
 <summary>The linear program, the duality proof, and a worked 3&#215;3 run</summary>
 
-**As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Relaxing the integrality to $x \ge 0$ gives a linear program,
+**As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Relaxing the integrality to $x \ge 0$ gives a linear program, a minimization of a linear objective over real variables subject only to linear equalities and inequalities,
 
 $$
 \min_{x \ge 0}\ \sum_{i,j}\text{cost}(i,j)\,x_{ij}
@@ -385,14 +386,14 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 *Step* ($k > 1$): suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column. Otherwise every column holds exactly two, the most any column can carry. That gives three cases.
 
 - *Zero 1s.* The column is all zeros, so $\det B = 0$.
-- *One 1,* at row $r$, column $c$ of $B$. Laplace-expand along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
-- *Two 1s in every column.* Every constraint-matrix column carries its two 1s in one prediction-row and one target-row, so each column of $B$ has one 1 among the prediction-rows $P$ and one among the target-rows $T$. Summing the rows in $P$ picks up exactly one 1 per column, giving the all-ones vector $\mathbf 1$, and summing the rows in $T$ gives $\mathbf 1$ the same way. So $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 0$, a nontrivial dependence among the rows, and $B$ is singular with $\det B = 0$.
+- *One 1,* at row $r$, column $c$ of $B$. [Laplace-expand](https://en.wikipedia.org/wiki/Laplace_expansion) along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
+- *Two 1s in every column.* Every constraint-matrix column carries its two 1s in one prediction-row and one target-row, so each column of $B$ has one 1 among the prediction-rows $P$ and one among the target-rows $T$. Summing the rows in $P$ picks up exactly one 1 per column, giving the all-ones vector $\mathbf 1$, and summing the rows in $T$ gives $\mathbf 1$ the same way. So $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 0$, a nontrivial dependence among the rows, and $B$ is [singular](https://en.wikipedia.org/wiki/Invertible_matrix) with $\det B = 0$.
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
-Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is attained at a vertex. Attainment at a vertex is standard. A bounded polyhedron is the convex hull of its finitely many vertices, and a linear objective on a mix $x = \sum_t \theta_t v_t$ of the vertices $v_t$, with weights $\theta_t \ge 0$ summing to $1$, equals the same mix of the vertex values, so no point can beat the best vertex. At a vertex, enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down. Those tight constraints hold their variables at $0$, and the surviving basic variables $x_B$ are fixed by the equality constraints. Dropping the one redundant equality (one is redundant because the prediction constraints and the target constraints each sum to the same equation $\sum_{i,j} x_{ij} = N$, so any single constraint follows from the other $2N-1$) leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. Cramer's rule gives $x_B = B^{-1} b$, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round.
+Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is [attained at a vertex](https://en.wikipedia.org/wiki/Fundamental_theorem_of_linear_programming). Attainment at a vertex is standard. A bounded polyhedron is the convex hull of its finitely many vertices, and a linear objective on a mix $x = \sum_t \theta_t v_t$ of the vertices $v_t$, with weights $\theta_t \ge 0$ summing to $1$, equals the same mix of the vertex values, so no point can beat the best vertex. At a vertex, enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down. Those tight constraints hold their variables at $0$, and the surviving [basic variables](https://en.wikipedia.org/wiki/Basic_feasible_solution) $x_B$ are fixed by the equality constraints. Dropping the one redundant equality (one is redundant because the prediction constraints and the target constraints each sum to the same equation $\sum_{i,j} x_{ij} = N$, so any single constraint follows from the other $2N-1$) leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. [Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule) writes each entry of $x_B$ as a ratio of two determinants, $B$ with one column swapped for $b$ over $\det B$. The numerator is an integer matrix's determinant, hence an integer, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round.
 
-So much for the primal. Every linear program has a companion maximization, its dual, whose value never exceeds the primal minimum. Here the dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+So much for the primal. Every linear program has a companion maximization, [its dual](https://en.wikipedia.org/wiki/Dual_linear_program), whose value never exceeds the primal minimum. Here the dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v}\ \sum_i u_i + \sum_j v_j
@@ -429,7 +430,7 @@ $$
 
 So $\sum_i u_i + \sum_j v_j$ lower-bounds the cost of every assignment. The tight $\sigma$ uses only edges with $\tilde c(\sigma(j),\, j) = 0$, so its first sum vanishes and $J(\sigma) = \sum_i u_i + \sum_j v_j$. That equals the lower bound, so no assignment costs less. $\blacksquare$
 
-A full assignment sitting on tight edges is a certificate that meets that bound. The equality is complementary slackness. An optimal $x$ puts weight only where $\tilde c = 0$.
+A full assignment sitting on tight edges is a certificate that meets that bound. The equality is [complementary slackness](https://en.wikipedia.org/wiki/Linear_programming#Complementary_slackness). An optimal $x$ puts weight only where $\tilde c = 0$.
 
 **How it runs.** The certificate lemma turns the search around. Instead of hunting through $N!$ assignments, hunt for potentials under which $N$ tight edges can be matched up, one per row and one per column, because the lemma then hands over optimality for free. The Hungarian method builds the potentials and the matching together and never breaks two invariants. Reduced costs stay nonnegative everywhere, and the matching only ever uses tight edges. Here is the whole method on a small instance, three predictions against three targets, prediction $i$ in row $i$, target $j$ in column $j$, the costs collected in a matrix written $C$ for this run only (not the notation table's feature dimension):
 
@@ -490,7 +491,7 @@ $$
 \sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = J(\pi \circ \sigma) \qquad \text{(definition of } J\text{)}.
 $$
 
-Minimize over $\sigma$. As $\sigma$ ranges over $S_N$, the composite $\pi \circ \sigma$ ranges over all of $S_N$ too, because left multiplication by the fixed $\pi$ is a bijection of the group. So
+Minimize over $\sigma$. As $\sigma$ ranges over $S_N$, the composite $\pi \circ \sigma$ ranges over all of $S_N$ too, because left multiplication by the fixed $\pi$ is a bijection of the group, undone by composing with $\pi^{-1}$, so every $\tau \in S_N$ is hit exactly once, as $\tau = \pi \circ (\pi^{-1} \circ \tau)$. So
 
 $$
 \min_{\sigma \in S_N} J(\pi \circ \sigma) = \min_{\tau \in S_N} J(\tau),
@@ -529,7 +530,7 @@ $$
 \ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
-The two logarithms differentiate through the sigmoid. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$ (differentiate $\sigma(z) = (1+e^{-z})^{-1}$ and factor the result),
+The two logarithms differentiate through the sigmoid, by the chain rule in the form $(\log u)' = u'/u$. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$ (differentiate $\sigma(z) = (1+e^{-z})^{-1}$ and factor the result),
 
 $$
 \begin{aligned}
@@ -569,7 +570,7 @@ $$
 \begin{aligned}
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
 &= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right) && \text{drop the } 1\\[4pt]
-&= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule}\\[4pt]
+&= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule, } (u/v)' = (u'v - uv')/v^2\\[4pt]
 &= -\,\frac{2\,g_x\,S - 2\,O}{S^2} && \text{insert the partials}.
 \end{aligned}
 $$
@@ -746,7 +747,7 @@ $$
 
 where $M_{l-1}$ is the same query's mask from the previous layer, its logits bilinearly resized to the current attention resolution, then passed through the sigmoid and thresholded at $0.5$. $M_0$ comes from the input queries $\mathbf{X}_0$, which is only meaningful because $\mathbf{X}_0$ is learnable and directly supervised (§7).
 
-Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once. Formally:
+Read the $-\infty$ literally. It is added to a location's score before the softmax, and $e^{-\infty} = 0$, so that location contributes exactly nothing to the weighted average while the surviving scores renormalize among themselves back to a total of 1. A merely large negative constant would let a sliver of weight leak through. Zeroing weights after the softmax would kill the leak but break the sum-to-one. Only the additive $-\infty$ does both jobs at once. The $-\infty$ is [extended-real](https://en.wikipedia.org/wiki/Extended_real_number_line#Arithmetic_operations) shorthand, with $x + (-\infty) = -\infty$ and $e^{-\infty} = 0$ as limiting conventions, so every identity below is the limit of masking with a large finite constant. Formally:
 
 **Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ a nonempty allowed set, with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
 
@@ -809,7 +810,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 
 ### 5.3 Stability, gradients, and the guard rail
 
-Three properties keep the recursion stable. First, the residual path in (2) preserves the pre-read state, so one bad read from a wrong region cannot erase a query. Second, masks are re-predicted and re-supervised at every layer, so the attendable region can move. Deep supervision (§3.2) is what trains masks to be good gates, and it has to be, because the gate itself is non-differentiable. Thresholding kills gradients through $\mathcal{M}$, so the learning signal for mask quality arrives only through the per-layer auxiliary losses. The proxy also happens to be the right objective. The mask loss is minimized exactly at $m = g$. For BCE that holds pointwise, and for soft Dice it follows from $2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x$, with equality only at $m = g$. And thresholding the true mask at $0.5$ gives the region §5.2's hypothesis wants the query to read. Better, the gate is already exactly right once every point's error $|m_x - g_x|$ falls below $0.5$, well before the mask itself converges, which is why imperfect intermediate masks already make good gates. Third is a detail that lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
+Three properties keep the recursion stable. First, the residual path in (2) preserves the pre-read state, so one bad read from a wrong region cannot erase a query. Second, masks are re-predicted and re-supervised at every layer, so the attendable region can move. Deep supervision (§3.2) is what trains masks to be good gates, and it has to be, because the gate itself is non-differentiable. Thresholding kills gradients through $\mathcal{M}$, so the learning signal for mask quality arrives only through the per-layer auxiliary losses. The proxy also happens to be the right objective. The mask loss is minimized exactly at $m = g$. For BCE that holds pointwise, and for soft Dice it follows from $2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x$, with equality only at $m = g$ (pointwise, $m_x + g_x - 2m_x g_x = m_x(1-g_x) + g_x(1-m_x) \ge 0$ for $m_x \in [0,1]$ and binary $g_x$, vanishing only at $m_x = g_x$, and summing over $x$ gives the claim). And thresholding the true mask at $0.5$ gives the region §5.2's hypothesis wants the query to read. Better, the gate is already exactly right once every point's error $|m_x - g_x|$ falls below $0.5$, well before the mask itself converges, which is why imperfect intermediate masks already make good gates. Third is a detail that lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
 
 ```python
 attn_mask = (mask_logits.sigmoid() < 0.5).flatten(2)   # True = forbidden
@@ -881,7 +882,7 @@ Three changes, zero extra FLOPs, jointly worth about 1.4 AP, 1.1 PQ, and 0.9 mIo
 
 Evaluating the mask losses, focal plus Dice in MaskFormer's case, densely for 100 predictions against all ground truths to build the cost matrix, then again for the matched pairs, at every supervised head, is what pinned MaskFormer at one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates all mask losses on $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points instead of full masks.
 
-The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. From here on losses are per-point averages rather than §3.2's sums, a constant factor of $|\Omega|$ that the loss weights absorb. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)$ has mean
+The statistical footing takes three lines. Let $x_1,\dots,x_{K_{\text{pt}}}$ be drawn independently and uniformly from the grid $\Omega$, and let $\ell(x)$ be a per-point loss. From here on losses are per-point averages rather than §3.2's sums, a constant factor of $|\Omega|$ that the loss weights absorb. The expectation $\mathbb{E}$ is the probability-weighted average over draws, $\mathbb{E}[\ell(x_1)] = \sum_{x\in\Omega}\tfrac{1}{|\Omega|}\,\ell(x)$ for one uniform point, and it passes through sums and constant factors term by term, no independence needed. The estimator $\hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(x_k)$ has mean
 
 $$
 \begin{aligned}
@@ -892,7 +893,7 @@ $$
 \end{aligned}
 $$
 
-For the variance, pull out the constant, then use independence:
+Variance, $\operatorname{Var}[X] = \mathbb{E}\big[(X - \mathbb{E}[X])^2\big]$, is the mean squared deviation from the mean. Its square root is the typical-error scale, and scaling $X$ by $c$ scales the variance by $c^2$. Across independent terms [variances add](https://en.wikipedia.org/wiki/Bienaym%C3%A9%27s_identity), and the summands $\ell(x_k)$ inherit independence from the points, fixed functions of independent draws being independent themselves. So for the variance, pull out the constant, then use independence:
 
 $$
 \begin{aligned}
@@ -909,7 +910,7 @@ The estimate is unbiased and its variance shrinks like $1/K_{\text{pt}}$, so the
 
 The sampling distribution differs by role, for a different reason in each case. For matching the reason is a variance argument. For the final loss it is a deliberate bias.
 
-**Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays essentially unbiased. The hedge is for Dice, since the argument of §8.1 is exact for per-point losses like BCE, but Dice is a ratio of point sums, and a sampled ratio picks up a bias of order $1/K_{\text{pt}}$, negligible at 12,544 points. The variance argument behind the stability folds out below.
+**Matching cost: one shared uniform set.** Every prediction-target pair in an image is scored on the same uniformly sampled points. The matcher only ever compares assignments, never absolute costs, and a pixel that lands on a hard spot like an object boundary inflates many pairs' costs together, so reusing one set of points lets that shared noise cancel out of the comparison. The matching gets more stable while every cost stays essentially unbiased. The hedge is for Dice, since the argument of §8.1 is exact for per-point losses like BCE, but Dice is a ratio of point sums, and [a sampled ratio](https://en.wikipedia.org/wiki/Ratio_estimator) picks up a bias of order $1/K_{\text{pt}}$, negligible at 12,544 points. The variance argument behind the stability folds out below.
 
 <details class="proof">
 <summary>Why sharing cancels the shared noise</summary>
@@ -922,7 +923,7 @@ $$
 \operatorname{Cov}(A,B)\big|_{\text{shared}} = \frac{1}{K_{\text{pt}}}\operatorname{Cov}_{x\sim U(\Omega)}\big(\ell_{ij}(x),\,\ell_{i'j'}(x)\big).
 $$
 
-The second identity comes from expanding the covariance as a double sum over point indices. Terms with $k \ne k'$ vanish because distinct points are independent, leaving $K_{\text{pt}}$ equal same-index terms of $\tfrac{1}{K_{\text{pt}}^2}$ times the per-point covariance. The marginal terms $\operatorname{Var}[A]$ and $\operatorname{Var}[B]$ are fixed by the uniform marginal and are identical under both schemes. Only the cross term moves. Independent per-pair points give $\operatorname{Cov}(A,B)=0$, so the two noises add. Shared points give a per-point covariance that is positive in the mask-cost regime, since a pixel that lands on a hard region such as an object boundary inflates the loss contribution for many pairs at once, so the per-point costs are positively correlated across entries. A positive covariance subtracts off the part of the sampling noise common to $A$ and $B$ and leaves only the part that distinguishes them, so $\operatorname{Var}[A-B]$ is smaller under sharing. Lower difference variance means a smaller chance that noise flips the sign of a comparison, hence a more stable argmin, and the expected difference is unchanged, so a better decision is made about the same underlying quantity. The same term-by-term cancellation extends to a general assignment comparison, where the object is the difference of sums above rather than a single entry difference. Two qualifications. The cancellation is partial, not a common additive shift, because the per-point losses are only correlated across entries, not equal up to a per-pair constant. And the positive sign of the covariance is the operative structural condition, not a theorem. Were two entries anticorrelated at the per-point level, sharing would raise their difference variance instead.
+Here $\operatorname{Cov}(A,B) = \mathbb{E}\big[(A - \mathbb{E}[A])(B - \mathbb{E}[B])\big]$ measures how the two fluctuate together, and the first identity is the square in $\operatorname{Var}[A-B] = \mathbb{E}\big[\big((A - \mathbb{E}[A]) - (B - \mathbb{E}[B])\big)^2\big]$ expanded term by term. The second comes from expanding the covariance as a double sum over point indices, since covariance is linear in each argument (substitute the sums into the product form and distribute). Terms with $k \ne k'$ vanish because distinct points are independent and independence factors expectations, $\mathbb{E}[XY] = \mathbb{E}[X]\,\mathbb{E}[Y]$, so each centered cross term splits into $\mathbb{E}\big[X - \mathbb{E}X\big]\,\mathbb{E}\big[Y - \mathbb{E}Y\big] = 0$, leaving $K_{\text{pt}}$ equal same-index terms of $\tfrac{1}{K_{\text{pt}}^2}$ times the per-point covariance. The marginal terms $\operatorname{Var}[A]$ and $\operatorname{Var}[B]$ are fixed by the uniform marginal and are identical under both schemes. Only the cross term moves. Independent per-pair points give $\operatorname{Cov}(A,B)=0$, so the two noises add. Shared points give a per-point covariance that is positive in the mask-cost regime, since a pixel that lands on a hard region such as an object boundary inflates the loss contribution for many pairs at once, so the per-point costs are positively correlated across entries. A positive covariance subtracts off the part of the sampling noise common to $A$ and $B$ and leaves only the part that distinguishes them, so $\operatorname{Var}[A-B]$ is smaller under sharing. Lower difference variance means a smaller chance that noise flips the sign of a comparison (by [Chebyshev's inequality](https://en.wikipedia.org/wiki/Chebyshev%27s_inequality) the flip probability is at most $\operatorname{Var}[A-B]\,/\,(\mathbb{E}[A-B])^2$, shrinking as the variance does), hence a more stable argmin, and the expected difference is unchanged, so a better decision is made about the same underlying quantity. The same term-by-term cancellation extends to a general assignment comparison, where the object is the difference of sums above rather than a single entry difference. Two qualifications. The cancellation is partial, not a common additive shift, because the per-point losses are only correlated across entries, not equal up to a per-pair constant. And the positive sign of the covariance is the operative structural condition, not a theorem. Were two entries anticorrelated at the per-point level, sharing would raise their difference variance instead.
 
 </details>
 
@@ -932,7 +933,7 @@ $$
 \mathbb{E}_{q}\big[\hat{\mathcal{L}}\big] = \sum_{x\in\Omega} q(x)\,\ell(x) \;\neq\; \frac{1}{|\Omega|}\sum_{x\in\Omega}\ell(x) = \mathcal{L}_{\text{dense}},
 $$
 
-a $q$-weighted mean that overweights the boundary points $q$ favors. This is not the unbiased estimator of §8.1. The uncorrected reweighting makes it a boundary-emphasized objective by design, not a cheaper copy of the dense loss, and precision is spent where the masks actually disagree.
+a $q$-weighted mean that overweights the boundary points $q$ favors. Reinstating the weight would cancel $q$ term by term, $q(x)\,\ell(x)/(|\Omega|\,q(x))$ summing over $x$ to $\mathcal{L}_{\text{dense}}$, which is the standard [importance-sampling](https://en.wikipedia.org/wiki/Importance_sampling) correction. This is not the unbiased estimator of §8.1. The uncorrected reweighting makes it a boundary-emphasized objective by design, not a cheaper copy of the dense loss, and precision is spent where the masks actually disagree.
 
 <figure class="viz">
 <video data-lazy autoplay loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: sampled points on the mask error band balancing a beam">

@@ -232,7 +232,7 @@ $$
 
 where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$ [[Everingham et al. 2015](#ref-everingham2015)].
 
-**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$ with confidence score $s_i$, evaluated by mask AP. For each class, predictions are ranked by score. A prediction counts as a true positive when its mask IoU with an unclaimed ground truth meets or exceeds a threshold $\tau$, and a false positive otherwise. Precision is the fraction of kept predictions that are true positives, recall the fraction of ground truths recovered, and the precision-recall curve plots one against the other as the score threshold sweeps from high to low. AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
+**Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$ with confidence score $s_i$, evaluated by mask AP, average precision, which the next few sentences build up. For each class, predictions are ranked by score. A prediction counts as a true positive when its mask IoU with an unclaimed ground truth meets or exceeds a threshold $\tau$, and a false positive otherwise. Precision is the fraction of kept predictions that are true positives, recall the fraction of ground truths recovered, and the precision-recall curve plots one against the other as the score threshold sweeps from high to low. AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
 
 $$
 P = \frac{|\mathit{TP}|}{|\mathit{TP}| + |\mathit{FP}|}, \qquad

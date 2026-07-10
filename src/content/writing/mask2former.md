@@ -415,38 +415,47 @@ So $\sum_i u_i + \sum_j v_j$ lower-bounds the cost of every assignment. The tigh
 
 A full assignment sitting on tight edges is a certificate that meets that bound. The equality is complementary slackness. An optimal $x$ puts weight only where $\tilde c = 0$.
 
-**How it runs.** The Hungarian method builds the assignment and the potentials together, holding two invariants throughout, $\tilde c \ge 0$ and a matching that uses only tight edges.
-
-1. **Reduce.** Set $u_i = \min_j \text{cost}(i,j)$, then $v_j = \min_i \tilde c(i,j)$. This subtracts each prediction's cheapest option, then each target's, so a reduced cost now reads as regret against the best available, and a tight edge marks a pairing with zero regret. The reduction leaves $\tilde c \ge 0$ with a tight edge in every row and every column, and the column pass cannot wipe out a row's zero, because that zero sits in a column whose minimum is already $0$, so $v_j = 0$ there and the entry survives untouched.
-2. **Match on tight edges.** Extend the matching over zero-reduced-cost edges by augmenting paths, as far as it will go. An augmenting path runs from a free prediction to a free target through edges that alternate unmatched and matched, and swapping which of its edges are in the matching adds exactly one pair.
-3. **Perfect?** If the matching reaches size $N$ it lies entirely on tight edges, so by the lemma it is optimal. Stop.
-4. **Otherwise lift the dual.** No augmenting path exists yet. Grow an alternating tree from an unmatched prediction along tight edges, reaching rows $I$ and columns $J$, and let $\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j)$. Raise $u_i$ by $\delta$ on $I$ and lower $v_j$ by $\delta$ on $J$. Reduced costs stay nonnegative, a fresh tight edge opens at the frontier so the tree grows, and because the tree holds one more row than column (every column the tree reaches is matched, otherwise the path would already augment, and each matched column brings its row into the tree, so only the root row lacks a partner column) the dual objective $\sum_i u_i + \sum_j v_j$ rises by $\delta$. Repeat the lift until the tree touches an unmatched target, then augment along that path and return to step 2.
-
-**A worked run.** Costs for three predictions against three targets, prediction $i$ in row $i$, target $j$ in column $j$:
+**How it runs.** The certificate lemma turns the search around. Instead of hunting through $N!$ assignments, hunt for potentials under which $N$ tight edges can be matched up, one per row and one per column, because the lemma then hands over optimality for free. The Hungarian method builds the potentials and the matching together and never breaks two invariants. Reduced costs stay nonnegative everywhere, and the matching only ever uses tight edges. Here is the whole method on a small instance, three predictions against three targets, prediction $i$ in row $i$, target $j$ in column $j$:
 
 $$
 C = \begin{pmatrix} 4 & 1 & 3\\ 2 & 0 & 5\\ 3 & 2 & 2 \end{pmatrix}.
 $$
 
-*Reduce.* The row minima give $u = (1, 0, 2)$, the column minima of what remains give $v = (1, 0, 0)$, and the reduced costs are
+**Make zeros.** At the start $u = v = 0$ and no edge is tight, so create some. Subtract each row's minimum from its row, which is exactly setting $u_i = \min_j \text{cost}(i,j)$, then subtract each remaining column minimum, $v_j = \min_i \tilde c(i,j)$. The certificate identity is what makes this legal, since potentials shift every assignment's total by the same constant and the ranking of assignments never moves. Here $u = (1, 0, 2)$ and then $v = (1, 0, 0)$:
 
 $$
 \tilde c = C - u - v = \begin{pmatrix} 2 & 0 & 2\\ 1 & 0 & 4\\ 0 & 0 & 0 \end{pmatrix}.
 $$
 
-*Match on tight edges.* The zeros let row 1 take column 2 and row 3 take column 1. Row 2's only zero sits in column 2, already taken, so the matching stalls at size two.
+Read a reduced cost as regret, how much worse a pairing is than the best deal available to its row and column. Every row and every column now holds a zero, and the column pass cannot wipe out a row's zero, because that zero sits in a column whose minimum is already $0$, so $v_j = 0$ there and the entry survives untouched.
 
-*Lift the dual.* Grow the tree from the free row 2. Its tight edge leads to column 2, whose partner row 1 joins, and row 1 brings no new column. So $I = \{1, 2\}$, $J = \{2\}$, and the smallest reduced cost leaving the tree is $\delta = \tilde c(2,1) = 1$. Raise $u_1, u_2$ by $1$ and lower $v_2$ by $1$, so $u = (2, 1, 2)$, $v = (1, -1, 0)$ and
+**Match on zeros.** Pair rows to columns through tight edges only, never reusing a row or a column. Row 1 takes column 2 and row 3 takes column 1. Row 2's only zero sits in column 2, already taken, so the matching stalls at two pairs.
+
+The tool for getting unstuck is the augmenting path. Call a row or column free while it has no partner. An augmenting path starts at a free row, steps to a column through a zero, steps from that column to its partner row through the matched edge, steps to a new column through another zero, and keeps alternating until it lands on a free column. Flip every edge along it, matched becoming unmatched and back. Each interior row and column trades one partner for another while the two free endpoints gain one, so the matching grows by exactly one pair. Matching as far as possible means flipping augmenting paths until none exists.
+
+None exists here. From the free row 2 the only zero leads to column 2, column 2's partner is row 1, and row 1 owns no other zero to continue through. Dead end.
+
+**Buy the missing zero.** The rows and columns that search just visited form the alternating tree, here rows $I = \{2, 1\}$ and columns $J = \{2\}$, the entire region the stuck row can reach through zeros. Progress needs a zero on an edge leaving the tree, from a row in $I$ to a column outside $J$. Take the cheapest escape,
+
+$$
+\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j) = \tilde c(2,1) = 1,
+$$
+
+and pay for it with the potentials. Raise $u_i$ by $\delta$ on every tree row and lower $v_j$ by $\delta$ on every tree column. Three checks, one per kind of entry, show the move is safe.
+
+- *Tree row, outside column.* The reduced cost drops by $\delta$. By the choice of $\delta$ nothing goes negative, and the minimizer lands exactly on zero. That is the purchased edge, $(2,1)$ here.
+- *Tree row, tree column.* The raise and the drop cancel, so every edge inside the tree, the matched ones included, stays exactly as tight as it was.
+- *Outside row, tree column.* The reduced cost rises by $\delta$, harmless for nonnegativity, and the only zeros this can erase are unmatched ones, because a tree column's partner sits inside the tree.
+
+So the invariants hold and the tree gains ground. The dual objective $\sum_i u_i + \sum_j v_j$ also rises by $\delta$, because the tree always holds one more row than column, every column it reaches being matched (a free column would already end an augmenting path) and each matched column bringing its partner row along, so only the root row lacks a column. The lower bound climbs toward the optimum, which is why the loop cannot stall forever. With $u = (2, 1, 2)$ and $v = (1, -1, 0)$,
 
 $$
 \tilde c = \begin{pmatrix} 1 & 0 & 1\\ 0 & 0 & 4\\ 0 & 1 & 0 \end{pmatrix}.
 $$
 
-Both matched edges stayed tight, exactly as the invariant promised, and a fresh zero opened at $(2,1)$.
+**Augment.** The purchased zero at $(2,1)$ extends the search. Row 2 now reaches column 1, column 1's partner row 3 joins, and row 3 owns a zero in column 3, which is free. That is an augmenting path, row 2 to column 1 to row 3 to column 3. Flip it. Row 2 takes column 1, row 3 moves to column 3, row 1 keeps column 2, and the matching is perfect.
 
-*Augment.* Through that zero the tree reaches column 1, whose partner row 3 joins, and row 3 owns a zero in the free column 3. That is an augmenting path, row 2 to column 1 to row 3 to column 3. Swapping along it yields the perfect matching $(1,2)$, $(2,1)$, $(3,3)$.
-
-*Certificate.* The assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $\sum_i u_i + \sum_j v_j = 5 + 0 = 5$. Primal equals dual, so by the lemma no assignment can cost less, and checking all $3! = 6$ permutations confirms it. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality you just watched close is complementary slackness by hand.
+**Read off the certificate.** In the original matrix the assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $(2 + 1 + 2) + (1 - 1 + 0) = 5$. Primal equals dual, so by the lemma no assignment can cost less, and enumerating all $3! = 6$ permutations confirms it. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality that just closed is complementary slackness checked by hand. On a larger instance nothing new happens. Match through zeros until stuck, buy the cheapest escape zero, augment the moment a free column comes into reach, and stop when every row has a partner.
 
 Each augmentation adds one edge, so $N$ of them finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. The implementation keeps, for every column outside the tree, its current slack $\min_{i\in I}\tilde c(i,j)$, updated in $O(N)$ whenever a row joins the tree, so each $\delta$ is read off the slacks instead of rescanned and one augmentation's lifts total $O(N^2)$. That gives $O(N^3)$ overall. Termination is not luck. The dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 

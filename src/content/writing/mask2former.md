@@ -237,12 +237,12 @@ where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$
 
 $$
 \begin{gathered}
-\text{IoU}(\bar m_i, g) = \frac{\sum_x \bar m_i(x)\, g(x)}{\sum_x \big(\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)\big)},\\[4pt]
+\text{IoU}(\bar m_i, g) = \frac{\sum_{x\in\Omega} \bar m_i(x)\, g(x)}{\sum_{x\in\Omega} \big(\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)\big)},\\[4pt]
 i \in \mathit{TP} \iff \max_{g \in \mathcal{G}_i} \text{IoU}(\bar m_i, g) \ge \tau,
 \end{gathered}
 $$
 
-where $x$ runs over the pixel grid $\Omega$, $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask at pixel $x$, the numerator counts the pixels both masks claim, the denominator the pixels either mask claims, and $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all $|G|$ of them for the top-scoring prediction. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Now fix a score cutoff and keep only the predictions above it. Precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff from strict to loose traces the precision-recall curve, and AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
+where the sums visit every pixel $x$ of the grid $\Omega$, and $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask, $1$ on the pixels the prediction claims and $0$ elsewhere, with $g(x)$ the same for the ground truth. On $0/1$ values a product acts as an AND, so each numerator term is $1$ exactly when both masks contain the pixel, and the sum counts the intersection. The combination $\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)$ acts as an OR, $1$ when either mask contains the pixel, so the denominator counts the union, and the fraction is §0's intersection over union computed by sums. Finally $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all $|G|$ of them for the top-scoring prediction. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Now fix a score cutoff and keep only the predictions above it. Precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff from strict to loose traces the precision-recall curve, and AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
 
 $$
 P = \frac{|\mathit{TP}|}{|\mathit{TP}| + |\mathit{FP}|}, \qquad

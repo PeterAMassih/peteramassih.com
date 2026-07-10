@@ -377,7 +377,7 @@ One-to-one matching, as opposed to greedy nearest-target, matters for a subtler 
 
 ### 3.2 The loss terms, with their gradients
 
-The mask loss is binary cross-entropy plus Dice,
+The mask loss is binary cross-entropy (BCE) plus Dice,
 
 $$
 \mathcal{L}_{\text{mask}} = \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}} + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}},

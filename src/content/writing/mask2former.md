@@ -422,6 +422,32 @@ A full assignment sitting on tight edges is a certificate that meets that bound.
 3. **Perfect?** If the matching reaches size $N$ it lies entirely on tight edges, so by the lemma it is optimal. Stop.
 4. **Otherwise lift the dual.** No augmenting path exists yet. Grow an alternating tree from an unmatched prediction along tight edges, reaching rows $I$ and columns $J$, and let $\delta = \min_{i\in I,\ j\notin J}\tilde c(i,j)$. Raise $u_i$ by $\delta$ on $I$ and lower $v_j$ by $\delta$ on $J$. Reduced costs stay nonnegative, a fresh tight edge opens at the frontier so the tree grows, and because the tree holds one more row than column (every column the tree reaches is matched, otherwise the path would already augment, and each matched column brings its row into the tree, so only the root row lacks a partner column) the dual objective $\sum_i u_i + \sum_j v_j$ rises by $\delta$. Repeat the lift until the tree touches an unmatched target, then augment along that path and return to step 2.
 
+**A worked run.** Costs for three predictions against three targets, prediction $i$ in row $i$, target $j$ in column $j$:
+
+$$
+C = \begin{pmatrix} 4 & 1 & 3\\ 2 & 0 & 5\\ 3 & 2 & 2 \end{pmatrix}.
+$$
+
+*Reduce.* The row minima give $u = (1, 0, 2)$, the column minima of what remains give $v = (1, 0, 0)$, and the reduced costs are
+
+$$
+\tilde c = C - u - v = \begin{pmatrix} 2 & 0 & 2\\ 1 & 0 & 4\\ 0 & 0 & 0 \end{pmatrix}.
+$$
+
+*Match on tight edges.* The zeros let row 1 take column 2 and row 3 take column 1. Row 2's only zero sits in column 2, already taken, so the matching stalls at size two.
+
+*Lift the dual.* Grow the tree from the free row 2. Its tight edge leads to column 2, whose partner row 1 joins, and row 1 brings no new column. So $I = \{1, 2\}$, $J = \{2\}$, and the smallest reduced cost leaving the tree is $\delta = \tilde c(2,1) = 1$. Raise $u_1, u_2$ by $1$ and lower $v_2$ by $1$, so $u = (2, 1, 2)$, $v = (1, -1, 0)$ and
+
+$$
+\tilde c = \begin{pmatrix} 1 & 0 & 1\\ 0 & 0 & 4\\ 0 & 1 & 0 \end{pmatrix}.
+$$
+
+Both matched edges stayed tight, exactly as the invariant promised, and a fresh zero opened at $(2,1)$.
+
+*Augment.* Through that zero the tree reaches column 1, whose partner row 3 joins, and row 3 owns a zero in the free column 3. That is an augmenting path, row 2 to column 1 to row 3 to column 3. Swapping along it yields the perfect matching $(1,2)$, $(2,1)$, $(3,3)$.
+
+*Certificate.* The assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $\sum_i u_i + \sum_j v_j = 5 + 0 = 5$. Primal equals dual, so by the lemma no assignment can cost less, and checking all $3! = 6$ permutations confirms it. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality you just watched close is complementary slackness by hand.
+
 Each augmentation adds one edge, so $N$ of them finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. The implementation keeps, for every column outside the tree, its current slack $\min_{i\in I}\tilde c(i,j)$, updated in $O(N)$ whenever a row joins the tree, so each $\delta$ is read off the slacks instead of rescanned and one augmentation's lifts total $O(N^2)$. That gives $O(N^3)$ overall. Termination is not luck. The dual objective strictly increases at every lift and can never exceed the optimal cost, so the primal and dual are squeezed together. Kuhn-Munkres schedules exactly these updates, and the Jonker-Volgenant routine `scipy` calls is a faster-constant refinement of the same primal-dual idea.
 
 **Proposition (the matched loss ignores prediction order).** *Let $\mathcal{L}(\hat y) = \min_{\sigma\in S_N} J(\sigma; \hat y)$. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{L}$ unchanged.*

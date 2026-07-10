@@ -236,9 +236,10 @@ where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$
 **Instance segmentation** outputs a set of scored masks over things only, $\{(m_i, c_i, s_i)\}$ with confidence score $s_i$, evaluated by mask AP, average precision, which the next few sentences build up. For each class, predictions are ranked by score and walked in that order. Each is compared against the ground-truth masks by the IoU of §0, written pointwise on binary masks, and joins the true positives when its best match among the still-unclaimed ground truths clears the threshold:
 
 $$
-\text{IoU}(\bar m_i, g) = \frac{\sum_x \bar m_i(x)\, g(x)}{\sum_x \big(\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)\big)},
-\qquad
+\begin{gathered}
+\text{IoU}(\bar m_i, g) = \frac{\sum_x \bar m_i(x)\, g(x)}{\sum_x \big(\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)\big)},\\[4pt]
 i \in \mathit{TP} \iff \max_{g \in \mathcal{G}_i} \text{IoU}(\bar m_i, g) \ge \tau,
+\end{gathered}
 $$
 
 where $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask, the numerator counts the pixels both masks claim, the denominator the pixels either mask claims, and $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all $|G|$ of them for the top-scoring prediction. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Precision is the fraction of kept predictions that are true positives, recall the fraction of ground truths recovered, and the precision-recall curve plots one against the other as the score threshold sweeps from high to low. AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
@@ -572,13 +573,13 @@ $$
 \frac{\partial O}{\partial m_x} = g_x, \qquad \frac{\partial S}{\partial m_x} = 1.
 $$
 
-Then
+Then, using the quotient rule in the form $(u/v)' = (u'v - uv')/v^2$,
 
 $$
 \begin{aligned}
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
 &= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O}{S}\right) && \text{drop the } 1\\[4pt]
-&= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule, } (u/v)' = (u'v - uv')/v^2\\[4pt]
+&= -\,\frac{2\,(\partial O/\partial m_x)\,S - 2O\,(\partial S/\partial m_x)}{S^2} && \text{quotient rule}\\[4pt]
 &= -\,\frac{2\,g_x\,S - 2\,O}{S^2} && \text{insert the partials}.
 \end{aligned}
 $$

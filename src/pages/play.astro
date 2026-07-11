@@ -77,13 +77,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <details class="about">
       <summary>what is this?</summary>
       <p>
-        A tiny multiplayer world. Every character is a live visitor to this
-        site, right now — walk over and say hi, or punch them (they bounce
-        back, no harm done; the blinking means briefly unpunchable). Your
-        browser keeps one WebSocket to a Cloudflare Durable Object that
-        referees the room: it validates every move, punch, and message, and
-        when the room is empty it hibernates and costs nothing. Physics runs
-        in your browser; the server only relays what it believes.
+        A tiny multiplayer world. Every character here is a real visitor,
+        on this page right now. Walk over and say hi, or throw a punch.
+        Nobody gets hurt. They bounce back and blink for a moment while
+        they cannot be hit again. Under the hood, your browser keeps one
+        WebSocket open to a Cloudflare Durable Object that referees the
+        room and checks every move, punch, and message. Physics runs in
+        your browser. When the room is empty, the server sleeps and costs
+        nothing.
       </p>
     </details>
   </main>

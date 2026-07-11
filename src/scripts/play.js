@@ -86,7 +86,17 @@ const touchPad = document.getElementById('play-touch');
 
 let room = ROOMS[location.hash.slice(1)] ? location.hash.slice(1) : 'plaza';
 let gravityScale = 1; // from the server's init: the moon is a different place
+let roomBrawl = true; // whether punches mean anything here
+let roomKb = 1; // how hard hits launch people (the arena says 1.6)
 let switching = false; // mid-door: old socket closing, new one connecting
+
+// The anonymous id rooms remember positions under. Not an account: a random
+// string in this browser's localStorage, meaningless anywhere else.
+let vid = localStorage.getItem('play-vid');
+if (!vid) {
+  vid = crypto.randomUUID();
+  localStorage.setItem('play-vid', vid);
+}
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
 // sprites ease rx/ry toward x/y so 10 Hz updates read as walking, not teleports.
@@ -277,7 +287,7 @@ let socket = null;
 function connect(enterFrom) {
   // Identity rides along on the handshake, so a door crossing (or a return
   // visit) keeps the same name and color instead of rerolling the sprite.
-  let url = `${SOCKET_BASE}/?room=${room}`;
+  let url = `${SOCKET_BASE}/?room=${room}&vid=${vid}`;
   const storedName = localStorage.getItem('play-name');
   const storedColor = localStorage.getItem('play-color');
   if (storedName) url += `&name=${encodeURIComponent(storedName)}`;
@@ -318,6 +328,8 @@ function onMessage(msg, enterFrom) {
     me = msg.id;
     switching = false;
     gravityScale = msg.gravity ?? 1;
+    roomBrawl = msg.brawl ?? true;
+    roomKb = msg.kb ?? 1;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     players.clear();
     for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
@@ -363,10 +375,10 @@ function onMessage(msg, enterFrom) {
     shakeMag = msg.target === me ? 5 : 2.5;
     sfx('hit');
     if (msg.target === me) {
-      // I got punched: my own physics takes the impulse.
+      // I got punched: my own physics takes the impulse, scaled by the room.
       stunUntil = now + STUN_MS;
-      kbVx = msg.dir * KB_VX;
-      vy = KB_POP;
+      kbVx = msg.dir * KB_VX * roomKb;
+      vy = KB_POP * roomKb;
     }
   } else if (msg.type === 'chat') {
     bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
@@ -449,6 +461,12 @@ function sendPunch() {
   const self = me && players.get(me);
   if (!self || now < stunUntil || now - lastPunch < PUNCH_COOLDOWN_MS) return;
   if (socket.readyState !== WebSocket.OPEN) return;
+  if (!roomBrawl) {
+    // The quiet room shushes you instead of pretending nothing happened.
+    bubbles.set(me, { text: 'shh…', until: now + 1200 });
+    lastPunch = now;
+    return;
+  }
   lastPunch = now;
   // Show your own swing immediately; the server echo confirms it for others.
   self.punchUntil = now + PUNCH_SHOW_MS;

@@ -12,11 +12,11 @@ const WORLD = { w: 640, h: 360 };
 // here); looks and doors live client-side. Unknown names never reach us —
 // the Worker whitelists against this same list.
 export const ROOM_NAMES = ["plaza", "arena", "library", "moon"] as const;
-const ROOM_RULES: Record<string, { gravity: number; brawl: boolean }> = {
-	plaza: { gravity: 1, brawl: true },
-	arena: { gravity: 1, brawl: true },
-	library: { gravity: 1, brawl: false }, // the quiet room
-	moon: { gravity: 0.35, brawl: true }, // jump like it matters
+const ROOM_RULES: Record<string, { gravity: number; brawl: boolean; kb: number }> = {
+	plaza: { gravity: 1, brawl: true, kb: 1 },
+	arena: { gravity: 1, brawl: true, kb: 1.6 }, // where hits actually launch you
+	library: { gravity: 1, brawl: false, kb: 1 }, // the quiet room
+	moon: { gravity: 0.35, brawl: true, kb: 1 }, // low gravity does the comedy
 };
 
 const PALETTE = [
@@ -75,6 +75,9 @@ export class Room extends DurableObject<Env> {
 	// their socket via serializeAttachment, so a room woken from hibernation can
 	// rebuild everything from the sockets the runtime kept open for it.
 	private players = new Map<WebSocket, Player>();
+	// Anonymous visitor ids (from the handshake, never broadcast): the key the
+	// room remembers positions under, so a return visit resumes where you left.
+	private vids = new Map<WebSocket, string>();
 	// Which room this object is. First use of durable storage: derived from
 	// the URL on first join, persisted, and reloaded after hibernation — the
 	// punch handler needs the rules even when the wake-up event is a message.
@@ -93,11 +96,19 @@ export class Room extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		for (const ws of ctx.getWebSockets()) {
-			this.players.set(ws, ws.deserializeAttachment() as Player);
+			const att = ws.deserializeAttachment() as { p: Player; vid: string | null };
+			this.players.set(ws, att.p);
+			if (att.vid) this.vids.set(ws, att.vid);
 		}
 		ctx.blockConcurrencyWhile(async () => {
 			this.roomName = ((await ctx.storage.get("room")) as string | undefined) ?? null;
 		});
+	}
+
+	// One attachment shape everywhere: the broadcastable player plus the
+	// private visitor id, both surviving hibernation on the socket itself.
+	private attach(ws: WebSocket, player: Player): void {
+		ws.serializeAttachment({ p: player, vid: this.vids.get(ws) ?? null });
 	}
 
 	private get rules() {
@@ -134,11 +145,27 @@ export class Room extends DurableObject<Env> {
 				: PALETTE[Math.floor(Math.random() * PALETTE.length)],
 		};
 
+		// This room remembers you: a returning visitor id resumes at the spot
+		// it left from. One storage read per join, one write per leave — the
+		// whole persistence bill for a visit is two operations.
+		const vid = url.searchParams.get("vid");
+		const validVid = vid && /^[0-9a-f-]{8,40}$/i.test(vid) ? vid : null;
+		if (validVid) {
+			const saved = (await this.ctx.storage.get(`pos:${validVid}`)) as
+				| { x: number; y: number }
+				| undefined;
+			if (saved) {
+				player.x = clamp(saved.x, 0, WORLD.w);
+				player.y = clamp(saved.y, 0, WORLD.h);
+			}
+		}
+
 		// acceptWebSocket (not accept) opts into hibernation: the runtime holds
 		// the connection open while the object itself can be evicted between
 		// messages. This is the whole free-tier economy of the design.
 		this.ctx.acceptWebSocket(server);
-		server.serializeAttachment(player);
+		if (validVid) this.vids.set(server, validVid);
+		this.attach(server, player);
 		this.players.set(server, player);
 
 		server.send(
@@ -148,6 +175,7 @@ export class Room extends DurableObject<Env> {
 				room: this.roomName,
 				gravity: this.rules.gravity,
 				brawl: this.rules.brawl,
+				kb: this.rules.kb,
 				players: [...this.players.values()],
 			}),
 		);
@@ -182,7 +210,7 @@ export class Room extends DurableObject<Env> {
 			// The server owns the truth: positions are clamped, never trusted raw.
 			player.x = clamp(msg.x as number, 0, WORLD.w);
 			player.y = clamp(msg.y as number, 0, WORLD.h);
-			ws.serializeAttachment(player); // keep the durable copy current for wake-ups
+			this.attach(ws, player); // keep the durable copy current for wake-ups
 			this.broadcast({ type: "moved", id: player.id, x: player.x, y: player.y }, ws);
 		} else if (msg.type === "chat") {
 			if (typeof msg.text !== "string") return;
@@ -200,7 +228,7 @@ export class Room extends DurableObject<Env> {
 			if (typeof msg.name !== "string" || !NAME_RE.test(msg.name)) return;
 			if (!this.underLimit(this.nameTimes, ws, NAME_BURST)) return;
 			player.name = msg.name;
-			ws.serializeAttachment(player); // renames survive hibernation too
+			this.attach(ws, player); // renames survive hibernation too
 			this.broadcast({ type: "named", id: player.id, name: player.name });
 		} else if (msg.type === "punch") {
 			if (!this.rules.brawl) return; // the quiet room stays quiet
@@ -252,7 +280,11 @@ export class Room extends DurableObject<Env> {
 	private drop(ws: WebSocket): void {
 		const player = this.players.get(ws);
 		if (!player) return;
+		// The room remembers where you were standing; see you next visit.
+		const vid = this.vids.get(ws);
+		if (vid) void this.ctx.storage.put(`pos:${vid}`, { x: player.x, y: player.y });
 		this.players.delete(ws);
+		this.vids.delete(ws);
 		this.chatTimes.delete(ws);
 		this.emoteTimes.delete(ws);
 		this.nameTimes.delete(ws);

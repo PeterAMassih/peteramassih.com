@@ -131,6 +131,7 @@ let crown = null; // { wearer, x, y } — only rooms that have one send it
 let crownWornAt = null; // local clock for the reign readout, from the server's held ms
 let raceTop = []; // best runs ever, from the server: { name, ms }
 let reignTop = []; // longest crown reigns ever: { name, ms }
+let hang = null; // the library's word: { masked, wrongL, misses, lives, last }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
@@ -377,6 +378,7 @@ function onMessage(msg, enterFrom) {
     crownWornAt = msg.crownHeld != null ? performance.now() - msg.crownHeld : null;
     raceTop = msg.raceTop ?? [];
     reignTop = msg.reignTop ?? [];
+    hang = msg.hang ?? null;
     myRunStart = null;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     chatInput.placeholder = roomMarks
@@ -424,6 +426,12 @@ function onMessage(msg, enterFrom) {
     crownWornAt = msg.held != null ? performance.now() - msg.held : null;
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
+  } else if (msg.type === 'hang') {
+    hang = msg.state;
+    // The guess floats over the guesser's head; the panel shows the result.
+    bubbles.set(msg.by, { text: msg.guess, until: performance.now() + 1800 });
+    if (msg.event === 'solve') sfx('crown');
+    else if (msg.event === 'fail') sfx('uncrown');
   } else if (msg.type === 'reign') {
     reignTop = msg.top ?? reignTop;
     bubbles.set(msg.id, {
@@ -766,13 +774,16 @@ function draw() {
     for (const [sx, sy] of STARS) ctx.fillRect(sx, sy, 2, 2);
   }
 
+  // The library's hangman, top right, clear of the guestbook wall.
+  if (hang) drawHangman(hang);
+
   // The guestbook wall: everyone who ever left a mark, faded into the room.
   if (marks.length) {
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'center';
     marks.forEach((m, i) => {
       const y = 58 + (i % 9) * 26;
-      const x = clamp(m.x, 90, WORLD.w - 90);
+      const x = clamp(m.x, 90, hang ? 420 : WORLD.w - 90);
       ctx.fillStyle = 'rgba(232, 216, 178, 0.42)';
       ctx.fillText(m.text, x, y);
       ctx.fillStyle = 'rgba(232, 216, 178, 0.22)';
@@ -944,6 +955,46 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
+}
+
+function drawHangman(h) {
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.fillText('chat a letter to guess', 470, 62);
+
+  // The word, one slot at a time.
+  ctx.font = '14px ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(232, 216, 178, 0.85)';
+  [...h.masked].forEach((c, i) => ctx.fillText(c, 470 + i * 13, 92));
+
+  if (h.wrongL) {
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(212, 83, 126, 0.7)';
+    ctx.fillText([...h.wrongL].join(' '), 470, 112);
+  }
+  if (h.last) {
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    const verdict = h.last.won ? 'solved by' : 'escaped from';
+    ctx.fillText(`${h.last.word} ${verdict} ${h.last.name}`, 470, 130);
+  }
+
+  // The gallows assembles one miss at a time; the little pixel person last.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const m = h.misses;
+  if (m > 0) { ctx.moveTo(596, 118); ctx.lineTo(632, 118); } // base
+  if (m > 1) { ctx.moveTo(604, 118); ctx.lineTo(604, 58); } // pole
+  if (m > 2) { ctx.moveTo(604, 58); ctx.lineTo(624, 58); } // beam
+  if (m > 3) { ctx.moveTo(624, 58); ctx.lineTo(624, 66); } // rope
+  if (m > 5) { ctx.moveTo(624, 78); ctx.lineTo(624, 94); } // body
+  if (m > 6) { ctx.moveTo(616, 84); ctx.lineTo(632, 84); } // arms
+  if (m > 7) { ctx.moveTo(624, 94); ctx.lineTo(618, 104); ctx.moveTo(624, 94); ctx.lineTo(630, 104); } // legs
+  ctx.stroke();
+  if (m > 4) { ctx.beginPath(); ctx.arc(624, 72, 6, 0, Math.PI * 2); ctx.stroke(); } // head
+  ctx.lineWidth = 1;
 }
 
 function drawFlag(x, baseY, color) {

@@ -21,11 +21,14 @@ interface RaceZones {
 
 const ROOM_RULES: Record<
 	string,
-	{ gravity: number; brawl: boolean; kb: number; marks: boolean; crown: boolean; race?: RaceZones }
+	{
+		gravity: number; brawl: boolean; kb: number; marks: boolean; crown: boolean;
+		hangman?: boolean; race?: RaceZones;
+	}
 > = {
 	plaza: { gravity: 1, brawl: true, kb: 1, marks: false, crown: false },
 	arena: { gravity: 1, brawl: true, kb: 1.6, marks: false, crown: true }, // king of the hill
-	library: { gravity: 1, brawl: false, kb: 1, marks: true, crown: false }, // the guestbook
+	library: { gravity: 1, brawl: false, kb: 1, marks: true, crown: false, hangman: true },
 	moon: {
 		gravity: 0.35, brawl: true, kb: 1, marks: false, crown: false,
 		// The moon run: floor flag to the top rock. The server does the timing —
@@ -39,6 +42,27 @@ const RACE_R = 22; // how close a move must be to a flag to count
 const RACE_MIN_MS = 1500; // faster than this is a teleport claim, not a run
 const RACE_TOP = 5;
 const RACE_KEPT = 200;
+
+// The library's hangman. A lone letter in chat is a guess, a word of the
+// right length is an attempt, and the puzzle persists across hibernation —
+// a half-solved word waits for the next stranger. Words from this world.
+const HANG_WORDS = [
+	"pixel", "crown", "plaza", "arena", "gravity", "socket", "worker", "durable",
+	"object", "tensor", "gradient", "neuron", "library", "hibernate", "sprite",
+	"canvas", "emote", "guestbook", "record", "reign", "punch", "bubble",
+	"platform", "visitor", "moon", "kernel", "matrix", "entropy", "lambda",
+	"vector", "cache", "quantize", "diffusion", "token", "epoch", "layer",
+];
+const HANG_LIVES = 8;
+const GUESS_BURST = 20; // guessing is bursty in co-op; looser than chat
+
+interface Hang {
+	word: string;
+	found: string; // letters guessed right
+	wrongL: string; // letters guessed wrong, for display
+	misses: number; // wrong letters plus failed word attempts
+	last: { name: string; word: string; won: boolean } | null;
+}
 
 // The crown needs no tick: a pickup is a move, a drop is a hit or a leave.
 // When forfeited it lands on a random arena tier (coordinates mirror the
@@ -135,6 +159,7 @@ export class Room extends DurableObject<Env> {
 	// punch handler needs the rules even when the wake-up event is a message.
 	private roomName: string | null = null;
 	private crown: Crown | null = null;
+	private hang: Hang | null = null;
 	// Active runs, playerId -> started-at. In-memory only: a run is seconds
 	// long, and one lost to a mid-run hibernation is no loss at all.
 	private runs = new Map<string, number>();
@@ -146,6 +171,7 @@ export class Room extends DurableObject<Env> {
 	private punchTimes = new Map<WebSocket, number[]>();
 	private moveTimes = new Map<WebSocket, number[]>();
 	private markTimes = new Map<WebSocket, number[]>();
+	private guessTimes = new Map<WebSocket, number[]>();
 	// Transient combat state, by player id. Deliberately not persisted: a room
 	// that hibernated mid-brawl waking up with immunity cleared is harmless.
 	private immuneUntil = new Map<string, number>();
@@ -160,6 +186,7 @@ export class Room extends DurableObject<Env> {
 		ctx.blockConcurrencyWhile(async () => {
 			this.roomName = ((await ctx.storage.get("room")) as string | undefined) ?? null;
 			this.crown = ((await ctx.storage.get("crown")) as Crown | undefined) ?? null;
+			this.hang = ((await ctx.storage.get("hang")) as Hang | undefined) ?? null;
 			// A wearer who vanished while the room slept forfeits: back to the spawn.
 			if (this.crown?.wearer && ![...this.players.values()].some((p) => p.id === this.crown?.wearer)) {
 				this.crown = { wearer: null, ...CROWN_SPAWN };
@@ -212,6 +239,61 @@ export class Room extends DurableObject<Env> {
 		return null;
 	}
 
+	private newWord(not: string): string {
+		let w = not;
+		while (w === not) w = HANG_WORDS[Math.floor(Math.random() * HANG_WORDS.length)];
+		return w;
+	}
+
+	// What clients see: the mask, never the word itself.
+	private hangView() {
+		const h = this.hang;
+		if (!h) return null;
+		return {
+			masked: [...h.word].map((c) => (h.found.includes(c) ? c : "_")).join(""),
+			wrongL: h.wrongL,
+			misses: h.misses,
+			lives: HANG_LIVES,
+			last: h.last,
+		};
+	}
+
+	private handleGuess(player: Player, t: string): void {
+		const h = this.hang;
+		if (!h) return;
+		if (t.length === 1) {
+			if (h.found.includes(t) || h.wrongL.includes(t)) return; // already tried
+			if (h.word.includes(t)) h.found += t;
+			else {
+				h.wrongL += t;
+				h.misses++;
+			}
+		} else if (t === h.word) {
+			h.found = [...new Set(h.word)].join("");
+		} else {
+			h.misses++;
+		}
+		const solved = [...h.word].every((c) => h.found.includes(c));
+		const failed = h.misses >= HANG_LIVES;
+		let event = "guess";
+		if (solved || failed) {
+			event = solved ? "solve" : "fail";
+			h.last = { name: player.name, word: h.word, won: solved };
+			h.word = this.newWord(h.word);
+			h.found = "";
+			h.wrongL = "";
+			h.misses = 0;
+		}
+		void this.ctx.storage.put("hang", h);
+		this.broadcast({
+			type: "hang",
+			event,
+			by: player.id,
+			guess: t.length === 1 ? t : "a word",
+			state: this.hangView(),
+		});
+	}
+
 	private topRuns() {
 		return this.ctx.storage.sql
 			.exec("SELECT name, ms FROM races ORDER BY ms ASC LIMIT ?", RACE_TOP)
@@ -260,6 +342,10 @@ export class Room extends DurableObject<Env> {
 		if (this.rules.crown && !this.crown) {
 			this.crown = { wearer: null, ...CROWN_SPAWN };
 			void this.ctx.storage.put("crown", this.crown);
+		}
+		if (this.rules.hangman && !this.hang) {
+			this.hang = { word: this.newWord(""), found: "", wrongL: "", misses: 0, last: null };
+			void this.ctx.storage.put("hang", this.hang);
 		}
 		const [client, server] = Object.values(new WebSocketPair());
 
@@ -319,6 +405,7 @@ export class Room extends DurableObject<Env> {
 				reignTop: this.rules.crown ? this.topReigns() : [],
 				raceTop: this.rules.race ? this.topRuns() : [],
 				marksOn: this.rules.marks,
+				hang: this.hangView(),
 				marks: this.rules.marks
 					? this.ctx.storage.sql
 							.exec("SELECT name, text, x, ts FROM marks ORDER BY ts DESC LIMIT ?", MARKS_SENT)
@@ -412,6 +499,16 @@ export class Room extends DurableObject<Env> {
 			if (typeof msg.text !== "string") return;
 			const text = msg.text.trim().slice(0, CHAT_MAX_LEN);
 			if (!text) return;
+			// In the library a lone letter is a hangman guess, and a word of
+			// exactly the right length is an attempt. Everything else is chat.
+			if (this.rules.hangman && this.hang) {
+				const t = text.toLowerCase();
+				if (/^[a-z]$/.test(t) || (/^[a-z]+$/.test(t) && t.length === this.hang.word.length)) {
+					if (!this.underLimit(this.guessTimes, ws, GUESS_BURST)) return;
+					this.handleGuess(player, t);
+					return;
+				}
+			}
 			if (!this.underLimit(this.chatTimes, ws, CHAT_BURST)) return;
 			// Everyone gets it, sender included — your own bubble is the server echo,
 			// so what you see is exactly what the room saw.
@@ -533,6 +630,7 @@ export class Room extends DurableObject<Env> {
 		this.punchTimes.delete(ws);
 		this.moveTimes.delete(ws);
 		this.markTimes.delete(ws);
+		this.guessTimes.delete(ws);
 		this.immuneUntil.delete(player.id);
 		this.runs.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });

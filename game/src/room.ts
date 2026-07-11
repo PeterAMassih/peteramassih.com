@@ -12,12 +12,25 @@ const WORLD = { w: 640, h: 360 };
 // here); looks and doors live client-side. Unknown names never reach us —
 // the Worker whitelists against this same list.
 export const ROOM_NAMES = ["plaza", "arena", "library", "moon"] as const;
-const ROOM_RULES: Record<string, { gravity: number; brawl: boolean; kb: number }> = {
-	plaza: { gravity: 1, brawl: true, kb: 1 },
-	arena: { gravity: 1, brawl: true, kb: 1.6 }, // where hits actually launch you
-	library: { gravity: 1, brawl: false, kb: 1 }, // the quiet room
-	moon: { gravity: 0.35, brawl: true, kb: 1 }, // low gravity does the comedy
+const ROOM_RULES: Record<
+	string,
+	{ gravity: number; brawl: boolean; kb: number; marks: boolean }
+> = {
+	plaza: { gravity: 1, brawl: true, kb: 1, marks: false },
+	arena: { gravity: 1, brawl: true, kb: 1.6, marks: false }, // hits launch you
+	library: { gravity: 1, brawl: false, kb: 1, marks: true }, // quiet; the guestbook
+	moon: { gravity: 0.35, brawl: true, kb: 1, marks: false }, // low-g comedy
 };
+
+// The guestbook: one mark per visitor per room (writing again replaces your
+// old one), capped at 500 with the oldest pruned — self-cleaning by design.
+// Positions expire instead: ignored after 30 days, swept opportunistically.
+const MARK_MAX_LEN = 40;
+const MARK_BURST = 3;
+const MARKS_KEPT = 500;
+const MARKS_SENT = 60; // what a joiner sees: the freshest wallful
+const POS_TTL_MS = 30 * 24 * 3600 * 1000;
+const SWEEP_EVERY_MS = 24 * 3600 * 1000;
 
 const PALETTE = [
 	"#e6482e", // red
@@ -89,6 +102,7 @@ export class Room extends DurableObject<Env> {
 	private nameTimes = new Map<WebSocket, number[]>();
 	private punchTimes = new Map<WebSocket, number[]>();
 	private moveTimes = new Map<WebSocket, number[]>();
+	private markTimes = new Map<WebSocket, number[]>();
 	// Transient combat state, by player id. Deliberately not persisted: a room
 	// that hibernated mid-brawl waking up with immunity cleared is harmless.
 	private immuneUntil = new Map<string, number>();
@@ -102,6 +116,9 @@ export class Room extends DurableObject<Env> {
 		}
 		ctx.blockConcurrencyWhile(async () => {
 			this.roomName = ((await ctx.storage.get("room")) as string | undefined) ?? null;
+			ctx.storage.sql.exec(
+				"CREATE TABLE IF NOT EXISTS marks (vid TEXT PRIMARY KEY, name TEXT, text TEXT, x REAL, ts INTEGER)",
+			);
 		});
 	}
 
@@ -152,13 +169,14 @@ export class Room extends DurableObject<Env> {
 		const validVid = vid && /^[0-9a-f-]{8,40}$/i.test(vid) ? vid : null;
 		if (validVid) {
 			const saved = (await this.ctx.storage.get(`pos:${validVid}`)) as
-				| { x: number; y: number }
+				| { x: number; y: number; t?: number }
 				| undefined;
-			if (saved) {
+			if (saved && Date.now() - (saved.t ?? 0) < POS_TTL_MS) {
 				player.x = clamp(saved.x, 0, WORLD.w);
 				player.y = clamp(saved.y, 0, WORLD.h);
 			}
 		}
+		void this.sweepPositions(); // hygiene rides along on a join, never a timer
 
 		// acceptWebSocket (not accept) opts into hibernation: the runtime holds
 		// the connection open while the object itself can be evicted between
@@ -176,6 +194,12 @@ export class Room extends DurableObject<Env> {
 				gravity: this.rules.gravity,
 				brawl: this.rules.brawl,
 				kb: this.rules.kb,
+				marksOn: this.rules.marks,
+				marks: this.rules.marks
+					? this.ctx.storage.sql
+							.exec("SELECT name, text, x, ts FROM marks ORDER BY ts DESC LIMIT ?", MARKS_SENT)
+							.toArray()
+					: [],
 				players: [...this.players.values()],
 			}),
 		);
@@ -230,6 +254,25 @@ export class Room extends DurableObject<Env> {
 			player.name = msg.name;
 			this.attach(ws, player); // renames survive hibernation too
 			this.broadcast({ type: "named", id: player.id, name: player.name });
+		} else if (msg.type === "mark") {
+			if (!this.rules.marks || typeof msg.text !== "string") return;
+			const vid = this.vids.get(ws);
+			if (!vid) return; // marks need a rememberable author
+			const text = msg.text.trim().slice(0, MARK_MAX_LEN);
+			if (!text) return;
+			if (!this.underLimit(this.markTimes, ws, MARK_BURST)) return;
+			const ts = Date.now();
+			// One mark per visitor: writing again replaces yours. The cap prunes
+			// the oldest beyond 500, so the wall can never grow without bound.
+			this.ctx.storage.sql.exec(
+				"INSERT OR REPLACE INTO marks (vid, name, text, x, ts) VALUES (?, ?, ?, ?, ?)",
+				vid, player.name, text, player.x, ts,
+			);
+			this.ctx.storage.sql.exec(
+				"DELETE FROM marks WHERE vid NOT IN (SELECT vid FROM marks ORDER BY ts DESC LIMIT ?)",
+				MARKS_KEPT,
+			);
+			this.broadcast({ type: "marked", mark: { name: player.name, text, x: player.x, ts } });
 		} else if (msg.type === "punch") {
 			if (!this.rules.brawl) return; // the quiet room stays quiet
 			const dir = msg.facing === -1 ? -1 : 1;
@@ -259,6 +302,21 @@ export class Room extends DurableObject<Env> {
 		}
 	}
 
+	// Deletes positions nobody has claimed in 30 days. Runs at most daily and
+	// only when a join has already woken the room — never on its own clock.
+	private async sweepPositions(): Promise<void> {
+		const now = Date.now();
+		const sweptAt = ((await this.ctx.storage.get("sweptAt")) as number | undefined) ?? 0;
+		if (now - sweptAt < SWEEP_EVERY_MS) return;
+		await this.ctx.storage.put("sweptAt", now);
+		const positions = await this.ctx.storage.list({ prefix: "pos:" });
+		const stale: string[] = [];
+		for (const [key, value] of positions) {
+			if (now - ((value as { t?: number }).t ?? 0) >= POS_TTL_MS) stale.push(key);
+		}
+		if (stale.length) await this.ctx.storage.delete(stale);
+	}
+
 	// Sliding-window rate limit; returns false (and records nothing) when over.
 	private underLimit(times: Map<WebSocket, number[]>, ws: WebSocket, burst: number): boolean {
 		const now = Date.now();
@@ -282,7 +340,9 @@ export class Room extends DurableObject<Env> {
 		if (!player) return;
 		// The room remembers where you were standing; see you next visit.
 		const vid = this.vids.get(ws);
-		if (vid) void this.ctx.storage.put(`pos:${vid}`, { x: player.x, y: player.y });
+		if (vid) {
+			void this.ctx.storage.put(`pos:${vid}`, { x: player.x, y: player.y, t: Date.now() });
+		}
 		this.players.delete(ws);
 		this.vids.delete(ws);
 		this.chatTimes.delete(ws);
@@ -290,6 +350,7 @@ export class Room extends DurableObject<Env> {
 		this.nameTimes.delete(ws);
 		this.punchTimes.delete(ws);
 		this.moveTimes.delete(ws);
+		this.markTimes.delete(ws);
 		this.immuneUntil.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
 	}

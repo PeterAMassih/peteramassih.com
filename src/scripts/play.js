@@ -88,6 +88,7 @@ let room = ROOMS[location.hash.slice(1)] ? location.hash.slice(1) : 'plaza';
 let gravityScale = 1; // from the server's init: the moon is a different place
 let roomBrawl = true; // whether punches mean anything here
 let roomKb = 1; // how hard hits launch people (the arena says 1.6)
+let roomMarks = false; // whether this room has the guestbook wall
 let switching = false; // mid-door: old socket closing, new one connecting
 
 // The anonymous id rooms remember positions under. Not an account: a random
@@ -103,6 +104,7 @@ let me = null; // my id, assigned by the server in init
 const players = new Map(); // id -> { x, y, rx, ry, color, name }
 const bubbles = new Map(); // id -> { text, until }
 const effects = []; // running emotes: { id, kind, start }
+let marks = []; // the guestbook wall: { name, text, x, ts }, newest first
 const held = new Set(); // movement keys currently down
 let vy = 0; // my vertical speed
 let jumpQueued = false; // jump pressed, consumed by the next frame
@@ -330,7 +332,12 @@ function onMessage(msg, enterFrom) {
     gravityScale = msg.gravity ?? 1;
     roomBrawl = msg.brawl ?? true;
     roomKb = msg.kb ?? 1;
+    marks = msg.marks ?? [];
+    roomMarks = msg.marksOn ?? false;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
+    chatInput.placeholder = roomMarks
+      ? 'say something… (/mark writes on the wall)'
+      : 'say something…';
     players.clear();
     for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
     // Coming through a door: appear beside it, not at a random spawn.
@@ -358,6 +365,10 @@ function onMessage(msg, enterFrom) {
   } else if (msg.type === 'named') {
     const p = players.get(msg.id);
     if (p) p.name = msg.name;
+  } else if (msg.type === 'marked') {
+    // The server upserts by visitor; mirror that by name so re-marking
+    // moves your line instead of duplicating it.
+    marks = [msg.mark, ...marks.filter((m) => m.name !== msg.mark.name)].slice(0, 60);
   } else if (msg.type === 'swung') {
     const p = players.get(msg.id);
     if (p) { p.punchUntil = performance.now() + PUNCH_SHOW_MS; p.facing = msg.dir; }
@@ -518,7 +529,17 @@ chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
   if (text && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'chat', text }));
+    if (text.startsWith('/mark ')) {
+      const note = text.slice(6).trim();
+      if (note && roomMarks) {
+        socket.send(JSON.stringify({ type: 'mark', text: note }));
+      } else if (note) {
+        // Wrong room: say so instead of silently eating the note.
+        bubbles.set(me, { text: 'the wall is in the library…', until: performance.now() + 2000 });
+      }
+    } else {
+      socket.send(JSON.stringify({ type: 'chat', text }));
+    }
     chatInput.value = '';
   } else if (!text) {
     chatInput.value = '';
@@ -624,6 +645,20 @@ function draw() {
   if (look.stars) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     for (const [sx, sy] of STARS) ctx.fillRect(sx, sy, 2, 2);
+  }
+
+  // The guestbook wall: everyone who ever left a mark, faded into the room.
+  if (marks.length) {
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    marks.forEach((m, i) => {
+      const y = 58 + (i % 9) * 26;
+      const x = clamp(m.x, 90, WORLD.w - 90);
+      ctx.fillStyle = 'rgba(232, 216, 178, 0.42)';
+      ctx.fillText(m.text, x, y);
+      ctx.fillStyle = 'rgba(232, 216, 178, 0.22)';
+      ctx.fillText(`· ${m.name}`, x, y + 11);
+    });
   }
 
   // Faint grid so motion is legible against the flat backdrop.

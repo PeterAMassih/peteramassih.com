@@ -275,14 +275,18 @@ function sprite(color, frame) {
 let socket = null;
 
 function connect(enterFrom) {
-  socket = new WebSocket(`${SOCKET_BASE}/?room=${room}`);
+  // Identity rides along on the handshake, so a door crossing (or a return
+  // visit) keeps the same name and color instead of rerolling the sprite.
+  let url = `${SOCKET_BASE}/?room=${room}`;
+  const storedName = localStorage.getItem('play-name');
+  const storedColor = localStorage.getItem('play-color');
+  if (storedName) url += `&name=${encodeURIComponent(storedName)}`;
+  if (storedColor) url += `&color=${encodeURIComponent(storedColor)}`;
+  socket = new WebSocket(url);
 
   socket.addEventListener('open', (e) => {
     if (e.target !== socket) return;
     statusEl.textContent = 'connected';
-    // Reclaim the identity from the last visit, if any.
-    const stored = nameInput.value.trim();
-    if (stored) socket.send(JSON.stringify({ type: 'name', name: stored }));
   });
   socket.addEventListener('close', (e) => {
     if (e.target !== socket) return;
@@ -323,6 +327,13 @@ function onMessage(msg, enterFrom) {
       self.x = enterFrom === 'right' ? WORLD.w - 44 : 44;
       self.rx = self.x;
       dirty = true;
+    }
+    // Adopt whatever the server settled on as this visitor's lasting identity:
+    // the first assigned color sticks, and a guest name becomes your name.
+    if (self) {
+      localStorage.setItem('play-color', self.color);
+      if (!localStorage.getItem('play-name')) localStorage.setItem('play-name', self.name);
+      if (!nameInput.value) nameInput.value = self.name;
     }
   } else if (msg.type === 'joined') {
     const p = msg.player;

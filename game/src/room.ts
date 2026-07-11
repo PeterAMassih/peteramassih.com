@@ -108,20 +108,30 @@ export class Room extends DurableObject<Env> {
 		if (this.players.size >= MAX_PLAYERS) {
 			return new Response("Room is full.", { status: 503 });
 		}
+		const url = new URL(request.url);
 		if (!this.roomName) {
-			this.roomName = new URL(request.url).searchParams.get("room") ?? "plaza";
+			this.roomName = url.searchParams.get("room") ?? "plaza";
 			void this.ctx.storage.put("room", this.roomName);
 		}
 		const [client, server] = Object.values(new WebSocketPair());
 
+		// Identity travels with the visitor: the client passes its remembered
+		// name and color so walking through a door does not reroll the sprite.
+		// Both are validated — unknown colors and bad names fall back to fresh.
+		const wantName = url.searchParams.get("name");
+		const wantColor = url.searchParams.get("color");
 		const player: Player = {
 			id: crypto.randomUUID(),
-			name: `guest_${100 + Math.floor(Math.random() * 900)}`,
+			name: wantName && NAME_RE.test(wantName)
+				? wantName
+				: `guest_${100 + Math.floor(Math.random() * 900)}`,
 			x: 40 + Math.floor(Math.random() * (WORLD.w - 80)),
 			// Spawn strictly above the client's floor line (y=312) so nobody
 			// stands sunk into the ground until their first jump.
 			y: 40 + Math.floor(Math.random() * 240),
-			color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+			color: wantColor && PALETTE.includes(wantColor)
+				? wantColor
+				: PALETTE[Math.floor(Math.random() * PALETTE.length)],
 		};
 
 		// acceptWebSocket (not accept) opts into hibernation: the runtime holds

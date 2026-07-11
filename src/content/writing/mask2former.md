@@ -1,5 +1,5 @@
 ---
-title: "Mask2Former, Dissected: One Transformer to Segment Them All"
+title: "Mask2Former, Dissected"
 description: "A ground-up walk through Mask2Former (CVPR 2022): the lineage from FCNs to set prediction, every equation derived, the training recipe, and the ablations ranked by what they bought."
 pubDate: 2026-07-11
 tags: [computer-vision, segmentation, transformers, paper-dissection]
@@ -10,7 +10,7 @@ part: 1
 
 **TL;DR.** Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] is one architecture that handles all three segmentation tasks, panoptic, instance, and semantic, and beats the models built specially for each. Its largest model, with a Swin-L backbone, reaches 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K, and at the smaller ResNet-50 scale it trains six times faster than its predecessor. The trick is not scale. It is a rewired Transformer decoder whose cross-attention is masked to each query's own predicted foreground, a coarse-to-fine feeding schedule, three cheap optimization changes, and a point-sampled loss that cuts training memory threefold. This post works through the paper from the ground up, tracing where each idea came from, deriving the equations rather than stating them, and ranking the ablations by what they actually bought.
 
-**Contents.** [0. Background](#0-the-background-you-need) · [1. The problem, formally](#1-the-segmentation-problem-formally) · [2. Two paradigms](#2-origins-two-paradigms) · [3. Set prediction](#3-the-set-prediction-machinery) · [4. The meta-architecture](#4-the-meta-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-losses-match-on-points-train-on-points) · [9. The recipe](#9-the-full-training-recipe) · [10. Results](#10-results-worth-remembering) · [11. Ablations, ranked](#11-what-actually-mattered) · [12. Limitations](#12-limitations-read-honestly) · [13. Lineage forward](#13-where-it-went-next) · [14. Implementation](#14-implementation-corner) · [15. Test yourself](#15-test-yourself) · [16. References](#16-references) · [17. Citation](#17-citation)
+**Contents.** [0. Background](#0-the-background-you-need) · [1. The problem, formally](#1-the-segmentation-problem-formally) · [2. Two paradigms](#2-origins-two-paradigms) · [3. Set prediction](#3-the-set-prediction-machinery) · [4. The meta-architecture](#4-the-meta-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-losses-match-on-points-train-on-points) · [9. The recipe](#9-the-full-training-recipe) · [10. Results](#10-results-worth-remembering) · [11. Ablations, ranked](#11-what-actually-mattered) · [12. Limitations](#12-limitations-read-honestly) · [13. Lineage forward](#13-where-it-went-next) · [Appendix A: Implementation](#appendix-a-implementation-corner) · [Appendix B: Test yourself](#appendix-b-test-yourself) · [References](#references) · [Citation](#citation)
 
 ## 0. The background you need
 
@@ -954,7 +954,7 @@ The recipe is explicit enough to reproduce, including the side-by-side against M
 | $\lambda_{\text{cls}}$ | 1.0 | 2.0, with 0.1 on $\varnothing$ |
 | decoder | 6 layers, SA→CA→FFN, dropout 0.1, stride 32 only, zero-init queries | **9 layers, MA→SA→FFN, no dropout, strides {32,16,8}×3, learnable supervised queries** |
 
-Three terms from that table need a gloss. AdamW is Adam, an adaptive per-parameter gradient method, with decoupled weight decay. Weight decay shrinks every weight toward zero by a small fixed fraction each step, a mild guard against overfitting, and decoupled means the shrink is applied to the weights directly instead of being folded into Adam's rescaled gradient. A batch is the number of images averaged into one gradient step, the B dimension in §14's code.
+Three terms from that table need a gloss. AdamW is Adam, an adaptive per-parameter gradient method, with decoupled weight decay. Weight decay shrinks every weight toward zero by a small fixed fraction each step, a mild guard against overfitting, and decoupled means the shrink is applied to the weights directly instead of being folded into Adam's rescaled gradient. A batch is the number of images averaged into one gradient step, the B dimension in Appendix A's code.
 
 Inference on [COCO](https://cocodataset.org/#explore) follows the Mask R-CNN protocol, shorter side 800, longer side at most 1333. Queries are 100 everywhere, except 200 for the largest panoptic and instance models, trained 100 epochs. The query ablation shows 100 is best for instance and semantic, 200 helps only panoptic (52.2 against 51.9 PQ, since panoptic scenes hold more segments), and 1000 actively hurts (40.3 AP against the 43.7 that 100 queries reach). Per dataset, [Cityscapes](https://www.cityscapes-dataset.com/examples/) [[Cordts et al. 2016](#ref-cordts2016)] uses 90k iterations (gradient steps, counted instead of epochs) at 512×1024 crops, [ADE20K](https://ade20k.csail.mit.edu/) [[Zhou et al. 2017](#ref-zhou2017)] uses $640^2$ crops for panoptic and instance (the semantic crop size varies by backbone, $512^2$ up to Swin-S), and [Mapillary Vistas](https://www.mapillary.com/dataset/vistas) [[Neuhold et al. 2017](#ref-neuhold2017)] uses 300k iterations at $1024^2$ crops.
 
@@ -1011,7 +1011,7 @@ There is also the decomposition every reviewer secretly wants, recipe against ar
 
 Mask2Former's decoder became infrastructure. The same group extended it unchanged to video, where masks become spatio-temporal tubes [[Cheng et al. 2021b](#ref-cheng2021vis)]. **OneFormer** [[Jain et al. 2023](#ref-jain2023)] closed the gap Mask2Former left open, one jointly trained model for all three tasks, by conditioning the same skeleton on a task token. **Mask DINO** [[Li et al. 2023](#ref-li2023)] unified it with DETR-style detection, letting box and mask queries help each other. The query-as-segment abstraction became the substrate for open-vocabulary segmentation, where the fixed classifier is replaced by text embeddings, and the "predict masks, classify separately" philosophy echoes in the promptable, class-agnostic design of SAM, the Segment Anything Model that segments whatever a user's click or box points at [[Kirillov et al. 2023](#ref-kirillov2023)], even though SAM's goal differs. Mask2Former itself shipped as a repo built on Detectron2 [[Wu et al. 2019](#ref-wu2019)] and in `transformers` as `facebook/mask2former-*`, and it remains a standard baseline for new segmentation papers. Leaderboards have moved since 2022. The skeleton mostly has not.
 
-## 14. Implementation corner
+## Appendix A: Implementation corner
 
 The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former), and its configs reproduce every table above. Meta archived the repository in January 2025, so it is read-only and frozen at exactly the code this post describes. For fine-tuning, the practical entry point is `Mask2FormerForUniversalSegmentation` in `transformers`, whose image processor ships `post_process_semantic_segmentation`, `post_process_instance_segmentation`, and `post_process_panoptic_segmentation`, the post-processing of §9 as three calls. The core, one decoder layer with the two details people miss, in PyTorch-flavored pseudocode:
 
@@ -1043,7 +1043,7 @@ def decoder_layer(x, feats_l, pos_l, lvl_emb, query_pos, prev_mask_logits, layer
 
 Assembly: run the heads once on the learnable $\mathbf{X}_0$ before the loop, giving both an extra supervised prediction and $M_0$, cycle the three scales for nine layers, and feed all ten class-mask pairs to the Hungarian-matched, point-sampled loss of §8. To feel it for yourself, reproduce one row of the ablation. Set `attn_mask=None` and watch convergence collapse.
 
-## 15. Test yourself
+## Appendix B: Test yourself
 
 **Prove that adding $-\infty$ before the softmax renormalizes over the allowed set, and say precisely what post-softmax zeroing breaks.**
 
@@ -1117,7 +1117,7 @@ The §1 lemma: with non-overlapping segments and IoU above 0.5, matches are prov
 
 </details>
 
-## 16. References
+## References
 
 1. <a name="ref-cheng2022"></a>Cheng, Misra, Schwing, Kirillov, Girdhar. "Masked-attention Mask Transformer for Universal Image Segmentation." CVPR 2022. [arXiv:2112.01527](https://arxiv.org/abs/2112.01527)
 2. <a name="ref-cheng2021"></a>Cheng, Schwing, Kirillov. "Per-Pixel Classification is Not All You Need for Semantic Segmentation." NeurIPS 2021. [arXiv:2107.06278](https://arxiv.org/abs/2107.06278)
@@ -1164,17 +1164,17 @@ The §1 lemma: with non-overlapping segments and IoU above 0.5, matches are prov
 43. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
 44. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." CVPR 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
 
-## 17. Citation
+## Citation
 
 Cited as:
 
-> Massih, Peter. "Mask2Former, Dissected: One Transformer to Segment Them All." *Peter's Patches*, no. 1, Jul 2026. https://peteramassih.com/writing/mask2former.
+> Massih, Peter. "Mask2Former, Dissected." *Peter's Patches*, no. 1, Jul 2026. https://peteramassih.com/writing/mask2former.
 
 Or:
 
 ```bibtex
 @article{massih2026mask2former,
-  title   = {Mask2Former, Dissected: One Transformer to Segment Them All},
+  title   = {Mask2Former, Dissected},
   author  = {Massih, Peter},
   journal = {peteramassih.com},
   series  = {Peter's Patches},

@@ -12,15 +12,33 @@ const WORLD = { w: 640, h: 360 };
 // here); looks and doors live client-side. Unknown names never reach us —
 // the Worker whitelists against this same list.
 export const ROOM_NAMES = ["plaza", "arena", "library", "moon"] as const;
+interface RaceZones {
+	sx: number;
+	sy: number;
+	fx: number;
+	fy: number;
+}
+
 const ROOM_RULES: Record<
 	string,
-	{ gravity: number; brawl: boolean; kb: number; marks: boolean; crown: boolean }
+	{ gravity: number; brawl: boolean; kb: number; marks: boolean; crown: boolean; race?: RaceZones }
 > = {
 	plaza: { gravity: 1, brawl: true, kb: 1, marks: false, crown: false },
 	arena: { gravity: 1, brawl: true, kb: 1.6, marks: false, crown: true }, // king of the hill
 	library: { gravity: 1, brawl: false, kb: 1, marks: true, crown: false }, // the guestbook
-	moon: { gravity: 0.35, brawl: true, kb: 1, marks: false, crown: false }, // low-g comedy
+	moon: {
+		gravity: 0.35, brawl: true, kb: 1, marks: false, crown: false,
+		// The moon run: floor flag to the top rock. The server does the timing —
+		// it stamps the move that leaves the start and the move that reaches the
+		// goal, so a client cannot lie about its time (only about ~100ms of it).
+		race: { sx: 60, sy: 312, fx: 335, fy: 142 },
+	},
 };
+
+const RACE_R = 22; // how close a move must be to a flag to count
+const RACE_MIN_MS = 1500; // faster than this is a teleport claim, not a run
+const RACE_TOP = 5;
+const RACE_KEPT = 200;
 
 // The crown needs no tick: a pickup is a move, a drop is a hit or a leave.
 // It rests on the arena's high platform (the client knows the geometry).
@@ -107,6 +125,9 @@ export class Room extends DurableObject<Env> {
 	// punch handler needs the rules even when the wake-up event is a message.
 	private roomName: string | null = null;
 	private crown: Crown | null = null;
+	// Active runs, playerId -> started-at. In-memory only: a run is seconds
+	// long, and one lost to a mid-run hibernation is no loss at all.
+	private runs = new Map<string, number>();
 	// Chat and emote timestamps per socket, for rate limiting. Deliberately not
 	// in the attachment: losing them across hibernation just grants a fresh burst.
 	private chatTimes = new Map<WebSocket, number[]>();
@@ -136,7 +157,16 @@ export class Room extends DurableObject<Env> {
 			ctx.storage.sql.exec(
 				"CREATE TABLE IF NOT EXISTS marks (vid TEXT PRIMARY KEY, name TEXT, text TEXT, x REAL, ts INTEGER)",
 			);
+			ctx.storage.sql.exec(
+				"CREATE TABLE IF NOT EXISTS races (vid TEXT PRIMARY KEY, name TEXT, ms INTEGER, ts INTEGER)",
+			);
 		});
+	}
+
+	private topRuns() {
+		return this.ctx.storage.sql
+			.exec("SELECT name, ms FROM races ORDER BY ms ASC LIMIT ?", RACE_TOP)
+			.toArray();
 	}
 
 	private setCrown(crown: Crown): void {
@@ -222,6 +252,7 @@ export class Room extends DurableObject<Env> {
 				brawl: this.rules.brawl,
 				kb: this.rules.kb,
 				crown: this.crown,
+				raceTop: this.rules.race ? this.topRuns() : [],
 				marksOn: this.rules.marks,
 				marks: this.rules.marks
 					? this.ctx.storage.sql
@@ -272,6 +303,45 @@ export class Room extends DurableObject<Env> {
 				Math.abs(player.y - this.crown.y) < CROWN_REACH.y
 			) {
 				this.setCrown({ wearer: player.id, x: 0, y: 0 });
+			}
+
+			// The race, timed entirely by the server's own clock. Every move
+			// inside the start zone re-arms the timer, so the run effectively
+			// starts on the move that leaves the flag.
+			const race = this.rules.race;
+			if (race) {
+				const now = Date.now();
+				if (Math.abs(player.x - race.sx) < RACE_R && Math.abs(player.y - race.sy) < RACE_R) {
+					const had = this.runs.has(player.id);
+					this.runs.set(player.id, now);
+					if (!had) this.broadcast({ type: "race", phase: "start", id: player.id });
+				} else if (
+					this.runs.has(player.id) &&
+					Math.abs(player.x - race.fx) < RACE_R &&
+					Math.abs(player.y - race.fy) < RACE_R
+				) {
+					const ms = now - (this.runs.get(player.id) ?? now);
+					this.runs.delete(player.id);
+					if (ms >= RACE_MIN_MS) {
+						const vid = this.vids.get(ws);
+						if (vid) {
+							const best = this.ctx.storage.sql
+								.exec("SELECT ms FROM races WHERE vid = ?", vid)
+								.toArray()[0];
+							if (!best || (best.ms as number) > ms) {
+								this.ctx.storage.sql.exec(
+									"INSERT OR REPLACE INTO races (vid, name, ms, ts) VALUES (?, ?, ?, ?)",
+									vid, player.name, ms, now,
+								);
+								this.ctx.storage.sql.exec(
+									"DELETE FROM races WHERE vid NOT IN (SELECT vid FROM races ORDER BY ms ASC LIMIT ?)",
+									RACE_KEPT,
+								);
+							}
+						}
+						this.broadcast({ type: "race", phase: "finish", id: player.id, ms, top: this.topRuns() });
+					}
+				}
 			}
 		} else if (msg.type === "chat") {
 			if (typeof msg.text !== "string") return;
@@ -397,6 +467,7 @@ export class Room extends DurableObject<Env> {
 		this.moveTimes.delete(ws);
 		this.markTimes.delete(ws);
 		this.immuneUntil.delete(player.id);
+		this.runs.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
 		// A wearer who walks out (or drops) leaves the crown behind.
 		if (this.crown?.wearer === player.id) {

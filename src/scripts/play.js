@@ -43,6 +43,9 @@ const ROOMS = {
     doors: { left: 'arena' },
     // Spaced for 0.35 gravity: unreachable anywhere else, easy here.
     platforms: [{ x: 90, y: 225, w: 80 }, { x: 290, y: 150, w: 90 }, { x: 500, y: 225, w: 80 }],
+    // The moon run: green flag on the floor, gold flag on the top rock.
+    // Zones mirror game/src/room.ts — the server owns the stopwatch.
+    race: { sx: 60, sy: 312, fx: 335, fy: 142 },
   },
 };
 const DOOR_TRIGGER = 18; // world-x within which a door takes you
@@ -117,6 +120,8 @@ let jumpQueued = false; // jump pressed, consumed by the next frame
 let dropQueued = false; // down pressed: fall through the platform you stand on
 let dropUntil = 0; // while set, platforms do not catch you
 let crown = null; // { wearer, x, y } — only rooms that have one send it
+let raceTop = []; // best runs ever, from the server: { name, ms }
+let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
 let shakeUntil = 0; // screen shake after a nearby hit
@@ -359,6 +364,8 @@ function onMessage(msg, enterFrom) {
     marks = msg.marks ?? [];
     roomMarks = msg.marksOn ?? false;
     crown = msg.crown ?? null;
+    raceTop = msg.raceTop ?? [];
+    myRunStart = null;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     chatInput.placeholder = roomMarks
       ? 'say something… (/mark writes on the wall)'
@@ -390,6 +397,15 @@ function onMessage(msg, enterFrom) {
   } else if (msg.type === 'named') {
     const p = players.get(msg.id);
     if (p) p.name = msg.name;
+  } else if (msg.type === 'race') {
+    if (msg.phase === 'start' && msg.id === me) {
+      myRunStart = performance.now();
+    } else if (msg.phase === 'finish') {
+      raceTop = msg.top ?? raceTop;
+      const secs = `${(msg.ms / 1000).toFixed(2)}s`;
+      bubbles.set(msg.id, { text: secs, until: performance.now() + BUBBLE_MS });
+      if (msg.id === me) { myRunStart = null; sfx('crown'); }
+    }
   } else if (msg.type === 'crown') {
     const wore = crown?.wearer;
     crown = msg.crown;
@@ -655,6 +671,14 @@ function frame(now) {
       dirty = true;
     }
 
+    // While standing in the start zone the run has not begun: keep the live
+    // readout re-armed exactly the way the server re-arms its stopwatch.
+    const race = ROOMS[room].race;
+    if (race && myRunStart !== null &&
+        Math.abs(self.x - race.sx) < 22 && Math.abs(self.y - race.sy) < 22) {
+      myRunStart = nowMs;
+    }
+
     // Doors: reach the edge of the world and you are somewhere else.
     if (!switching) {
       const doors = ROOMS[room].doors;
@@ -748,6 +772,28 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  // The race: two flags, the all-time board, and your live readout.
+  if (look.race) {
+    drawFlag(look.race.sx, GROUND_Y, '#6cae44');
+    drawFlag(look.race.fx, look.race.fy + SIZE / 2, '#ffd23f');
+    if (raceTop.length) {
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillText('the moon run', 508, 200);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
+      raceTop.forEach((r, i) => {
+        ctx.fillText(`${i + 1}. ${r.name} ${(r.ms / 1000).toFixed(2)}s`, 508, 216 + i * 15);
+      });
+    }
+    if (myRunStart !== null) {
+      ctx.font = '14px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillText(`${((now - myRunStart) / 1000).toFixed(1)}`, WORLD.w / 2, 28);
+    }
+  }
+
   for (let i = effects.length - 1; i >= 0; i--) {
     const life = effects[i].kind === 'burst' ? BURST_MS : EMOTE_MS;
     if (now - effects[i].start > life) effects.splice(i, 1);
@@ -832,6 +878,18 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
+}
+
+function drawFlag(x, baseY, color) {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fillRect(x - 1, baseY - 26, 2, 26);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x + 1, baseY - 26);
+  ctx.lineTo(x + 13, baseY - 21);
+  ctx.lineTo(x + 1, baseY - 16);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawCrown(x, baseY) {

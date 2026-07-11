@@ -41,8 +41,14 @@ const RACE_TOP = 5;
 const RACE_KEPT = 200;
 
 // The crown needs no tick: a pickup is a move, a drop is a hit or a leave.
-// It rests on the arena's high platform (the client knows the geometry).
-const CROWN_SPAWN = { x: 320, y: 177 };
+// When forfeited it lands on a random arena tier (coordinates mirror the
+// client's platform layout) — always elevated, never quite where you left it.
+const CROWN_PERCHES = [
+	{ x: 320, y: 177 }, // the hill
+	{ x: 120, y: 250 }, // left tier
+	{ x: 520, y: 250 }, // right tier
+];
+const CROWN_SPAWN = CROWN_PERCHES[0];
 const CROWN_REACH = { x: 20, y: 26 };
 
 interface Crown {
@@ -178,12 +184,13 @@ export class Room extends DurableObject<Env> {
 
 	// Close out the current wearer's reign: record it if it is their longest,
 	// tell the room how long they lasted. Called before the crown moves on.
-	private endReign(vid: string | null): void {
+	// The name comes from the caller: on the leave path the player is already
+	// out of the map, so a lookup here would come up empty.
+	private endReign(vid: string | null, name: string): void {
 		const c = this.crown;
 		if (!c?.wearer || !c.since) return;
 		const ms = Date.now() - c.since;
 		if (ms < REIGN_MIN_MS) return;
-		const name = [...this.players.values()].find((p) => p.id === c.wearer)?.name ?? "unknown";
 		if (vid) {
 			const best = this.ctx.storage.sql.exec("SELECT ms FROM reigns WHERE vid = ?", vid).toArray()[0];
 			if (!best || (best.ms as number) < ms) {
@@ -454,7 +461,7 @@ export class Room extends DurableObject<Env> {
 				// The crown is held only as long as you can defend it.
 				if (this.crown?.wearer === target.id) {
 					const tws = this.wsOf(target.id);
-					this.endReign(tws ? (this.vids.get(tws) ?? null) : null);
+					this.endReign(tws ? (this.vids.get(tws) ?? null) : null, target.name);
 					this.setCrown({
 						wearer: null,
 						x: clamp(target.x + dir * 36, 20, WORLD.w - 20),
@@ -517,11 +524,12 @@ export class Room extends DurableObject<Env> {
 		this.immuneUntil.delete(player.id);
 		this.runs.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
-		// A wearer who leaves forfeits: the crown goes home to the hill rather
+		// A wearer who leaves forfeits: the crown lands on a random tier rather
 		// than lying jammed against whichever door they walked out through.
 		if (this.crown?.wearer === player.id) {
-			this.endReign(vid ?? null); // captured above, before the maps were cleared
-			this.setCrown({ wearer: null, ...CROWN_SPAWN });
+			this.endReign(vid ?? null, player.name); // vid captured before the maps were cleared
+			const perch = CROWN_PERCHES[Math.floor(Math.random() * CROWN_PERCHES.length)];
+			this.setCrown({ wearer: null, ...perch });
 		}
 	}
 

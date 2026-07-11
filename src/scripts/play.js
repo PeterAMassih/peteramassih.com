@@ -48,6 +48,7 @@ const countEl = document.getElementById('play-count');
 const chatForm = document.getElementById('play-chat-form');
 const chatInput = document.getElementById('play-chat');
 const nameInput = document.getElementById('play-name');
+const touchPad = document.getElementById('play-touch');
 
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
@@ -88,6 +89,12 @@ function tone(shape, f0, f1, dur, vol, delay = 0) {
   o.connect(g).connect(audioCtx.destination);
   o.start(t);
   o.stop(t + dur);
+}
+
+// Browsers only allow audio after a user gesture — a keypress or a tap.
+function unlockAudio() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 function sfx(kind) {
@@ -296,10 +303,7 @@ setInterval(() => {
 // --- input ---
 
 window.addEventListener('keydown', (e) => {
-  // Browsers only allow audio after a user gesture; a keypress is one.
-  if (!audioCtx) audioCtx = new AudioContext();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-
+  unlockAudio();
   const el = document.activeElement;
   if (el && el.tagName === 'INPUT') {
     if (e.key === 'Escape') el.blur();
@@ -322,10 +326,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'z' && !e.repeat) {
-    const self = me && players.get(me);
-    if (self && performance.now() >= stunUntil && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
-    }
+    sendPunch();
     return;
   }
   if (JUMP_KEYS.includes(e.key)) {
@@ -346,6 +347,36 @@ window.addEventListener('keyup', (e) => {
   const dir = KEYS[e.key];
   if (dir) held.delete(dir);
 });
+
+function sendPunch() {
+  const self = me && players.get(me);
+  if (self && performance.now() >= stunUntil && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
+  }
+}
+
+// Touch pad (rendered only on coarse-pointer devices). Each finger is
+// tracked by pointerId so holding a walk button while tapping jump with
+// the other thumb releases the right thing.
+const touchActs = new Map(); // pointerId -> act
+touchPad.addEventListener('pointerdown', (e) => {
+  const act = e.target.dataset.act;
+  if (!act) return;
+  e.preventDefault();
+  unlockAudio();
+  if (act === 'left' || act === 'right') { held.add(act); touchActs.set(e.pointerId, act); }
+  else if (act === 'jump') jumpQueued = true;
+  else if (act === 'punch') sendPunch();
+  // Last, since it can throw on an already-gone pointer: keep receiving the
+  // up event even when the finger slides off the button.
+  e.target.setPointerCapture(e.pointerId);
+});
+const releaseTouch = (e) => {
+  const act = touchActs.get(e.pointerId);
+  if (act) { held.delete(act); touchActs.delete(e.pointerId); }
+};
+touchPad.addEventListener('pointerup', releaseTouch);
+touchPad.addEventListener('pointercancel', releaseTouch);
 
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();

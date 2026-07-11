@@ -26,6 +26,16 @@ const JUMP_KEYS = ['ArrowUp', 'w', ' '];
 
 const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
 const EMOTE_MS = 1200; // wave wiggle / heart float duration
+
+// The brawl, client side. The server decides who got hit; the target's own
+// browser applies the knockback (one movement authority per sprite), and
+// everyone renders the tumble and the immunity blink. STUN/IMMUNE mirror
+// game/src/room.ts.
+const PUNCH_SHOW_MS = 220; // how long the extended-arm frame shows
+const STUN_MS = 700;
+const IMMUNE_MS = 1500;
+const KB_VX = 260; // knockback launch speed, px/s, decaying
+const KB_POP = -220; // the little upward pop on getting hit
 const SMOOTH_RATE = 12; // per second: how fast remote sprites chase their target
 const SNAP_DIST = 80; // farther than this is a spawn or teleport, not a walk: snap
 
@@ -46,6 +56,8 @@ const effects = []; // running emotes: { id, kind, start }
 const held = new Set(); // movement keys currently down
 let vy = 0; // my vertical speed
 let jumpQueued = false; // jump pressed, consumed by the next frame
+let kbVx = 0; // horizontal knockback speed while stunned
+let stunUntil = 0; // while stunned, input is ignored — you are tumbling
 let dirty = false; // my position changed since the last network send
 let last = 0; // previous frame timestamp
 
@@ -131,6 +143,24 @@ const FRAMES = {
     '............',
     '............',
   ],
+  punch: [
+    '....hhhh....',
+    '...hhhhhh...',
+    '...hssssh...',
+    '...sesses...',
+    '...ssssss...',
+    '....ssss....',
+    '...tttttt...',
+    '..tttttttt..',
+    '..tttttttss.',
+    '..tttttttt..',
+    '...tttttt...',
+    '...pppppp...',
+    '...pp..pp...',
+    '...pp..pp...',
+    '...bb..bb...',
+    '...bb..bb...',
+  ],
 };
 const SPR_W = 12 * SPRITE_PX;
 const SPR_H = 16 * SPRITE_PX;
@@ -184,6 +214,22 @@ socket.addEventListener('message', (e) => {
   } else if (msg.type === 'named') {
     const p = players.get(msg.id);
     if (p) p.name = msg.name;
+  } else if (msg.type === 'swung') {
+    const p = players.get(msg.id);
+    if (p) { p.punchUntil = performance.now() + PUNCH_SHOW_MS; p.facing = msg.dir; }
+  } else if (msg.type === 'hit') {
+    const now = performance.now();
+    const t = players.get(msg.target);
+    if (t) {
+      t.hurtUntil = now + STUN_MS;
+      t.immuneUntil = now + STUN_MS + IMMUNE_MS;
+    }
+    if (msg.target === me) {
+      // I got punched: my own physics takes the impulse.
+      stunUntil = now + STUN_MS;
+      kbVx = msg.dir * KB_VX;
+      vy = KB_POP;
+    }
   } else if (msg.type === 'chat') {
     bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
   } else if (msg.type === 'left') {
@@ -218,6 +264,13 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'e' || e.key === 'q') && !e.repeat) {
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'emote', kind: e.key === 'e' ? 'wave' : 'heart' }));
+    }
+    return;
+  }
+  if (e.key === 'z' && !e.repeat) {
+    const self = me && players.get(me);
+    if (self && performance.now() >= stunUntil && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
     }
     return;
   }
@@ -272,8 +325,9 @@ function frame(now) {
   if (self) {
     const floor = GROUND_Y - SIZE / 2; // sprite center when standing
     const grounded = self.y >= floor;
+    const stunned = performance.now() < stunUntil;
 
-    const dx = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
+    const dx = stunned ? 0 : (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
     if (dx) {
       // Stricter than the server's clamp so the sprite never clips the edge.
       self.x = clamp(self.x + dx * SPEED * dt, SPR_W / 2, WORLD.w - SPR_W / 2);
@@ -282,8 +336,16 @@ function frame(now) {
     }
     self.moving = !!dx;
 
+    // Knockback: steering is gone, the impulse carries you and bleeds off.
+    if (kbVx) {
+      self.x = clamp(self.x + kbVx * dt, SPR_W / 2, WORLD.w - SPR_W / 2);
+      kbVx *= Math.exp(-dt * 4);
+      if (!stunned || Math.abs(kbVx) < 4) kbVx = 0;
+      dirty = true;
+    }
+
     if (jumpQueued) {
-      if (grounded) vy = -JUMP_V;
+      if (grounded && !stunned) vy = -JUMP_V;
       jumpQueued = false; // consume either way: no buffering jumps mid-air
     }
     if (!grounded || vy < 0) {
@@ -341,7 +403,9 @@ function draw() {
   for (const [id, p] of players) {
     const feetY = p.ry + SIZE / 2;
     const airborne = p.ry < GROUND_Y - SIZE / 2 - 1;
-    const frame = airborne ? 'jump'
+    const hurt = now < (p.hurtUntil ?? 0);
+    const frame = now < (p.punchUntil ?? 0) ? 'punch'
+      : airborne ? 'jump'
       : p.moving ? (Math.floor(now / 140) % 2 ? 'walk1' : 'walk0')
       : 'idle';
     const img = sprite(p.color, frame);
@@ -349,12 +413,19 @@ function draw() {
 
     ctx.save();
     ctx.translate(p.rx, feetY - SPR_H / 2);
-    if (wave) {
+    if (hurt) {
+      // The tumble: a fast, hard wobble for as long as the stun lasts.
+      ctx.rotate(Math.sin(now / 40) * 0.5);
+    } else if (wave) {
       // Wiggle: a decaying rock around the sprite's own center.
       const t = (now - wave.start) / EMOTE_MS;
       ctx.rotate(Math.sin(t * Math.PI * 6) * 0.35 * (1 - t));
     }
     if ((p.facing ?? 1) < 0) ctx.scale(-1, 1);
+    if (now < (p.immuneUntil ?? 0)) {
+      // Immunity blink: untouchable, and visibly so.
+      ctx.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(now / 90));
+    }
     ctx.drawImage(img, -SPR_W / 2, -SPR_H / 2);
     ctx.restore();
 

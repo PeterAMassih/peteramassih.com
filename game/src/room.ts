@@ -33,6 +33,16 @@ const EMOTE_BURST = 10;
 const NAME_RE = /^[\w-]{2,16}$/;
 const NAME_BURST = 3;
 
+// The brawl. A punch hits the nearest player in front within reach, knocked
+// back by their own client on the hit broadcast. Immunity after a hit means
+// nobody can be chain-punched — that is what keeps it funny instead of mean.
+// STUN_MS + IMMUNE_MS are mirrored in the client for the tumble and blink.
+const PUNCH_RANGE_X = 30;
+const PUNCH_RANGE_Y = 26;
+const PUNCH_BURST = 12;
+const STUN_MS = 700;
+const IMMUNE_MS = 1500;
+
 interface Player {
 	id: string;
 	name: string;
@@ -51,6 +61,10 @@ export class Room extends DurableObject<Env> {
 	private chatTimes = new Map<WebSocket, number[]>();
 	private emoteTimes = new Map<WebSocket, number[]>();
 	private nameTimes = new Map<WebSocket, number[]>();
+	private punchTimes = new Map<WebSocket, number[]>();
+	// Transient combat state, by player id. Deliberately not persisted: a room
+	// that hibernated mid-brawl waking up with immunity cleared is harmless.
+	private immuneUntil = new Map<string, number>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -96,6 +110,7 @@ export class Room extends DurableObject<Env> {
 			text?: unknown;
 			kind?: unknown;
 			name?: unknown;
+			facing?: unknown;
 		};
 		try {
 			msg = JSON.parse(raw);
@@ -129,6 +144,27 @@ export class Room extends DurableObject<Env> {
 			player.name = msg.name;
 			ws.serializeAttachment(player); // renames survive hibernation too
 			this.broadcast({ type: "named", id: player.id, name: player.name });
+		} else if (msg.type === "punch") {
+			const dir = msg.facing === -1 ? -1 : 1;
+			if (!this.underLimit(this.punchTimes, ws, PUNCH_BURST)) return;
+			// Everyone sees the swing, hit or miss.
+			this.broadcast({ type: "swung", id: player.id, dir });
+
+			// The server decides what connected, from its own positions.
+			const now = Date.now();
+			let target: Player | null = null;
+			for (const other of this.players.values()) {
+				if (other.id === player.id) continue;
+				const dx = other.x - player.x;
+				if (Math.abs(other.y - player.y) > PUNCH_RANGE_Y) continue;
+				if (dx * dir < 4 || Math.abs(dx) > PUNCH_RANGE_X) continue; // behind or too far
+				if ((this.immuneUntil.get(other.id) ?? 0) > now) continue;
+				if (!target || Math.abs(dx) < Math.abs(target.x - player.x)) target = other;
+			}
+			if (target) {
+				this.immuneUntil.set(target.id, now + STUN_MS + IMMUNE_MS);
+				this.broadcast({ type: "hit", attacker: player.id, target: target.id, dir });
+			}
 		}
 	}
 
@@ -157,6 +193,8 @@ export class Room extends DurableObject<Env> {
 		this.chatTimes.delete(ws);
 		this.emoteTimes.delete(ws);
 		this.nameTimes.delete(ws);
+		this.punchTimes.delete(ws);
+		this.immuneUntil.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
 	}
 

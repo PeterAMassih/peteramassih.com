@@ -1,0 +1,58 @@
+---
+// src/pages/play.astro
+// A tiny shared world — every square is a live visitor. v0: walk, see others.
+// Game logic in src/scripts/play.js; the server lives in game/ (Durable Object).
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Play — Peter Massih" description="A tiny shared pixel world. Everyone here is a real visitor.">
+  <Fragment slot="head">
+    {/* Unlisted while v0 is a test page. */}
+    <meta name="robots" content="noindex" />
+  </Fragment>
+  <main>
+    <header class="head">
+      <h1>Play</h1>
+      <p>
+        A tiny shared world. Every square you see is a real visitor, connected
+        live to the same room. v0 is deliberately small: walk around, notice
+        you are not alone.
+      </p>
+    </header>
+
+    <canvas id="play-canvas" class="canvas" width="640" height="360" aria-label="Shared pixel world"></canvas>
+
+    <p class="meta">
+      status: <span id="play-status">connecting…</span> ·
+      here now: <span id="play-count">–</span>
+    </p>
+
+    <p class="hint muted">Move with the arrow keys or WASD.</p>
+  </main>
+</BaseLayout>
+
+<script>import '../scripts/play.js';</script>
+
+<style>
+  main {
+    max-width: var(--page-width);
+    margin: var(--space-16) auto var(--space-16);
+    padding: 0 var(--space-4);
+  }
+  .head { margin-bottom: var(--space-6); }
+  .head p { margin-top: var(--space-2); max-width: 65ch; }
+  .canvas {
+    width: 100%;
+    display: block;
+    background: #16181d; /* the world keeps its own palette in both site themes */
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .meta {
+    margin-top: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+</style>

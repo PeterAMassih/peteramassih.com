@@ -1,0 +1,17 @@
+// game/wrangler.jsonc
+// The game server: a separate Worker from the site, deployed independently.
+{
+	"name": "peteramassih-play",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-05-26",
+	// SQLite-backed Durable Objects are the free-plan backend. "new_sqlite_classes"
+	// (not "new_classes") is what selects it; storage is unused in v0 but wired now
+	// because the backend choice is permanent per class.
+	"durable_objects": {
+		"bindings": [{ "name": "ROOM", "class_name": "Room" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+	"observability": {
+		"enabled": true
+	}
+}

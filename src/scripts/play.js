@@ -128,6 +128,7 @@ let jumpQueued = false; // jump pressed, consumed by the next frame
 let dropQueued = false; // down pressed: fall through the platform you stand on
 let dropUntil = 0; // while set, platforms do not catch you
 let crown = null; // { wearer, x, y } — only rooms that have one send it
+let crownWornAt = null; // local clock for the reign readout, from the server's held ms
 let raceTop = []; // best runs ever, from the server: { name, ms }
 let reignTop = []; // longest crown reigns ever: { name, ms }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
@@ -373,6 +374,7 @@ function onMessage(msg, enterFrom) {
     marks = msg.marks ?? [];
     roomMarks = msg.marksOn ?? false;
     crown = msg.crown ?? null;
+    crownWornAt = msg.crownHeld != null ? performance.now() - msg.crownHeld : null;
     raceTop = msg.raceTop ?? [];
     reignTop = msg.reignTop ?? [];
     myRunStart = null;
@@ -419,6 +421,7 @@ function onMessage(msg, enterFrom) {
   } else if (msg.type === 'crown') {
     const wore = crown?.wearer;
     crown = msg.crown;
+    crownWornAt = msg.held != null ? performance.now() - msg.held : null;
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
   } else if (msg.type === 'reign') {
@@ -467,6 +470,28 @@ connect(null);
 // Only send while actually moving: an idle tab sends nothing, so an idle
 // room can hibernate — that is what keeps the server free.
 setInterval(() => {
+  // Hidden tabs get no animation frames, so physics stops — without this a
+  // player who switches tabs mid-jump levitates forever on everyone else's
+  // screen. Intervals still tick (slowly) in background tabs: settle them.
+  if (document.hidden && me) {
+    const self = players.get(me);
+    if (self) {
+      const floor = GROUND_Y - SIZE / 2;
+      let support = floor;
+      for (const pl of ROOMS[room].platforms ?? []) {
+        const top = pl.y - SIZE / 2;
+        if (top >= self.y && top < support && self.x > pl.x - 8 && self.x < pl.x + pl.w + 8) {
+          support = top;
+        }
+      }
+      if (self.y < support) {
+        self.y = Math.min(self.y + 60, support);
+        self.ry = self.y;
+        if (self.y >= support) vy = 0;
+        dirty = true;
+      }
+    }
+  }
   if (!dirty || socket.readyState !== WebSocket.OPEN) return;
   const self = players.get(me);
   if (!self) return;
@@ -695,8 +720,10 @@ function frame(now) {
       myRunStart = nowMs;
     }
 
-    // Doors: reach the edge of the world and you are somewhere else.
-    if (!switching) {
+    // Doors: reach the edge of the world and you are somewhere else — but
+    // doors are on the ground. Brushing the wall mid-jump (easy on the moon)
+    // must not teleport anyone.
+    if (!switching && self.y > GROUND_Y - SIZE / 2 - 40) {
       const doors = ROOMS[room].doors;
       if (doors.left && self.x <= DOOR_TRIGGER) switchRoom(doors.left, 'right');
       else if (doors.right && self.x >= WORLD.w - DOOR_TRIGGER) switchRoom(doors.right, 'left');
@@ -869,13 +896,14 @@ function draw() {
 
     if (crown?.wearer === id) {
       drawCrown(p.rx, feetY - SPR_H - 1);
-      if (crown.since) {
-        // The current reign, counting up for everyone to covet.
+      if (crownWornAt !== null) {
+        // The current reign, counting up for everyone to covet. Above the
+        // name, not through it, and on our own clock so skew cannot lie.
         ctx.font = '10px ui-monospace, monospace';
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.fillStyle = '#ffd23f';
-        const held = Math.max(0, (Date.now() - crown.since) / 1000);
-        ctx.fillText(`${held.toFixed(0)}s`, p.rx + 9, feetY - SPR_H - 3);
+        const held = Math.max(0, (now - crownWornAt) / 1000);
+        ctx.fillText(`${held.toFixed(0)}s`, p.rx, feetY - SPR_H - 18);
       }
     }
 

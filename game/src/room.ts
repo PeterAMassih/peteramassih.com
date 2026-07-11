@@ -214,7 +214,9 @@ export class Room extends DurableObject<Env> {
 	private setCrown(crown: Crown): void {
 		this.crown = crown;
 		void this.ctx.storage.put("crown", crown);
-		this.broadcast({ type: "crown", crown });
+		// held rides along so clients can count reigns on their own clock —
+		// comparing raw timestamps across machines invites clock-skew nonsense.
+		this.broadcast({ type: "crown", crown, held: crown.since ? Date.now() - crown.since : null });
 	}
 
 	// One attachment shape everywhere: the broadcastable player plus the
@@ -294,6 +296,7 @@ export class Room extends DurableObject<Env> {
 				brawl: this.rules.brawl,
 				kb: this.rules.kb,
 				crown: this.crown,
+				crownHeld: this.crown?.since ? Date.now() - this.crown.since : null,
 				reignTop: this.rules.crown ? this.topReigns() : [],
 				raceTop: this.rules.race ? this.topRuns() : [],
 				marksOn: this.rules.marks,
@@ -514,10 +517,11 @@ export class Room extends DurableObject<Env> {
 		this.immuneUntil.delete(player.id);
 		this.runs.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
-		// A wearer who walks out (or drops) leaves the crown behind.
+		// A wearer who leaves forfeits: the crown goes home to the hill rather
+		// than lying jammed against whichever door they walked out through.
 		if (this.crown?.wearer === player.id) {
 			this.endReign(vid ?? null); // captured above, before the maps were cleared
-			this.setCrown({ wearer: null, x: clamp(player.x, 20, WORLD.w - 20), y: 312 });
+			this.setCrown({ wearer: null, ...CROWN_SPAWN });
 		}
 	}
 

@@ -80,10 +80,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         A tiny multiplayer world. Every character here is a real visitor,
         on this page right now. Walk over and say hi, or throw a punch.
         Nobody gets hurt. They bounce back and blink for a moment while
-        they cannot be hit again. Under the hood, your browser keeps one
-        WebSocket open to a Cloudflare Durable Object that referees the
-        room and checks every move, punch, and message. Physics runs in
-        your browser. When the room is empty, the server sleeps and costs
+        they cannot be hit again.
+      </p>
+      <p>
+        Four rooms, four games, doors at the edges. The plaza is for
+        hanging out. The arena has a crown. Steal it, hold it, and the
+        longest reigns go on the wall forever. The library is quiet, no
+        punching, and typing /mark in chat writes a note on its wall that
+        stays. The moon has low gravity and a timed run, green flag to
+        gold flag, best times on the board.
+      </p>
+      <p>
+        Under the hood, your browser keeps one WebSocket open to a
+        Cloudflare Durable Object that referees the room and checks every
+        move, punch, and message. Physics runs in your browser. Chat is
+        never stored. When the room is empty, the server sleeps and costs
         nothing.
       </p>
     </details>

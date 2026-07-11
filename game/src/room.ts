@@ -49,7 +49,11 @@ interface Crown {
 	wearer: string | null;
 	x: number;
 	y: number;
+	since?: number; // when the current wearer took it — reigns are this minus now
 }
+
+const REIGN_MIN_MS = 1000; // shorter than this is a fumble, not a reign
+const REIGN_TOP = 5;
 
 // The guestbook: one mark per visitor per room (writing again replaces your
 // old one), capped at 500 with the oldest pruned — self-cleaning by design.
@@ -160,7 +164,45 @@ export class Room extends DurableObject<Env> {
 			ctx.storage.sql.exec(
 				"CREATE TABLE IF NOT EXISTS races (vid TEXT PRIMARY KEY, name TEXT, ms INTEGER, ts INTEGER)",
 			);
+			ctx.storage.sql.exec(
+				"CREATE TABLE IF NOT EXISTS reigns (vid TEXT PRIMARY KEY, name TEXT, ms INTEGER, ts INTEGER)",
+			);
 		});
+	}
+
+	private topReigns() {
+		return this.ctx.storage.sql
+			.exec("SELECT name, ms FROM reigns ORDER BY ms DESC LIMIT ?", REIGN_TOP)
+			.toArray();
+	}
+
+	// Close out the current wearer's reign: record it if it is their longest,
+	// tell the room how long they lasted. Called before the crown moves on.
+	private endReign(vid: string | null): void {
+		const c = this.crown;
+		if (!c?.wearer || !c.since) return;
+		const ms = Date.now() - c.since;
+		if (ms < REIGN_MIN_MS) return;
+		const name = [...this.players.values()].find((p) => p.id === c.wearer)?.name ?? "unknown";
+		if (vid) {
+			const best = this.ctx.storage.sql.exec("SELECT ms FROM reigns WHERE vid = ?", vid).toArray()[0];
+			if (!best || (best.ms as number) < ms) {
+				this.ctx.storage.sql.exec(
+					"INSERT OR REPLACE INTO reigns (vid, name, ms, ts) VALUES (?, ?, ?, ?)",
+					vid, name, ms, Date.now(),
+				);
+				this.ctx.storage.sql.exec(
+					"DELETE FROM reigns WHERE vid NOT IN (SELECT vid FROM reigns ORDER BY ms DESC LIMIT ?)",
+					RACE_KEPT,
+				);
+			}
+		}
+		this.broadcast({ type: "reign", id: c.wearer, ms, top: this.topReigns() });
+	}
+
+	private wsOf(id: string): WebSocket | null {
+		for (const [ws, p] of this.players) if (p.id === id) return ws;
+		return null;
 	}
 
 	private topRuns() {
@@ -252,6 +294,7 @@ export class Room extends DurableObject<Env> {
 				brawl: this.rules.brawl,
 				kb: this.rules.kb,
 				crown: this.crown,
+				reignTop: this.rules.crown ? this.topReigns() : [],
 				raceTop: this.rules.race ? this.topRuns() : [],
 				marksOn: this.rules.marks,
 				marks: this.rules.marks
@@ -302,7 +345,7 @@ export class Room extends DurableObject<Env> {
 				Math.abs(player.x - this.crown.x) < CROWN_REACH.x &&
 				Math.abs(player.y - this.crown.y) < CROWN_REACH.y
 			) {
-				this.setCrown({ wearer: player.id, x: 0, y: 0 });
+				this.setCrown({ wearer: player.id, x: 0, y: 0, since: Date.now() });
 			}
 
 			// The race, timed entirely by the server's own clock. Every move
@@ -407,6 +450,8 @@ export class Room extends DurableObject<Env> {
 				this.broadcast({ type: "hit", attacker: player.id, target: target.id, dir });
 				// The crown is held only as long as you can defend it.
 				if (this.crown?.wearer === target.id) {
+					const tws = this.wsOf(target.id);
+					this.endReign(tws ? (this.vids.get(tws) ?? null) : null);
 					this.setCrown({
 						wearer: null,
 						x: clamp(target.x + dir * 36, 20, WORLD.w - 20),
@@ -471,6 +516,7 @@ export class Room extends DurableObject<Env> {
 		this.broadcast({ type: "left", id: player.id });
 		// A wearer who walks out (or drops) leaves the crown behind.
 		if (this.crown?.wearer === player.id) {
+			this.endReign(vid ?? null); // captured above, before the maps were cleared
 			this.setCrown({ wearer: null, x: clamp(player.x, 20, WORLD.w - 20), y: 312 });
 		}
 	}

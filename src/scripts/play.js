@@ -25,12 +25,17 @@ const ROOMS = {
   plaza: {
     label: 'the plaza', bg: '#16181d', floor: '#1c1f26',
     doors: { left: 'library', right: 'arena' },
-    platforms: [{ x: 120, y: 268, w: 100 }, { x: 420, y: 268, w: 100 }, { x: 270, y: 208, w: 100 }],
+    // Two benches. The plaza is for standing around, not parkour.
+    platforms: [{ x: 150, y: 262, w: 110 }, { x: 390, y: 262, w: 110 }],
   },
   library: {
     label: 'the library', bg: '#191512', floor: '#282013',
     doors: { right: 'plaza' }, quiet: true,
-    platforms: [{ x: 80, y: 263, w: 90 }, { x: 250, y: 210, w: 100 }, { x: 430, y: 263, w: 90 }],
+    // Shelves climbing left to right, and a reading nook off on its own.
+    platforms: [
+      { x: 70, y: 270, w: 80 }, { x: 210, y: 230, w: 80 },
+      { x: 350, y: 190, w: 80 }, { x: 480, y: 255, w: 60 },
+    ],
   },
   arena: {
     label: 'the arena', bg: '#1a1417', floor: '#291a1e',
@@ -41,8 +46,11 @@ const ROOMS = {
   moon: {
     label: 'the moon', bg: '#0d1020', floor: '#2a2d3c', stars: true,
     doors: { left: 'arena' },
-    // Spaced for 0.35 gravity: unreachable anywhere else, easy here.
-    platforms: [{ x: 90, y: 225, w: 80 }, { x: 290, y: 150, w: 90 }, { x: 500, y: 225, w: 80 }],
+    // Spaced for 0.35 gravity — and one rock so high only the moon allows it.
+    platforms: [
+      { x: 90, y: 225, w: 80 }, { x: 290, y: 150, w: 90 },
+      { x: 500, y: 225, w: 80 }, { x: 150, y: 80, w: 60 },
+    ],
     // The moon run: green flag on the floor, gold flag on the top rock.
     // Zones mirror game/src/room.ts — the server owns the stopwatch.
     race: { sx: 60, sy: 312, fx: 335, fy: 142 },
@@ -121,6 +129,7 @@ let dropQueued = false; // down pressed: fall through the platform you stand on
 let dropUntil = 0; // while set, platforms do not catch you
 let crown = null; // { wearer, x, y } — only rooms that have one send it
 let raceTop = []; // best runs ever, from the server: { name, ms }
+let reignTop = []; // longest crown reigns ever: { name, ms }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
@@ -365,6 +374,7 @@ function onMessage(msg, enterFrom) {
     roomMarks = msg.marksOn ?? false;
     crown = msg.crown ?? null;
     raceTop = msg.raceTop ?? [];
+    reignTop = msg.reignTop ?? [];
     myRunStart = null;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     chatInput.placeholder = roomMarks
@@ -411,6 +421,12 @@ function onMessage(msg, enterFrom) {
     crown = msg.crown;
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
+  } else if (msg.type === 'reign') {
+    reignTop = msg.top ?? reignTop;
+    bubbles.set(msg.id, {
+      text: `reigned ${(msg.ms / 1000).toFixed(1)}s`,
+      until: performance.now() + BUBBLE_MS,
+    });
   } else if (msg.type === 'marked') {
     // The server upserts by visitor; mirror that by name so re-marking
     // moves your line instead of duplicating it.
@@ -772,6 +788,18 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  // The arena's hall of fame: who held the crown longest, ever.
+  if (crown && reignTop.length) {
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fillText('longest reigns', 64, 66);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
+    reignTop.forEach((r, i) => {
+      ctx.fillText(`${i + 1}. ${r.name} ${(r.ms / 1000).toFixed(1)}s`, 64, 82 + i * 15);
+    });
+  }
+
   // The race: two flags, the all-time board, and your live readout.
   if (look.race) {
     drawFlag(look.race.sx, GROUND_Y, '#6cae44');
@@ -839,7 +867,17 @@ function draw() {
     }
     ctx.restore();
 
-    if (crown?.wearer === id) drawCrown(p.rx, feetY - SPR_H - 1);
+    if (crown?.wearer === id) {
+      drawCrown(p.rx, feetY - SPR_H - 1);
+      if (crown.since) {
+        // The current reign, counting up for everyone to covet.
+        ctx.font = '10px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffd23f';
+        const held = Math.max(0, (Date.now() - crown.since) / 1000);
+        ctx.fillText(`${held.toFixed(0)}s`, p.rx + 9, feetY - SPR_H - 3);
+      }
+    }
 
     // Your own name reads brighter; that is how you find yourself.
     // 12px, not 10: the canvas downscales to ~0.54x on phones.

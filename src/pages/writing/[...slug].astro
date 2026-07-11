@@ -71,6 +71,14 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     max-width: var(--content-width);
     margin-inline: auto;
   }
+  /* Long math posts leave tens of thousands of elements in the DOM. Blocks
+     far offscreen skip style, layout, and paint until the reader approaches;
+     the placeholder height keeps the scrollbar honest before first render.
+     Figures stay rendered so the lazy-video observer keeps its full lead. */
+  .body > :global(:not(figure)) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 10rem;
+  }
   .post > header { margin-bottom: var(--space-12); }
   .meta-row {
     display: flex;

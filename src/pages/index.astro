@@ -30,6 +30,9 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
           <a href="https://www.linkedin.com/in/peteramassih/" target="_blank" rel="noopener noreferrer">linkedin</a> ·
           <a href="mailto:peteramassih@gmail.com">email</a>
         </p>
+        <p class="play-invite">
+          <a id="play-invite" href="/play/">There is a tiny world hiding on this site →</a>
+        </p>
       </div>
       <img class="photo" src="/peter.jpg" alt="Peter Massih" width="240" height="240" />
     </header>
@@ -109,6 +112,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
   </main>
 </BaseLayout>
 
+<script>import '../scripts/presence.js';</script>
+
 <style>
   main {
     max-width: var(--content-width);
@@ -127,6 +132,9 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
   .socials { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
   .socials a { color: var(--color-text-muted); }
   .socials a:hover { color: var(--color-text); }
+  .play-invite { margin-top: var(--space-2); font-size: var(--text-sm); }
+  .play-invite a { color: var(--color-text-muted); transition: color var(--transition); }
+  .play-invite a:hover { color: var(--color-accent); }
   section { margin-top: var(--space-12); }
   section h2 { margin-bottom: var(--space-4); }
   section p + p { margin-top: var(--space-2); }

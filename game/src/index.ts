@@ -27,6 +27,25 @@ function originAllowed(origin: string | null): boolean {
 
 export default {
 	async fetch(request, env): Promise<Response> {
+		// The one HTTP endpoint: how many visitors are in the world right now.
+		// Public, cacheable for half a minute, feeds the homepage invitation.
+		if (new URL(request.url).pathname === "/presence") {
+			const counts = await Promise.all(
+				ROOM_NAMES.map(async (name) => {
+					const res = await env.ROOM.get(env.ROOM.idFromName(name)).fetch("https://room/count");
+					return ((await res.json()) as { count: number }).count;
+				}),
+			);
+			return Response.json(
+				{ count: counts.reduce((a, b) => a + b, 0) },
+				{
+					headers: {
+						"Access-Control-Allow-Origin": "*",
+						"Cache-Control": "public, max-age=30",
+					},
+				},
+			);
+		}
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return new Response("This endpoint speaks WebSocket only.", { status: 426 });
 		}

@@ -237,6 +237,12 @@ export class Room extends DurableObject<Env> {
 	}
 
 	async fetch(request: Request): Promise<Response> {
+		// Anything that is not a socket upgrade is a presence ping. Answered
+		// before any join state is touched, so a count can never mis-name a
+		// fresh room or mint a crown.
+		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+			return Response.json({ count: this.players.size });
+		}
 		if (this.players.size >= MAX_PLAYERS) {
 			return new Response("Room is full.", { status: 503 });
 		}

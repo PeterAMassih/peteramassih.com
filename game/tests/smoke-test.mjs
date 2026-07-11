@@ -56,9 +56,12 @@ function connect(name) {
   );
 }
 
-// 1. Plain HTTP is refused.
+// 1. Plain HTTP is refused, except the one presence endpoint.
 const res = await fetch(URL_HTTP);
 ok(res.status === 426, `plain GET refused with 426 (got ${res.status})`);
+const presence = await (await fetch(`${URL_HTTP}/presence`)).json();
+ok(Number.isInteger(presence.count) && presence.count >= 0,
+  `presence answers a headcount (${presence.count})`);
 
 // 2. A connects, gets init containing itself.
 const A = await connect("A");

@@ -7,16 +7,22 @@ const SIZE = 16; // sprite square, px
 const SPEED = 160; // px per second
 const SEND_HZ = 10; // position updates to the server, per second
 
+// Side-view physics. Simulated only for your own sprite, in your own browser —
+// the server just relays positions. Remote jumps arrive as positions and glide
+// through the same interpolation as walking.
+const GROUND_Y = 320; // top of the floor
+const GRAVITY = 1400; // px/s^2
+const JUMP_V = 520; // initial upward speed; ~96px apex, ~0.74s of air
+
 const SOCKET_URL = import.meta.env.DEV
   ? 'ws://localhost:8787'
   : 'wss://peteramassih-play.peteramassih.workers.dev';
 
 const KEYS = {
-  ArrowUp: 'up', w: 'up',
-  ArrowDown: 'down', s: 'down',
   ArrowLeft: 'left', a: 'left',
   ArrowRight: 'right', d: 'right',
 };
+const JUMP_KEYS = ['ArrowUp', 'w', ' '];
 
 const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
 const EMOTE_MS = 1200; // wave wiggle / heart float duration
@@ -37,6 +43,8 @@ const players = new Map(); // id -> { x, y, rx, ry, color, name }
 const bubbles = new Map(); // id -> { text, until }
 const effects = []; // running emotes: { id, kind, start }
 const held = new Set(); // movement keys currently down
+let vy = 0; // my vertical speed
+let jumpQueued = false; // jump pressed, consumed by the next frame
 let dirty = false; // my position changed since the last network send
 let last = 0; // previous frame timestamp
 
@@ -99,6 +107,15 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  if (JUMP_KEYS.includes(e.key)) {
+    e.preventDefault(); // space and up-arrow would scroll the page
+    if (!e.repeat) jumpQueued = true;
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 's') {
+    e.preventDefault(); // nothing yet, but keep the page from scrolling
+    return;
+  }
   const dir = KEYS[e.key];
   if (!dir) return;
   e.preventDefault(); // arrows would scroll the page
@@ -127,13 +144,24 @@ function frame(now) {
 
   const self = me && players.get(me);
   if (self) {
-    let dx = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
-    let dy = (held.has('down') ? 1 : 0) - (held.has('up') ? 1 : 0);
-    if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; } // diagonals no faster
-    if (dx || dy) {
+    const floor = GROUND_Y - SIZE / 2; // sprite center when standing
+    const grounded = self.y >= floor;
+
+    const dx = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
+    if (dx) {
       // Stricter than the server's clamp so the sprite never clips the edge.
       self.x = clamp(self.x + dx * SPEED * dt, SIZE / 2, WORLD.w - SIZE / 2);
-      self.y = clamp(self.y + dy * SPEED * dt, SIZE / 2, WORLD.h - SIZE / 2);
+      dirty = true;
+    }
+
+    if (jumpQueued) {
+      if (grounded) vy = -JUMP_V;
+      jumpQueued = false; // consume either way: no buffering jumps mid-air
+    }
+    if (!grounded || vy < 0) {
+      vy += GRAVITY * dt;
+      self.y = Math.max(self.y + vy * dt, SIZE / 2);
+      if (self.y >= floor) { self.y = floor; vy = 0; } // landed
       dirty = true;
     }
   }
@@ -158,11 +186,20 @@ function draw() {
   ctx.fillStyle = '#16181d';
   ctx.fillRect(0, 0, WORLD.w, WORLD.h);
 
-  // Faint grid so motion is legible against the flat floor.
+  // Faint grid so motion is legible against the flat backdrop.
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
   ctx.beginPath();
   for (let x = 40; x < WORLD.w; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, WORLD.h); }
-  for (let y = 40; y < WORLD.h; y += 40) { ctx.moveTo(0, y); ctx.lineTo(WORLD.w, y); }
+  for (let y = 40; y < GROUND_Y; y += 40) { ctx.moveTo(0, y); ctx.lineTo(WORLD.w, y); }
+  ctx.stroke();
+
+  // The floor.
+  ctx.fillStyle = '#1c1f26';
+  ctx.fillRect(0, GROUND_Y, WORLD.w, WORLD.h - GROUND_Y);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y + 0.5);
+  ctx.lineTo(WORLD.w, GROUND_Y + 0.5);
   ctx.stroke();
 
   const now = performance.now();

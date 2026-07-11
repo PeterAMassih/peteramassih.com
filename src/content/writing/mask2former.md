@@ -286,7 +286,7 @@ So every matching prediction covers more than half of $g$. Now suppose two predi
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching, pairing segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: one scene regrouped under the three segmentation semantics">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/query_becomes_segment_poster.webp" width="1920" height="1080" aria-label="Animation: one scene regrouped under the three segmentation semantics">
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
@@ -517,7 +517,7 @@ The proof is one bijection, but the property is load-bearing. The storage order 
 One-to-one matching, as opposed to greedy nearest-target, matters for a subtler reason. Greedy lets two queries claim the same object and leaves another object orphaned. The global assignment forbids duplicate claims by construction, and that is what lets the trained model drop non-maximum suppression entirely.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: Hungarian matching as cords untangling in segment space">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/hungarian_matching_poster.webp" width="1920" height="1080" aria-label="Animation: Hungarian matching as cords untangling in segment space">
 <source data-src="/assets/m2f/hungarian_matching.webm" type="video/webm">
 <source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
 </video>
@@ -812,7 +812,7 @@ Trivial, but it is the entire design distinction between Mask2Former and its nei
 **Origins of the trick.** Additive $-\infty$ masking is not new. It is the mechanism of causal masking in the original Transformer decoder [[Vaswani et al. 2017](#ref-vaswani2017)], where a fixed triangular mask hides the future. Mask2Former's contribution is what generates the mask, not a fixed structural pattern but a predicted, spatial, per-query region, refined online by the network's own output. Read recursively, equations (2) and (3) define a loop in which prediction and attention bootstrap each other nine times. The mask decides where the query reads. What it reads improves the mask. The improved mask sharpens the next read.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: masked attention as a stencil cutting background strands while survivors thicken">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/masked_attention_poster.webp" width="1920" height="1080" aria-label="Animation: masked attention as a stencil cutting background strands while survivors thicken">
 <source data-src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source data-src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
@@ -856,7 +856,7 @@ $$
 computed separately for $x$ and $y$ and concatenated. Here $\text{pos}$ is the cell's coordinate on that axis, $i$ indexes the frequency, each frequency filling one sine and one cosine channel, and the exponent's $C/2$ is there because each axis gets half of the $C$ channels. The intuition is that each position gets a unique fingerprint of phases across many frequencies, and shifting the position rotates those phases in a predictable way, which is what lets a dot product read off relative offsets. The rung is a learnable scale-level embedding $e_{\text{lvl}} \in \mathbb{R}^{1\times C}$ per resolution, borrowed from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: three resolution panes and an orb breathing coarse to fine">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/scales_breathe_poster.webp" width="1920" height="1080" aria-label="Animation: three resolution panes and an orb breathing coarse to fine">
 <source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
@@ -947,7 +947,7 @@ $$
 a $q$-weighted mean that overweights the boundary points $q$ favors. Reinstating the weight would cancel $q$ term by term, $q(x)\,\ell(x)/(|\Omega|\,q(x))$ summing over $x$ to $\mathcal{L}_{\text{dense}}$, which is the standard [importance-sampling](https://en.wikipedia.org/wiki/Importance_sampling) correction. This is not the unbiased estimator of §8.1. The uncorrected reweighting makes it a boundary-emphasized objective by design, not a cheaper copy of the dense loss, and precision is spent where the masks actually disagree.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" width="1920" height="1080" aria-label="Animation: sampled points on the mask error band balancing a beam">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation: sampled points on the mask error band balancing a beam">
 <source data-src="/assets/m2f/shoreline_probes.webm" type="video/webm">
 <source data-src="/assets/m2f/shoreline_probes.mp4" type="video/mp4">
 </video>
@@ -1214,6 +1214,8 @@ Or:
 <script>
 // Videos load lazily and autoplay only for readers who allow motion.
 // Under prefers-reduced-motion they get controls and start nothing.
+// Posters are inline in the markup, so a box is never blank; the margin
+// below starts the real fetch about two screens before the reader arrives.
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 for (const v of document.querySelectorAll('video[data-lazy]')) {
   const io = new IntersectionObserver((entries) => {
@@ -1230,7 +1232,7 @@ for (const v of document.querySelectorAll('video[data-lazy]')) {
       }
       io.disconnect();
     }
-  }, { rootMargin: '400px' });
+  }, { rootMargin: '1600px' });
   io.observe(v);
 }
 

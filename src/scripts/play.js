@@ -18,11 +18,14 @@ const SOCKET_URL = import.meta.env.DEV
   ? 'ws://localhost:8787'
   : 'wss://peteramassih-play.peteramassih.workers.dev';
 
+// All lookups go through e.key.toLowerCase(): otherwise releasing a key
+// while Shift is down (or with CapsLock on) delivers 'A' where 'a' was
+// pressed, the lookup misses, and the sprite walks into the wall forever.
 const KEYS = {
-  ArrowLeft: 'left', a: 'left',
-  ArrowRight: 'right', d: 'right',
+  arrowleft: 'left', a: 'left',
+  arrowright: 'right', d: 'right',
 };
-const JUMP_KEYS = ['ArrowUp', 'w', ' '];
+const JUMP_KEYS = ['arrowup', 'w', ' '];
 
 const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
 const EMOTE_MS = 1200; // wave wiggle / heart float duration
@@ -32,6 +35,7 @@ const EMOTE_MS = 1200; // wave wiggle / heart float duration
 // everyone renders the tumble and the immunity blink. STUN/IMMUNE mirror
 // game/src/room.ts.
 const PUNCH_SHOW_MS = 220; // how long the extended-arm frame shows
+const PUNCH_COOLDOWN_MS = 260; // client cadence; stays under the server budget
 const STUN_MS = 700;
 const IMMUNE_MS = 1500;
 const KB_VX = 260; // knockback launch speed, px/s, decaying
@@ -304,61 +308,81 @@ setInterval(() => {
 
 window.addEventListener('keydown', (e) => {
   unlockAudio();
+  const key = e.key.toLowerCase();
   const el = document.activeElement;
   if (el && el.tagName === 'INPUT') {
-    if (e.key === 'Escape') el.blur();
+    if (key === 'escape') el.blur();
     return; // typing, not steering
   }
-  if (e.key === 'm' && !e.repeat) {
+  // A focused link, button, or the details summary must keep its native
+  // Enter/Space activation — the game only owns keys when nothing else does.
+  if (el && (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'SUMMARY')) {
+    return;
+  }
+  if (key === 'm' && !e.repeat) {
     muted = !muted;
     localStorage.setItem('play-muted', muted ? '1' : '0');
     return;
   }
-  if (e.key === 'Enter') {
+  if (key === 'enter') {
     e.preventDefault();
     chatInput.focus();
     return;
   }
-  if ((e.key === 'e' || e.key === 'q') && !e.repeat) {
+  if ((key === 'e' || key === 'q') && !e.repeat) {
     if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'emote', kind: e.key === 'e' ? 'wave' : 'heart' }));
+      socket.send(JSON.stringify({ type: 'emote', kind: key === 'e' ? 'wave' : 'heart' }));
     }
     return;
   }
-  if (e.key === 'z' && !e.repeat) {
+  if (key === 'z' && !e.repeat) {
     sendPunch();
     return;
   }
-  if (JUMP_KEYS.includes(e.key)) {
+  if (JUMP_KEYS.includes(key)) {
     e.preventDefault(); // space and up-arrow would scroll the page
     if (!e.repeat) jumpQueued = true;
     return;
   }
-  if (e.key === 'ArrowDown' || e.key === 's') {
+  if (key === 'arrowdown' || key === 's') {
     e.preventDefault(); // nothing yet, but keep the page from scrolling
     return;
   }
-  const dir = KEYS[e.key];
+  const dir = KEYS[key];
   if (!dir) return;
   e.preventDefault(); // arrows would scroll the page
   held.add(dir);
 });
 window.addEventListener('keyup', (e) => {
-  const dir = KEYS[e.key];
+  const dir = KEYS[e.key.toLowerCase()];
   if (dir) held.delete(dir);
 });
 
+let lastPunch = 0;
 function sendPunch() {
+  const now = performance.now();
   const self = me && players.get(me);
-  if (self && performance.now() >= stunUntil && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
-  }
+  if (!self || now < stunUntil || now - lastPunch < PUNCH_COOLDOWN_MS) return;
+  if (socket.readyState !== WebSocket.OPEN) return;
+  lastPunch = now;
+  // Show your own swing immediately; the server echo confirms it for others.
+  self.punchUntil = now + PUNCH_SHOW_MS;
+  socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
 }
+
+// A tab switch or the phone keyboard can eat keyup events, leaving a key
+// "held" and the sprite walking forever. Losing focus releases everything.
+window.addEventListener('blur', () => held.clear());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) held.clear();
+});
 
 // Touch pad (rendered only on coarse-pointer devices). Each finger is
 // tracked by pointerId so holding a walk button while tapping jump with
 // the other thumb releases the right thing.
 const touchActs = new Map(); // pointerId -> act
+const muteBtn = touchPad.querySelector('[data-act="mute"]');
+muteBtn.textContent = muted ? 'unmute' : 'mute';
 touchPad.addEventListener('pointerdown', (e) => {
   const act = e.target.dataset.act;
   if (!act) return;
@@ -367,6 +391,15 @@ touchPad.addEventListener('pointerdown', (e) => {
   if (act === 'left' || act === 'right') { held.add(act); touchActs.set(e.pointerId, act); }
   else if (act === 'jump') jumpQueued = true;
   else if (act === 'punch') sendPunch();
+  else if (act === 'wave' || act === 'heart') {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'emote', kind: act }));
+    }
+  } else if (act === 'mute') {
+    muted = !muted;
+    localStorage.setItem('play-muted', muted ? '1' : '0');
+    muteBtn.textContent = muted ? 'unmute' : 'mute';
+  }
   // Last, since it can throw on an already-gone pointer: keep receiving the
   // up event even when the finger slides off the button.
   e.target.setPointerCapture(e.pointerId);
@@ -383,8 +416,11 @@ chatForm.addEventListener('submit', (e) => {
   const text = chatInput.value.trim();
   if (text && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'chat', text }));
+    chatInput.value = '';
+  } else if (!text) {
+    chatInput.value = '';
   }
-  chatInput.value = '';
+  // An unsent message (dead socket) stays in the box rather than vanishing.
   chatInput.blur(); // back to walking
 });
 
@@ -393,7 +429,10 @@ chatForm.addEventListener('submit', (e) => {
 nameInput.value = localStorage.getItem('play-name') ?? '';
 nameInput.addEventListener('change', () => {
   const name = nameInput.value.trim();
-  if (!/^[\w-]{2,16}$/.test(name)) return; // same rule the server enforces
+  if (!/^[\w-]{2,16}$/.test(name)) {
+    nameInput.reportValidity(); // surface the pattern rule instead of failing silently
+    return;
+  }
   localStorage.setItem('play-name', name);
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'name', name }));
@@ -533,7 +572,8 @@ function draw() {
     ctx.restore();
 
     // Your own name reads brighter; that is how you find yourself.
-    ctx.font = '10px ui-monospace, monospace';
+    // 12px, not 10: the canvas downscales to ~0.54x on phones.
+    ctx.font = '12px ui-monospace, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = id === me ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.55)';
     ctx.fillText(p.name, p.rx, feetY - SPR_H - 6);
@@ -558,6 +598,16 @@ function draw() {
   }
 
   ctx.restore(); // end of shake
+
+  // A dead socket must not look like a quiet room: dim the world and say so.
+  if (socket.readyState >= WebSocket.CLOSING) {
+    ctx.fillStyle = 'rgba(13, 15, 19, 0.72)';
+    ctx.fillRect(0, 0, WORLD.w, WORLD.h);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.font = '14px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
+  }
 }
 
 function drawBurst(x, y, t) {
@@ -601,12 +651,12 @@ function drawHeart(x, y, alpha) {
 }
 
 function drawBubble(p, text) {
-  ctx.font = '11px ui-monospace, monospace';
-  const w = Math.min(ctx.measureText(text).width + 14, 240);
-  const h = 20;
+  ctx.font = '13px ui-monospace, monospace'; // sized to survive phone downscale
+  const w = Math.min(ctx.measureText(text).width + 14, 260);
+  const h = 22;
   // Keep the bubble on the canvas even at the edges of the world.
   const bx = clamp(p.rx - w / 2, 4, WORLD.w - w - 4);
-  const by = clamp(p.ry + SIZE / 2 - SPR_H - 38, 4, WORLD.h - h - 4);
+  const by = clamp(p.ry + SIZE / 2 - SPR_H - 40, 4, WORLD.h - h - 4);
 
   ctx.fillStyle = 'rgba(244, 240, 230, 0.95)';
   ctx.beginPath();
@@ -615,7 +665,7 @@ function drawBubble(p, text) {
 
   ctx.fillStyle = '#1d1f24';
   ctx.textAlign = 'center';
-  ctx.fillText(text, bx + w / 2, by + 14, w - 10);
+  ctx.fillText(text, bx + w / 2, by + 15.5, w - 10);
 }
 
 requestAnimationFrame(frame);

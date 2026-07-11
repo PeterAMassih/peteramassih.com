@@ -17,20 +17,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <canvas id="play-canvas" class="canvas" width="640" height="360" aria-label="Shared pixel world"></canvas>
 
-    <p class="meta">
+    <p class="meta" aria-live="polite">
       status: <span id="play-status">connecting…</span> ·
       here now: <span id="play-count">–</span>
     </p>
 
     {/* Shown only on coarse-pointer (touch) devices, via the media query below. */}
     <div id="play-touch" class="touch">
-      <div class="pad">
-        <button type="button" data-act="left" aria-label="Walk left">←</button>
-        <button type="button" data-act="right" aria-label="Walk right">→</button>
+      <div class="pads">
+        <div class="pad">
+          <button type="button" data-act="left" aria-label="Walk left">←</button>
+          <button type="button" data-act="right" aria-label="Walk right">→</button>
+        </div>
+        <div class="pad">
+          <button type="button" data-act="jump">jump</button>
+          <button type="button" data-act="punch">punch</button>
+        </div>
       </div>
-      <div class="pad">
-        <button type="button" data-act="jump">jump</button>
-        <button type="button" data-act="punch">punch</button>
+      <div class="pad small">
+        <button type="button" data-act="wave">wave</button>
+        <button type="button" data-act="heart">heart</button>
+        <button type="button" data-act="mute">mute</button>
       </div>
     </div>
 
@@ -42,6 +49,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         placeholder="your name"
         autocomplete="off"
         aria-label="Your name"
+        pattern="[\w\-]{2,16}"
+        title="2–16 letters, digits, - or _"
       />
       <form id="play-chat-form">
         <input
@@ -55,9 +64,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </form>
     </div>
 
-    <p class="hint muted">
+    <p class="hint hint-keys muted">
       Arrows to walk, Space to jump, Z punches, Enter to chat. E waves, Q sends
       a heart, M mutes.
+    </p>
+    <p class="hint hint-touch muted">
+      Walk, jump, and punch with the buttons. Tap the field below to chat.
     </p>
 
     <details class="about">
@@ -101,11 +113,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   @media (pointer: coarse) {
     .touch {
       display: flex;
-      justify-content: space-between;
-      gap: var(--space-4);
+      flex-direction: column;
+      gap: var(--space-2);
       margin-top: var(--space-3);
     }
+    .pads { display: flex; justify-content: space-between; gap: var(--space-4); }
     .pad { display: flex; gap: var(--space-2); flex: 1; }
+    .pad.small button { min-height: 44px; font-size: var(--text-sm); color: var(--color-text-muted); }
     .touch button {
       flex: 1;
       min-height: 56px;
@@ -115,7 +129,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       background: var(--color-bg);
       border: 1px solid var(--color-border);
       border-radius: 6px;
-      touch-action: manipulation; /* no double-tap zoom mid-brawl */
+      /* none, not manipulation: a thumb drift while holding a walk button
+         must never become a scroll gesture that cancels the pointer. */
+      touch-action: none;
+      -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
     }
@@ -135,8 +152,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     transition: border-color var(--transition);
   }
   .row input:focus { outline: none; border-color: var(--color-text-muted); }
+  .row input:invalid { border-color: #c0564a; }
   #play-name { width: 9rem; flex: none; }
+  @media (pointer: coarse) {
+    /* 16px minimum: anything smaller makes iOS Safari zoom the page on focus
+       and it never zooms back out after the keyboard closes. */
+    .row input { font-size: 1rem; }
+  }
+  @media (max-width: 700px) {
+    /* Downscaling below 1:1 with nearest-neighbor decimates text strokes;
+       smooth scaling reads far better on small screens. */
+    .canvas { image-rendering: auto; }
+  }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .hint-touch { display: none; }
+  @media (pointer: coarse) {
+    .hint-keys { display: none; }
+    .hint-touch { display: block; }
+  }
   .about { margin-top: var(--space-4); }
   .about summary {
     font-family: var(--font-mono);

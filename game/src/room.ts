@@ -39,9 +39,16 @@ const NAME_BURST = 3;
 // STUN_MS + IMMUNE_MS are mirrored in the client for the tumble and blink.
 const PUNCH_RANGE_X = 30;
 const PUNCH_RANGE_Y = 26;
-const PUNCH_BURST = 12;
+const PUNCH_BURST = 20; // paired with the client's 260ms cooldown
 const STUN_MS = 700;
 const IMMUNE_MS = 1500;
+
+// The honest client sends at most 10 moves/s; the budget leaves headroom for
+// bursts but stops a hostile script from amplifying through the broadcast.
+const MOVE_BURST = 80;
+// Well above the 2-20 design target; insurance against a scripted mass-join
+// (each join costs an O(n) broadcast and a slice of per-connection memory).
+const MAX_PLAYERS = 32;
 
 interface Player {
 	id: string;
@@ -62,6 +69,7 @@ export class Room extends DurableObject<Env> {
 	private emoteTimes = new Map<WebSocket, number[]>();
 	private nameTimes = new Map<WebSocket, number[]>();
 	private punchTimes = new Map<WebSocket, number[]>();
+	private moveTimes = new Map<WebSocket, number[]>();
 	// Transient combat state, by player id. Deliberately not persisted: a room
 	// that hibernated mid-brawl waking up with immunity cleared is harmless.
 	private immuneUntil = new Map<string, number>();
@@ -74,13 +82,18 @@ export class Room extends DurableObject<Env> {
 	}
 
 	async fetch(_request: Request): Promise<Response> {
+		if (this.players.size >= MAX_PLAYERS) {
+			return new Response("Room is full.", { status: 503 });
+		}
 		const [client, server] = Object.values(new WebSocketPair());
 
 		const player: Player = {
 			id: crypto.randomUUID(),
 			name: `guest_${100 + Math.floor(Math.random() * 900)}`,
 			x: 40 + Math.floor(Math.random() * (WORLD.w - 80)),
-			y: 40 + Math.floor(Math.random() * (WORLD.h - 80)),
+			// Spawn strictly above the client's floor line (y=312) so nobody
+			// stands sunk into the ground until their first jump.
+			y: 40 + Math.floor(Math.random() * 240),
 			color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
 		};
 
@@ -121,6 +134,7 @@ export class Room extends DurableObject<Env> {
 
 		if (msg.type === "move") {
 			if (!Number.isFinite(msg.x) || !Number.isFinite(msg.y)) return;
+			if (!this.underLimit(this.moveTimes, ws, MOVE_BURST)) return;
 			// The server owns the truth: positions are clamped, never trusted raw.
 			player.x = clamp(msg.x as number, 0, WORLD.w);
 			player.y = clamp(msg.y as number, 0, WORLD.h);
@@ -157,7 +171,11 @@ export class Room extends DurableObject<Env> {
 				if (other.id === player.id) continue;
 				const dx = other.x - player.x;
 				if (Math.abs(other.y - player.y) > PUNCH_RANGE_Y) continue;
-				if (dx * dir < 4 || Math.abs(dx) > PUNCH_RANGE_X) continue; // behind or too far
+				if (Math.abs(dx) > PUNCH_RANGE_X) continue; // too far
+				// Overlapping players are always hittable; only a target clearly
+				// behind the swing is excluded. Sprites stand inside each other
+				// all the time, and a punch that whiffs at zero range feels broken.
+				if (dx * dir < -6) continue;
 				if ((this.immuneUntil.get(other.id) ?? 0) > now) continue;
 				if (!target || Math.abs(dx) < Math.abs(target.x - player.x)) target = other;
 			}
@@ -194,6 +212,7 @@ export class Room extends DurableObject<Env> {
 		this.emoteTimes.delete(ws);
 		this.nameTimes.delete(ws);
 		this.punchTimes.delete(ws);
+		this.moveTimes.delete(ws);
 		this.immuneUntil.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
 	}
@@ -205,7 +224,10 @@ export class Room extends DurableObject<Env> {
 			try {
 				ws.send(data);
 			} catch {
-				this.players.delete(ws); // socket died before its close event landed
+				// Socket died before its close event landed. Full drop, not a bare
+				// map delete: otherwise no "left" is ever broadcast and every other
+				// client renders a frozen ghost until they refresh.
+				this.drop(ws);
 			}
 		}
 	}

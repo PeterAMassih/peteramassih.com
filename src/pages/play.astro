@@ -45,8 +45,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <p class="hint muted">
       Arrows to walk, Space to jump, Z punches, Enter to chat. E waves, Q sends
-      a heart. Everyone you see is really here.
+      a heart, M mutes.
     </p>
+
+    <details class="about">
+      <summary>what is this?</summary>
+      <p>
+        A tiny multiplayer world. Every character is a live visitor to this
+        site, right now — walk over and say hi, or punch them (they bounce
+        back, no harm done; the blinking means briefly unpunchable). Your
+        browser keeps one WebSocket to a Cloudflare Durable Object that
+        referees the room: it validates every move, punch, and message, and
+        when the room is empty it hibernates and costs nothing. Physics runs
+        in your browser; the server only relays what it believes.
+      </p>
+    </details>
   </main>
 </BaseLayout>
 
@@ -88,4 +101,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .row input:focus { outline: none; border-color: var(--color-text-muted); }
   #play-name { width: 9rem; flex: none; }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .about { margin-top: var(--space-4); }
+  .about summary {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    cursor: pointer;
+    transition: color var(--transition);
+  }
+  .about summary:hover { color: var(--color-text); }
+  .about p {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    max-width: 65ch;
+  }
 </style>

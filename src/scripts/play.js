@@ -36,6 +36,8 @@ const STUN_MS = 700;
 const IMMUNE_MS = 1500;
 const KB_VX = 260; // knockback launch speed, px/s, decaying
 const KB_POP = -220; // the little upward pop on getting hit
+const BURST_MS = 350; // impact starburst lifetime
+const SHAKE_MS = 180; // screen shake after a hit
 const SMOOTH_RATE = 12; // per second: how fast remote sprites chase their target
 const SNAP_DIST = 80; // farther than this is a spawn or teleport, not a walk: snap
 
@@ -58,10 +60,47 @@ let vy = 0; // my vertical speed
 let jumpQueued = false; // jump pressed, consumed by the next frame
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
+let shakeUntil = 0; // screen shake after a nearby hit
+let shakeMag = 0;
 let dirty = false; // my position changed since the last network send
 let last = 0; // previous frame timestamp
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// --- sound ---
+// Synthesized with WebAudio: no files, no bundle weight. Each effect is one
+// or two oscillators with a pitch slide and a fast decay — 8-bit flavored.
+// The context can only start after a user gesture, so it is created (and
+// resumed) from the keydown handler; events before that are just silent.
+let audioCtx = null;
+let muted = localStorage.getItem('play-muted') === '1';
+
+function tone(shape, f0, f1, dur, vol, delay = 0) {
+  const t = audioCtx.currentTime + delay;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = shape;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t);
+  o.stop(t + dur);
+}
+
+function sfx(kind) {
+  if (muted || !audioCtx || audioCtx.state !== 'running') return;
+  if (kind === 'hit') {
+    tone('square', 150, 40, 0.14, 0.1);
+    tone('sawtooth', 90, 28, 0.18, 0.06);
+  } else if (kind === 'swing') {
+    tone('sine', 480, 160, 0.06, 0.025);
+  } else if (kind === 'jump') {
+    tone('square', 200, 420, 0.09, 0.03);
+  }
+}
 
 // --- sprites ---
 // Hand-authored pixel frames, one character per pixel: h hair, s skin, e eyes,
@@ -217,13 +256,19 @@ socket.addEventListener('message', (e) => {
   } else if (msg.type === 'swung') {
     const p = players.get(msg.id);
     if (p) { p.punchUntil = performance.now() + PUNCH_SHOW_MS; p.facing = msg.dir; }
+    sfx('swing');
   } else if (msg.type === 'hit') {
     const now = performance.now();
     const t = players.get(msg.target);
     if (t) {
       t.hurtUntil = now + STUN_MS;
       t.immuneUntil = now + STUN_MS + IMMUNE_MS;
+      // The impact burst lives at the moment of contact, not on a player.
+      effects.push({ kind: 'burst', x: t.rx, y: t.ry - 4, start: now });
     }
+    shakeUntil = now + SHAKE_MS;
+    shakeMag = msg.target === me ? 5 : 2.5;
+    sfx('hit');
     if (msg.target === me) {
       // I got punched: my own physics takes the impulse.
       stunUntil = now + STUN_MS;
@@ -251,10 +296,19 @@ setInterval(() => {
 // --- input ---
 
 window.addEventListener('keydown', (e) => {
+  // Browsers only allow audio after a user gesture; a keypress is one.
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
   const el = document.activeElement;
   if (el && el.tagName === 'INPUT') {
     if (e.key === 'Escape') el.blur();
     return; // typing, not steering
+  }
+  if (e.key === 'm' && !e.repeat) {
+    muted = !muted;
+    localStorage.setItem('play-muted', muted ? '1' : '0');
+    return;
   }
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -345,7 +399,7 @@ function frame(now) {
     }
 
     if (jumpQueued) {
-      if (grounded && !stunned) vy = -JUMP_V;
+      if (grounded && !stunned) { vy = -JUMP_V; sfx('jump'); }
       jumpQueued = false; // consume either way: no buffering jumps mid-air
     }
     if (!grounded || vy < 0) {
@@ -376,8 +430,15 @@ function frame(now) {
 }
 
 function draw() {
+  const now = performance.now();
   ctx.fillStyle = '#16181d';
   ctx.fillRect(0, 0, WORLD.w, WORLD.h);
+
+  // A hit rattles the whole room, briefly. Skipped for reduced-motion users.
+  ctx.save();
+  if (now < shakeUntil && !reducedMotion) {
+    ctx.translate((Math.random() - 0.5) * 2 * shakeMag, (Math.random() - 0.5) * 2 * shakeMag);
+  }
 
   // Faint grid so motion is legible against the flat backdrop.
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
@@ -395,9 +456,9 @@ function draw() {
   ctx.lineTo(WORLD.w, GROUND_Y + 0.5);
   ctx.stroke();
 
-  const now = performance.now();
   for (let i = effects.length - 1; i >= 0; i--) {
-    if (now - effects[i].start > EMOTE_MS) effects.splice(i, 1);
+    const life = effects[i].kind === 'burst' ? BURST_MS : EMOTE_MS;
+    if (now - effects[i].start > life) effects.splice(i, 1);
   }
 
   for (const [id, p] of players) {
@@ -427,6 +488,17 @@ function draw() {
       ctx.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(now / 90));
     }
     ctx.drawImage(img, -SPR_W / 2, -SPR_H / 2);
+    if (frame === 'punch') {
+      // Speed lines off the fist, fading with the swing.
+      const st = 1 - (p.punchUntil - now) / PUNCH_SHOW_MS;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * (1 - st)})`;
+      ctx.beginPath();
+      ctx.moveTo(SPR_W / 2 + 2, -6);
+      ctx.lineTo(SPR_W / 2 + 8 + st * 6, -6);
+      ctx.moveTo(SPR_W / 2 + 3, -1);
+      ctx.lineTo(SPR_W / 2 + 11 + st * 6, -1);
+      ctx.stroke();
+    }
     ctx.restore();
 
     // Your own name reads brighter; that is how you find yourself.
@@ -444,12 +516,45 @@ function draw() {
 
   // Hearts float up over everything, fading as they rise.
   for (const f of effects) {
-    if (f.kind !== 'heart') continue;
-    const p = players.get(f.id);
-    if (!p) continue;
-    const t = (now - f.start) / EMOTE_MS;
-    drawHeart(p.rx, p.ry + SIZE / 2 - SPR_H - 14 - t * 22, 1 - t);
+    if (f.kind === 'heart') {
+      const p = players.get(f.id);
+      if (!p) continue;
+      const t = (now - f.start) / EMOTE_MS;
+      drawHeart(p.rx, p.ry + SIZE / 2 - SPR_H - 14 - t * 22, 1 - t);
+    } else if (f.kind === 'burst') {
+      drawBurst(f.x, f.y, (now - f.start) / BURST_MS);
+    }
   }
+
+  ctx.restore(); // end of shake
+}
+
+function drawBurst(x, y, t) {
+  const spikes = 8;
+  const outer = 10 + t * 16;
+  const inner = outer * 0.45;
+  ctx.save();
+  ctx.globalAlpha = 1 - t;
+  ctx.translate(x, y);
+  ctx.rotate(t * 0.8);
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 ? inner : outer;
+    const a = (i / (spikes * 2)) * Math.PI * 2;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#ffd23f';
+  ctx.fill();
+  ctx.strokeStyle = '#e0930f';
+  ctx.stroke();
+  if (t < 0.6) {
+    ctx.fillStyle = '#a3291f';
+    ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('pow!', 0, 3.5);
+  }
+  ctx.restore();
 }
 
 function drawHeart(x, y, alpha) {

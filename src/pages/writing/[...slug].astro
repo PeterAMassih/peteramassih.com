@@ -39,10 +39,24 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
 </BaseLayout>
 
 <style>
+  /* Prose, the notation table, and math stay at the readable measure and stay
+     aligned; only code blocks and figures break out to --wide-width. */
   .post {
-    max-width: var(--content-width);
+    max-width: var(--wide-width);
     margin: var(--space-24) auto var(--space-16);
     padding: 0 var(--space-4);
+  }
+  .post > header,
+  .body :global(p),
+  .body :global(h2),
+  .body :global(h3),
+  .body :global(ul),
+  .body :global(ol),
+  .body :global(blockquote),
+  .body :global(table),
+  .body :global(.katex-display) {
+    max-width: var(--content-width);
+    margin-inline: auto;
   }
   .post > header { margin-bottom: var(--space-12); }
   .meta {
@@ -63,5 +77,53 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     padding-left: var(--space-4);
     border-left: 2px solid var(--color-border);
     color: var(--color-text-muted);
+  }
+  /* Proof folds: closed by default so the story reads without the machinery.
+     Native details/summary, the marker arrow is the whole affordance. */
+  .body :global(details.proof) {
+    margin-top: var(--space-4);
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border);
+  }
+  .body :global(details.proof summary) {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    transition: color 150ms;
+  }
+  .body :global(details.proof summary:hover) { color: var(--color-text); }
+  /* Wide math and tables scroll inside their own box; the page never
+     scrolls horizontally on narrow screens. */
+  .body :global(.katex-display) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--space-1) 0;
+  }
+  .body :global(table) {
+    display: block;
+    overflow-x: auto;
+    margin-top: var(--space-4);
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .body :global(th), .body :global(td) {
+    padding: var(--space-1) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+  .body :global(figure.viz) { margin: var(--space-8) 0; overflow-x: auto; }
+  .body :global(figure.viz video),
+  .body :global(figure.viz img),
+  .body :global(figure.viz svg) {
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+  }
+  .body :global(figure.viz figcaption) {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    line-height: 1.5;
   }
 </style>

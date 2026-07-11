@@ -35,6 +35,20 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
+/* Inline section cross-references (§8.1, from rehype-section-links) stay in the
+   text color with a faint underline, and only take the accent on hover, so they
+   read as quiet links rather than a field of colored numbers. */
+.section-ref {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 0.15em;
+}
+.section-ref:hover {
+  color: var(--color-accent);
+  text-decoration-color: currentColor;
+}
+
 /* Inline code */
 code {
   font-family: var(--font-mono);
@@ -44,11 +58,13 @@ code {
   border-radius: 3px;
 }
 
-/* Block code (Shiki output wraps in <pre><code>) */
+/* Block code (Shiki output wraps in <pre><code>). copy-code.js wraps each <pre>
+   in a .code-block so the copy button pins to the block while the code scrolls
+   horizontally inside the <pre>. */
+.code-block { position: relative; }
 pre {
-  position: relative;
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: 0.9375rem; /* 15px, roomier than body-sm for code */
   background: var(--color-code-bg);
   padding: var(--space-4);
   border-radius: 6px;
@@ -78,13 +94,19 @@ pre code {
   transition: opacity var(--transition), color var(--transition);
 }
 
-pre:hover .copy-btn,
+.code-block:hover .copy-btn,
 .copy-btn:focus-visible { opacity: 1; }
 
 .copy-btn:hover { color: var(--color-text); }
 
 /* Muted text helper */
 .muted {
+  color: var(--color-text-muted);
+}
+
+/* A post's opening paragraph reads as a summary: muted, but the same size and
+   flow as the body (no quote block). */
+.body > p:first-child {
   color: var(--color-text-muted);
 }
 

@@ -4,6 +4,7 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeSectionLinks from './src/plugins/rehype-section-links.mjs';
 
 import cloudflare from '@astrojs/cloudflare';
 
@@ -17,13 +18,15 @@ export default defineConfig({
 
   markdown: {
     remarkPlugins: [remarkMath],
-    rehypePlugins: [rehypeKatex],
+    rehypePlugins: [rehypeSectionLinks, rehypeKatex],
     shikiConfig: {
       themes: {
         light: 'github-light',
         dark: 'github-dark',
       },
-      wrap: true,
+      // Long lines scroll horizontally instead of wrapping, so code
+      // indentation stays intact (wrapping folds lines to the left margin).
+      wrap: false,
     },
   },
 

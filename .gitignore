@@ -4,7 +4,7 @@ dist/
 .astro/
 
 # dependencies
-node_modules/
+node_modules
 
 # logs
 npm-debug.log*
@@ -34,3 +34,4 @@ dist/
 !.dev.vars.example
 !.env.example
 worker-configuration.d.ts
+.claude/

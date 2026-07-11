@@ -976,8 +976,8 @@ function drawHangman(h) {
   if (h.last) {
     ctx.font = '10px ui-monospace, monospace';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    const verdict = h.last.won ? 'solved by' : 'escaped from';
-    ctx.fillText(`${h.last.word} ${verdict} ${h.last.name}`, 470, 130);
+    const verdict = h.last.won ? 'solved by' : 'fumbled by';
+    ctx.fillText(`last word ${verdict} ${h.last.name}`, 470, 130);
   }
 
   // The gallows assembles one miss at a time; the little pixel person last.

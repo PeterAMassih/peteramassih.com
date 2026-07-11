@@ -61,7 +61,7 @@ interface Hang {
 	found: string; // letters guessed right
 	wrongL: string; // letters guessed wrong, for display
 	misses: number; // wrong letters plus failed word attempts
-	last: { name: string; word: string; won: boolean } | null;
+	last: { name: string; won: boolean } | null;
 }
 
 // The crown needs no tick: a pickup is a move, a drop is a hit or a leave.
@@ -254,7 +254,9 @@ export class Room extends DurableObject<Env> {
 			wrongL: h.wrongL,
 			misses: h.misses,
 			lives: HANG_LIVES,
-			last: h.last,
+			// Projected, not passed through: rounds persisted before the word
+			// was dropped from the verdict still carry it in storage.
+			last: h.last ? { name: h.last.name, won: h.last.won } : null,
 		};
 	}
 
@@ -278,7 +280,7 @@ export class Room extends DurableObject<Env> {
 		let event = "guess";
 		if (solved || failed) {
 			event = solved ? "solve" : "fail";
-			h.last = { name: player.name, word: h.word, won: solved };
+			h.last = { name: player.name, won: solved };
 			h.word = this.newWord(h.word);
 			h.found = "";
 			h.wrongL = "";

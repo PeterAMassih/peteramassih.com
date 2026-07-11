@@ -76,9 +76,11 @@ for (const c of "abcdefghijklmnopqrstuvwxyz") {
   ended = hangs(B).find((m) => m.event === "solve" || m.event === "fail");
   if (ended) break;
 }
-ok(ended, `the round ended (${ended?.event}: ${ended?.state.last?.word})`);
+ok(ended, `the round ended (${ended?.event} by ${ended?.state.last?.name})`);
 ok(ended.state.last && typeof ended.state.last.won === "boolean",
   "the outcome is recorded with a verdict");
+ok(!("word" in ended.state.last),
+  "the word itself never leaves the server, even after the round");
 ok(!ended.state.masked.replace(/_/g, "").length && ended.state.misses === 0,
   "a fresh word is already waiting");
 

@@ -18,6 +18,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <canvas id="play-canvas" class="canvas" width="640" height="360" aria-label="Shared pixel world"></canvas>
 
     <p class="meta" aria-live="polite">
+      <span id="play-room">…</span> ·
       status: <span id="play-status">connecting…</span> ·
       here now: <span id="play-count">–</span>
     </p>
@@ -66,10 +67,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <p class="hint hint-keys muted">
       Arrows to walk, Space to jump, Z punches, Enter to chat. E waves, Q sends
-      a heart, M mutes.
+      a heart, M mutes. Doors at the edges lead to other rooms.
     </p>
     <p class="hint hint-touch muted">
       Walk, jump, and punch with the buttons. Tap the field below to chat.
+      Doors at the edges lead to other rooms.
     </p>
 
     <details class="about">

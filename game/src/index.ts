@@ -1,6 +1,6 @@
 // game/src/index.ts
-// Thin front door: upgrade the WebSocket and hand the visitor to the room.
-import { Room } from "./room";
+// Thin front door: upgrade the WebSocket and hand the visitor to their room.
+import { Room, ROOM_NAMES } from "./room";
 
 export { Room };
 
@@ -33,7 +33,10 @@ export default {
 		if (!originAllowed(request.headers.get("Origin"))) {
 			return new Response("Forbidden origin.", { status: 403 });
 		}
-		// Every visitor lands in the same world for v0. More named rooms later.
-		return env.ROOM.get(env.ROOM.idFromName("main")).fetch(request);
+		// One Durable Object per room, picked by name. Unknown names fall back
+		// to the plaza rather than minting objects for arbitrary strings.
+		const wanted = new URL(request.url).searchParams.get("room") ?? "plaza";
+		const room = (ROOM_NAMES as readonly string[]).includes(wanted) ? wanted : "plaza";
+		return env.ROOM.get(env.ROOM.idFromName(room)).fetch(request);
 	},
 } satisfies ExportedHandler<Env>;

@@ -7,6 +7,18 @@ import { DurableObject } from "cloudflare:workers";
 // both sides rather than a shared package: two deploy targets, one line each.
 const WORLD = { w: 640, h: 360 };
 
+// Every room is one instance of this class, picked by name in the Worker.
+// The server owns the rules (gravity is echoed to clients, brawl is enforced
+// here); looks and doors live client-side. Unknown names never reach us —
+// the Worker whitelists against this same list.
+export const ROOM_NAMES = ["plaza", "arena", "library", "moon"] as const;
+const ROOM_RULES: Record<string, { gravity: number; brawl: boolean }> = {
+	plaza: { gravity: 1, brawl: true },
+	arena: { gravity: 1, brawl: true },
+	library: { gravity: 1, brawl: false }, // the quiet room
+	moon: { gravity: 0.35, brawl: true }, // jump like it matters
+};
+
 const PALETTE = [
 	"#e6482e", // red
 	"#3b82c4", // blue
@@ -63,6 +75,10 @@ export class Room extends DurableObject<Env> {
 	// their socket via serializeAttachment, so a room woken from hibernation can
 	// rebuild everything from the sockets the runtime kept open for it.
 	private players = new Map<WebSocket, Player>();
+	// Which room this object is. First use of durable storage: derived from
+	// the URL on first join, persisted, and reloaded after hibernation — the
+	// punch handler needs the rules even when the wake-up event is a message.
+	private roomName: string | null = null;
 	// Chat and emote timestamps per socket, for rate limiting. Deliberately not
 	// in the attachment: losing them across hibernation just grants a fresh burst.
 	private chatTimes = new Map<WebSocket, number[]>();
@@ -79,11 +95,22 @@ export class Room extends DurableObject<Env> {
 		for (const ws of ctx.getWebSockets()) {
 			this.players.set(ws, ws.deserializeAttachment() as Player);
 		}
+		ctx.blockConcurrencyWhile(async () => {
+			this.roomName = ((await ctx.storage.get("room")) as string | undefined) ?? null;
+		});
 	}
 
-	async fetch(_request: Request): Promise<Response> {
+	private get rules() {
+		return ROOM_RULES[this.roomName ?? "plaza"] ?? ROOM_RULES.plaza;
+	}
+
+	async fetch(request: Request): Promise<Response> {
 		if (this.players.size >= MAX_PLAYERS) {
 			return new Response("Room is full.", { status: 503 });
+		}
+		if (!this.roomName) {
+			this.roomName = new URL(request.url).searchParams.get("room") ?? "plaza";
+			void this.ctx.storage.put("room", this.roomName);
 		}
 		const [client, server] = Object.values(new WebSocketPair());
 
@@ -105,7 +132,14 @@ export class Room extends DurableObject<Env> {
 		this.players.set(server, player);
 
 		server.send(
-			JSON.stringify({ type: "init", id: player.id, players: [...this.players.values()] }),
+			JSON.stringify({
+				type: "init",
+				id: player.id,
+				room: this.roomName,
+				gravity: this.rules.gravity,
+				brawl: this.rules.brawl,
+				players: [...this.players.values()],
+			}),
 		);
 		this.broadcast({ type: "joined", player }, server);
 
@@ -159,6 +193,7 @@ export class Room extends DurableObject<Env> {
 			ws.serializeAttachment(player); // renames survive hibernation too
 			this.broadcast({ type: "named", id: player.id, name: player.name });
 		} else if (msg.type === "punch") {
+			if (!this.rules.brawl) return; // the quiet room stays quiet
 			const dir = msg.facing === -1 ? -1 : 1;
 			if (!this.underLimit(this.punchTimes, ws, PUNCH_BURST)) return;
 			// Everyone sees the swing, hit or miss.

@@ -14,9 +14,38 @@ const GROUND_Y = 320; // top of the floor
 const GRAVITY = 1400; // px/s^2
 const JUMP_V = 520; // initial upward speed; ~96px apex, ~0.74s of air
 
-const SOCKET_URL = import.meta.env.DEV
+const SOCKET_BASE = import.meta.env.DEV
   ? 'ws://localhost:8787'
   : 'wss://peteramassih-play.peteramassih.workers.dev';
+
+// The world map. Rules (gravity, brawl) come from the server's init message;
+// this table owns the looks and the doors. Each room is its own Durable
+// Object — walking through a door is a reconnect to a different one.
+const ROOMS = {
+  plaza: {
+    label: 'the plaza', bg: '#16181d', floor: '#1c1f26',
+    doors: { left: 'library', right: 'arena' },
+  },
+  library: {
+    label: 'the library', bg: '#191512', floor: '#282013',
+    doors: { right: 'plaza' }, quiet: true,
+  },
+  arena: {
+    label: 'the arena', bg: '#1a1417', floor: '#291a1e',
+    doors: { left: 'plaza', right: 'moon' },
+  },
+  moon: {
+    label: 'the moon', bg: '#0d1020', floor: '#2a2d3c', stars: true,
+    doors: { left: 'arena' },
+  },
+};
+const DOOR_TRIGGER = 18; // world-x within which a door takes you
+// Fixed constellation for the moon room; random stars would shimmer per frame.
+const STARS = [
+  [40, 30], [95, 70], [150, 25], [210, 90], [265, 45], [320, 20], [370, 75],
+  [430, 40], [480, 95], [540, 30], [590, 65], [625, 15], [70, 130], [180, 150],
+  [300, 125], [420, 160], [520, 140], [610, 170], [130, 200], [560, 210],
+];
 
 // All lookups go through e.key.toLowerCase(): otherwise releasing a key
 // while Shift is down (or with CapsLock on) delivers 'A' where 'a' was
@@ -48,12 +77,16 @@ const SNAP_DIST = 80; // farther than this is a spawn or teleport, not a walk: s
 const canvas = document.getElementById('play-canvas');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('play-status');
+const roomEl = document.getElementById('play-room');
 const countEl = document.getElementById('play-count');
 const chatForm = document.getElementById('play-chat-form');
 const chatInput = document.getElementById('play-chat');
 const nameInput = document.getElementById('play-name');
 const touchPad = document.getElementById('play-touch');
 
+let room = ROOMS[location.hash.slice(1)] ? location.hash.slice(1) : 'plaza';
+let gravityScale = 1; // from the server's init: the moon is a different place
+let switching = false; // mid-door: old socket closing, new one connecting
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
 // sprites ease rx/ry toward x/y so 10 Hz updates read as walking, not teleports.
@@ -236,23 +269,61 @@ function sprite(color, frame) {
 }
 
 // --- socket ---
+// One connection per room; walking through a door closes it and opens the
+// next. Stale-socket events are ignored via the e.target !== socket guard.
 
-const socket = new WebSocket(SOCKET_URL);
+let socket = null;
 
-socket.addEventListener('open', () => {
-  statusEl.textContent = 'connected';
-  // Reclaim the identity from the last visit, if any.
-  const stored = nameInput.value.trim();
-  if (stored) socket.send(JSON.stringify({ type: 'name', name: stored }));
-});
-socket.addEventListener('close', () => { statusEl.textContent = 'disconnected — refresh to rejoin'; });
+function connect(enterFrom) {
+  socket = new WebSocket(`${SOCKET_BASE}/?room=${room}`);
 
-socket.addEventListener('message', (e) => {
-  const msg = JSON.parse(e.data);
+  socket.addEventListener('open', (e) => {
+    if (e.target !== socket) return;
+    statusEl.textContent = 'connected';
+    // Reclaim the identity from the last visit, if any.
+    const stored = nameInput.value.trim();
+    if (stored) socket.send(JSON.stringify({ type: 'name', name: stored }));
+  });
+  socket.addEventListener('close', (e) => {
+    if (e.target !== socket) return;
+    statusEl.textContent = 'disconnected — refresh to rejoin';
+  });
+  socket.addEventListener('message', (e) => {
+    if (e.target !== socket) return;
+    onMessage(JSON.parse(e.data), enterFrom);
+  });
+}
+
+function switchRoom(target, enterFrom) {
+  if (switching) return;
+  switching = true;
+  socket.close();
+  players.clear();
+  bubbles.clear();
+  effects.length = 0;
+  me = null;
+  held.clear();
+  kbVx = 0;
+  room = target;
+  history.replaceState(null, '', '#' + target);
+  connect(enterFrom);
+}
+
+function onMessage(msg, enterFrom) {
   if (msg.type === 'init') {
     me = msg.id;
+    switching = false;
+    gravityScale = msg.gravity ?? 1;
+    roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     players.clear();
     for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
+    // Coming through a door: appear beside it, not at a random spawn.
+    const self = players.get(me);
+    if (self && enterFrom) {
+      self.x = enterFrom === 'right' ? WORLD.w - 44 : 44;
+      self.rx = self.x;
+      dirty = true;
+    }
   } else if (msg.type === 'joined') {
     const p = msg.player;
     players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
@@ -293,13 +364,16 @@ socket.addEventListener('message', (e) => {
     bubbles.delete(msg.id);
   }
   countEl.textContent = players.size;
-});
+}
+
+connect(null);
 
 // Only send while actually moving: an idle tab sends nothing, so an idle
 // room can hibernate — that is what keeps the server free.
 setInterval(() => {
   if (!dirty || socket.readyState !== WebSocket.OPEN) return;
   const self = players.get(me);
+  if (!self) return;
   socket.send(JSON.stringify({ type: 'move', x: self.x, y: self.y }));
   dirty = false;
 }, 1000 / SEND_HZ);
@@ -473,10 +547,17 @@ function frame(now) {
       jumpQueued = false; // consume either way: no buffering jumps mid-air
     }
     if (!grounded || vy < 0) {
-      vy += GRAVITY * dt;
+      vy += GRAVITY * gravityScale * dt; // the moon says 0.35
       self.y = Math.max(self.y + vy * dt, SIZE / 2);
       if (self.y >= floor) { self.y = floor; vy = 0; } // landed
       dirty = true;
+    }
+
+    // Doors: reach the edge of the world and you are somewhere else.
+    if (!switching) {
+      const doors = ROOMS[room].doors;
+      if (doors.left && self.x <= DOOR_TRIGGER) switchRoom(doors.left, 'right');
+      else if (doors.right && self.x >= WORLD.w - DOOR_TRIGGER) switchRoom(doors.right, 'left');
     }
   }
 
@@ -501,13 +582,19 @@ function frame(now) {
 
 function draw() {
   const now = performance.now();
-  ctx.fillStyle = '#16181d';
+  const look = ROOMS[room];
+  ctx.fillStyle = look.bg;
   ctx.fillRect(0, 0, WORLD.w, WORLD.h);
 
   // A hit rattles the whole room, briefly. Skipped for reduced-motion users.
   ctx.save();
   if (now < shakeUntil && !reducedMotion) {
     ctx.translate((Math.random() - 0.5) * 2 * shakeMag, (Math.random() - 0.5) * 2 * shakeMag);
+  }
+
+  if (look.stars) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    for (const [sx, sy] of STARS) ctx.fillRect(sx, sy, 2, 2);
   }
 
   // Faint grid so motion is legible against the flat backdrop.
@@ -518,13 +605,17 @@ function draw() {
   ctx.stroke();
 
   // The floor.
-  ctx.fillStyle = '#1c1f26';
+  ctx.fillStyle = look.floor;
   ctx.fillRect(0, GROUND_Y, WORLD.w, WORLD.h - GROUND_Y);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
   ctx.beginPath();
   ctx.moveTo(0, GROUND_Y + 0.5);
   ctx.lineTo(WORLD.w, GROUND_Y + 0.5);
   ctx.stroke();
+
+  // Doors to neighboring rooms, at the world's edges.
+  if (look.doors.left) drawDoor(4, look.doors.left);
+  if (look.doors.right) drawDoor(WORLD.w - 26, look.doors.right);
 
   for (let i = effects.length - 1; i >= 0; i--) {
     const life = effects[i].kind === 'burst' ? BURST_MS : EMOTE_MS;
@@ -608,6 +699,20 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
+}
+
+function drawDoor(x, target) {
+  const h = 46;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(x, GROUND_Y - h, 22, h);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.strokeRect(x + 0.5, GROUND_Y - h + 0.5, 21, h - 1);
+  ctx.fillStyle = 'rgba(255, 210, 63, 0.8)'; // a lit doorknob, so it reads as a door
+  ctx.fillRect(x + (x < WORLD.w / 2 ? 16 : 3), GROUND_Y - 22, 3, 3);
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.fillText(target, x + 11, GROUND_Y - h - 6);
 }
 
 function drawBurst(x, y, t) {

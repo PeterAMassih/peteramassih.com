@@ -239,9 +239,15 @@ export class Room extends DurableObject<Env> {
 	async fetch(request: Request): Promise<Response> {
 		// Anything that is not a socket upgrade is a presence ping. Answered
 		// before any join state is touched, so a count can never mis-name a
-		// fresh room or mint a crown.
+		// fresh room or mint a crown. Race rooms also volunteer their record:
+		// an empty world with a standing record is a challenge, not a void.
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-			return Response.json({ count: this.players.size });
+			const record = this.rules.race
+				? ((this.ctx.storage.sql
+						.exec("SELECT ms FROM races ORDER BY ms ASC LIMIT 1")
+						.toArray()[0]?.ms as number | undefined) ?? null)
+				: null;
+			return Response.json({ count: this.players.size, record });
 		}
 		if (this.players.size >= MAX_PLAYERS) {
 			return new Response("Room is full.", { status: 503 });

@@ -10,9 +10,16 @@ const invite = document.getElementById('play-invite');
 if (invite) {
   fetch(PRESENCE_URL)
     .then((r) => r.json())
-    .then(({ count }) => {
-      if (count === 1) invite.textContent = '1 person is in the tiny world on this site right now →';
-      else if (count > 1) invite.textContent = `${count} people are in the tiny world on this site right now →`;
+    .then(({ count, record }) => {
+      if (count === 1) {
+        invite.textContent = '1 person is in the tiny world on this site right now →';
+      } else if (count > 1) {
+        invite.textContent = `${count} people are in the tiny world on this site right now →`;
+      } else if (record) {
+        // Nobody inside, but the world has history: issue the challenge.
+        invite.textContent =
+          `There is a tiny world hiding on this site. Someone ran the moon in ${(record / 1000).toFixed(2)}s →`;
+      }
     })
     .catch(() => {});
 }

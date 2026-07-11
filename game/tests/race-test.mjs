@@ -67,7 +67,12 @@ const onBoard = f2.top.find((r) => r.name === "runner");
 // invariant is: never worse than any run we just witnessed.
 ok(onBoard && onBoard.ms <= bestMs, "the board keeps the best time, not the last");
 
-// 4. The plaza has no stopwatch.
+// 4. The presence endpoint volunteers the moon record for the homepage.
+const p = await (await fetch(`${SECURE ? "https" : "http"}://${HOST}/presence`)).json();
+ok(Number.isInteger(p.record) && p.record <= bestMs,
+  `presence carries the moon record (${p.record}ms)`);
+
+// 5. The plaza has no stopwatch.
 const P = await connect("plaza");
 await sleep(300);
 P.send({ type: "move", ...START });

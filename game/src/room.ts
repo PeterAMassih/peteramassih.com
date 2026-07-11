@@ -14,13 +14,24 @@ const WORLD = { w: 640, h: 360 };
 export const ROOM_NAMES = ["plaza", "arena", "library", "moon"] as const;
 const ROOM_RULES: Record<
 	string,
-	{ gravity: number; brawl: boolean; kb: number; marks: boolean }
+	{ gravity: number; brawl: boolean; kb: number; marks: boolean; crown: boolean }
 > = {
-	plaza: { gravity: 1, brawl: true, kb: 1, marks: false },
-	arena: { gravity: 1, brawl: true, kb: 1.6, marks: false }, // hits launch you
-	library: { gravity: 1, brawl: false, kb: 1, marks: true }, // quiet; the guestbook
-	moon: { gravity: 0.35, brawl: true, kb: 1, marks: false }, // low-g comedy
+	plaza: { gravity: 1, brawl: true, kb: 1, marks: false, crown: false },
+	arena: { gravity: 1, brawl: true, kb: 1.6, marks: false, crown: true }, // king of the hill
+	library: { gravity: 1, brawl: false, kb: 1, marks: true, crown: false }, // the guestbook
+	moon: { gravity: 0.35, brawl: true, kb: 1, marks: false, crown: false }, // low-g comedy
 };
+
+// The crown needs no tick: a pickup is a move, a drop is a hit or a leave.
+// It rests on the arena's high platform (the client knows the geometry).
+const CROWN_SPAWN = { x: 320, y: 177 };
+const CROWN_REACH = { x: 20, y: 26 };
+
+interface Crown {
+	wearer: string | null;
+	x: number;
+	y: number;
+}
 
 // The guestbook: one mark per visitor per room (writing again replaces your
 // old one), capped at 500 with the oldest pruned — self-cleaning by design.
@@ -95,6 +106,7 @@ export class Room extends DurableObject<Env> {
 	// the URL on first join, persisted, and reloaded after hibernation — the
 	// punch handler needs the rules even when the wake-up event is a message.
 	private roomName: string | null = null;
+	private crown: Crown | null = null;
 	// Chat and emote timestamps per socket, for rate limiting. Deliberately not
 	// in the attachment: losing them across hibernation just grants a fresh burst.
 	private chatTimes = new Map<WebSocket, number[]>();
@@ -116,10 +128,21 @@ export class Room extends DurableObject<Env> {
 		}
 		ctx.blockConcurrencyWhile(async () => {
 			this.roomName = ((await ctx.storage.get("room")) as string | undefined) ?? null;
+			this.crown = ((await ctx.storage.get("crown")) as Crown | undefined) ?? null;
+			// A wearer who vanished while the room slept forfeits: back to the spawn.
+			if (this.crown?.wearer && ![...this.players.values()].some((p) => p.id === this.crown?.wearer)) {
+				this.crown = { wearer: null, ...CROWN_SPAWN };
+			}
 			ctx.storage.sql.exec(
 				"CREATE TABLE IF NOT EXISTS marks (vid TEXT PRIMARY KEY, name TEXT, text TEXT, x REAL, ts INTEGER)",
 			);
 		});
+	}
+
+	private setCrown(crown: Crown): void {
+		this.crown = crown;
+		void this.ctx.storage.put("crown", crown);
+		this.broadcast({ type: "crown", crown });
 	}
 
 	// One attachment shape everywhere: the broadcastable player plus the
@@ -140,6 +163,10 @@ export class Room extends DurableObject<Env> {
 		if (!this.roomName) {
 			this.roomName = url.searchParams.get("room") ?? "plaza";
 			void this.ctx.storage.put("room", this.roomName);
+		}
+		if (this.rules.crown && !this.crown) {
+			this.crown = { wearer: null, ...CROWN_SPAWN };
+			void this.ctx.storage.put("crown", this.crown);
 		}
 		const [client, server] = Object.values(new WebSocketPair());
 
@@ -194,6 +221,7 @@ export class Room extends DurableObject<Env> {
 				gravity: this.rules.gravity,
 				brawl: this.rules.brawl,
 				kb: this.rules.kb,
+				crown: this.crown,
 				marksOn: this.rules.marks,
 				marks: this.rules.marks
 					? this.ctx.storage.sql
@@ -236,6 +264,15 @@ export class Room extends DurableObject<Env> {
 			player.y = clamp(msg.y as number, 0, WORLD.h);
 			this.attach(ws, player); // keep the durable copy current for wake-ups
 			this.broadcast({ type: "moved", id: player.id, x: player.x, y: player.y }, ws);
+			// Walking into the lying crown picks it up. A move is the only way
+			// to reach it, so pickup needs no clock of its own.
+			if (
+				this.crown && !this.crown.wearer &&
+				Math.abs(player.x - this.crown.x) < CROWN_REACH.x &&
+				Math.abs(player.y - this.crown.y) < CROWN_REACH.y
+			) {
+				this.setCrown({ wearer: player.id, x: 0, y: 0 });
+			}
 		} else if (msg.type === "chat") {
 			if (typeof msg.text !== "string") return;
 			const text = msg.text.trim().slice(0, CHAT_MAX_LEN);
@@ -298,6 +335,14 @@ export class Room extends DurableObject<Env> {
 			if (target) {
 				this.immuneUntil.set(target.id, now + STUN_MS + IMMUNE_MS);
 				this.broadcast({ type: "hit", attacker: player.id, target: target.id, dir });
+				// The crown is held only as long as you can defend it.
+				if (this.crown?.wearer === target.id) {
+					this.setCrown({
+						wearer: null,
+						x: clamp(target.x + dir * 36, 20, WORLD.w - 20),
+						y: 312, // it falls to the floor; the client draws it there
+					});
+				}
 			}
 		}
 	}
@@ -353,6 +398,10 @@ export class Room extends DurableObject<Env> {
 		this.markTimes.delete(ws);
 		this.immuneUntil.delete(player.id);
 		this.broadcast({ type: "left", id: player.id });
+		// A wearer who walks out (or drops) leaves the crown behind.
+		if (this.crown?.wearer === player.id) {
+			this.setCrown({ wearer: null, x: clamp(player.x, 20, WORLD.w - 20), y: 312 });
+		}
 	}
 
 	private broadcast(msg: object, except?: WebSocket): void {

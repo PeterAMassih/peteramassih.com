@@ -25,18 +25,24 @@ const ROOMS = {
   plaza: {
     label: 'the plaza', bg: '#16181d', floor: '#1c1f26',
     doors: { left: 'library', right: 'arena' },
+    platforms: [{ x: 120, y: 268, w: 100 }, { x: 420, y: 268, w: 100 }, { x: 270, y: 208, w: 100 }],
   },
   library: {
     label: 'the library', bg: '#191512', floor: '#282013',
     doors: { right: 'plaza' }, quiet: true,
+    platforms: [{ x: 80, y: 263, w: 90 }, { x: 250, y: 210, w: 100 }, { x: 430, y: 263, w: 90 }],
   },
   arena: {
     label: 'the arena', bg: '#1a1417', floor: '#291a1e',
     doors: { left: 'plaza', right: 'moon' },
+    // The high center platform is the hill; the crown spawns on it.
+    platforms: [{ x: 60, y: 258, w: 120 }, { x: 460, y: 258, w: 120 }, { x: 250, y: 185, w: 140 }],
   },
   moon: {
     label: 'the moon', bg: '#0d1020', floor: '#2a2d3c', stars: true,
     doors: { left: 'arena' },
+    // Spaced for 0.35 gravity: unreachable anywhere else, easy here.
+    platforms: [{ x: 90, y: 225, w: 80 }, { x: 290, y: 150, w: 90 }, { x: 500, y: 225, w: 80 }],
   },
 };
 const DOOR_TRIGGER = 18; // world-x within which a door takes you
@@ -108,6 +114,9 @@ let marks = []; // the guestbook wall: { name, text, x, ts }, newest first
 const held = new Set(); // movement keys currently down
 let vy = 0; // my vertical speed
 let jumpQueued = false; // jump pressed, consumed by the next frame
+let dropQueued = false; // down pressed: fall through the platform you stand on
+let dropUntil = 0; // while set, platforms do not catch you
+let crown = null; // { wearer, x, y } — only rooms that have one send it
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
 let shakeUntil = 0; // screen shake after a nearby hit
@@ -117,6 +126,16 @@ let last = 0; // previous frame timestamp
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// True when the sprite has support underneath: the floor, or a platform top
+// it is exactly standing on (unless it is deliberately dropping through).
+function standingOn(self, plats, floor, dropping) {
+  if (self.y >= floor) return true;
+  if (dropping) return false;
+  return plats.some((pl) =>
+    Math.abs(self.y - (pl.y - SIZE / 2)) < 0.6 &&
+    self.x > pl.x - 8 && self.x < pl.x + pl.w + 8);
+}
 
 // --- sound ---
 // Synthesized with WebAudio: no files, no bundle weight. Each effect is one
@@ -155,6 +174,11 @@ function sfx(kind) {
     tone('sine', 480, 160, 0.06, 0.025);
   } else if (kind === 'jump') {
     tone('square', 200, 420, 0.09, 0.03);
+  } else if (kind === 'crown') {
+    tone('square', 520, 1040, 0.12, 0.05);
+    tone('square', 780, 1560, 0.12, 0.04, 0.08);
+  } else if (kind === 'uncrown') {
+    tone('square', 700, 180, 0.2, 0.05);
   }
 }
 
@@ -334,6 +358,7 @@ function onMessage(msg, enterFrom) {
     roomKb = msg.kb ?? 1;
     marks = msg.marks ?? [];
     roomMarks = msg.marksOn ?? false;
+    crown = msg.crown ?? null;
     roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
     chatInput.placeholder = roomMarks
       ? 'say something… (/mark writes on the wall)'
@@ -365,6 +390,11 @@ function onMessage(msg, enterFrom) {
   } else if (msg.type === 'named') {
     const p = players.get(msg.id);
     if (p) p.name = msg.name;
+  } else if (msg.type === 'crown') {
+    const wore = crown?.wearer;
+    crown = msg.crown;
+    if (crown?.wearer && !wore) sfx('crown');
+    else if (!crown?.wearer && wore) sfx('uncrown');
   } else if (msg.type === 'marked') {
     // The server upserts by visitor; mirror that by name so re-marking
     // moves your line instead of duplicating it.
@@ -453,7 +483,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (key === 'arrowdown' || key === 's') {
-    e.preventDefault(); // nothing yet, but keep the page from scrolling
+    e.preventDefault(); // also: down-arrow would scroll the page
+    if (!e.repeat) dropQueued = true; // step down through a platform
     return;
   }
   const dir = KEYS[key];
@@ -572,8 +603,11 @@ function frame(now) {
   const self = me && players.get(me);
   if (self) {
     const floor = GROUND_Y - SIZE / 2; // sprite center when standing
-    const grounded = self.y >= floor;
-    const stunned = performance.now() < stunUntil;
+    const plats = ROOMS[room].platforms ?? [];
+    const nowMs = performance.now();
+    const dropping = nowMs < dropUntil;
+    const grounded = standingOn(self, plats, floor, dropping);
+    const stunned = nowMs < stunUntil;
 
     const dx = stunned ? 0 : (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
     if (dx) {
@@ -596,9 +630,27 @@ function frame(now) {
       if (grounded && !stunned) { vy = -JUMP_V; sfx('jump'); }
       jumpQueued = false; // consume either way: no buffering jumps mid-air
     }
+    if (dropQueued) {
+      // Standing on a platform (not the floor): step off through it.
+      if (grounded && self.y < floor - 1) { dropUntil = nowMs + 180; vy = Math.max(vy, 40); }
+      dropQueued = false;
+    }
     if (!grounded || vy < 0) {
       vy += GRAVITY * gravityScale * dt; // the moon says 0.35
-      self.y = Math.max(self.y + vy * dt, SIZE / 2);
+      const prevY = self.y;
+      let ny = Math.max(prevY + vy * dt, SIZE / 2);
+      // One-way platforms: they only catch a body falling onto their top.
+      if (vy > 0 && !dropping) {
+        for (const pl of plats) {
+          const top = pl.y - SIZE / 2;
+          if (prevY <= top && ny >= top && self.x > pl.x - 8 && self.x < pl.x + pl.w + 8) {
+            ny = top;
+            vy = 0;
+            break;
+          }
+        }
+      }
+      self.y = ny;
       if (self.y >= floor) { self.y = floor; vy = 0; } // landed
       dirty = true;
     }
@@ -677,9 +729,24 @@ function draw() {
   ctx.lineTo(WORLD.w, GROUND_Y + 0.5);
   ctx.stroke();
 
+  // Platforms: one-way ledges, lit along their walkable top.
+  for (const pl of look.platforms ?? []) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.fillRect(pl.x, pl.y, pl.w, 8);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillRect(pl.x, pl.y, pl.w, 1.5);
+  }
+
   // Doors to neighboring rooms, at the world's edges.
   if (look.doors.left) drawDoor(4, look.doors.left);
   if (look.doors.right) drawDoor(WORLD.w - 26, look.doors.right);
+
+  // The crown, lying in wait. (On a head it is drawn with its wearer below.)
+  if (crown && !crown.wearer) {
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(now / 300);
+    drawCrown(crown.x, crown.y + SIZE / 2);
+    ctx.globalAlpha = 1;
+  }
 
   for (let i = effects.length - 1; i >= 0; i--) {
     const life = effects[i].kind === 'burst' ? BURST_MS : EMOTE_MS;
@@ -726,6 +793,8 @@ function draw() {
     }
     ctx.restore();
 
+    if (crown?.wearer === id) drawCrown(p.rx, feetY - SPR_H - 1);
+
     // Your own name reads brighter; that is how you find yourself.
     // 12px, not 10: the canvas downscales to ~0.54x on phones.
     ctx.font = '12px ui-monospace, monospace';
@@ -763,6 +832,14 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
+}
+
+function drawCrown(x, baseY) {
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillRect(x - 5, baseY - 3, 10, 3);
+  ctx.fillRect(x - 5, baseY - 6, 2, 3);
+  ctx.fillRect(x - 1, baseY - 6, 2, 3);
+  ctx.fillRect(x + 3, baseY - 6, 2, 3);
 }
 
 function drawDoor(x, target) {

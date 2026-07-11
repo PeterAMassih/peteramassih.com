@@ -27,8 +27,10 @@ import os as _os
 
 import manimpango as _manimpango
 
-_font_path = _os.path.join(_os.path.dirname(__file__), "fonts",
-                           "Geist-Regular.ttf")
+_font_path = _os.environ.get(
+    "M2F_FONT_PATH",
+    _os.path.join(_os.path.dirname(__file__), "fonts", "Geist-Regular.ttf"),
+)
 _manimpango.register_font(_font_path)
 
 # Thin strokes match the site's restraint: 2-3 px at 1080p.

@@ -8,7 +8,8 @@
 		"binding": "ASSETS"
 	},
 	"kv_namespaces": [
-		{ "binding": "SESSION", "id": "832ff165911d4f6e8b7477ccb78cfb66" }
+		{ "binding": "SESSION", "id": "832ff165911d4f6e8b7477ccb78cfb66" },
+		{ "binding": "LIKES", "id": "c89486e662ca4884b64d18ad76bd860a" }
 	],
 	"observability": {
 		"enabled": true

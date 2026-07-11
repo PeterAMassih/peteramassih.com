@@ -1,0 +1,79 @@
+---
+// src/components/LikeButton.astro
+// One-way thumbs-up for a post, counted by /api/likes. localStorage remembers
+// a browser's like, which is honest enough for a blog. Starts disabled and
+// empty; without JavaScript it stays a quiet dot of UI that does nothing.
+type Props = { slug: string };
+const { slug } = Astro.props;
+---
+
+<button class="like" data-slug={slug} aria-pressed="false" disabled>
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 10v12" />
+    <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+  </svg>
+  <span class="count" aria-live="polite"></span>
+  <span class="label">Like this post</span>
+</button>
+
+<style>
+  .like {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: none;
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: color 150ms, border-color 150ms;
+  }
+  .like:hover:not(:disabled) {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+  }
+  .like[aria-pressed='true'] {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .like:disabled { cursor: default; }
+  .count { min-width: 1ch; }
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+</style>
+
+<script>
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('button.like')) {
+    const slug = btn.dataset.slug ?? '';
+    const stored = `liked:${slug}`;
+    const count = btn.querySelector('.count')!;
+    const url = `/api/likes?slug=${encodeURIComponent(slug)}`;
+
+    const paint = (likes: number, liked: boolean) => {
+      count.textContent = String(likes);
+      btn.setAttribute('aria-pressed', String(liked));
+      btn.disabled = liked;
+    };
+
+    fetch(url)
+      .then((r) => r.json())
+      .then(({ likes }) => paint(likes, localStorage.getItem(stored) === '1'))
+      .catch(() => { btn.hidden = true; });
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      localStorage.setItem(stored, '1');
+      const r = await fetch(url, { method: 'POST' }).catch(() => null);
+      const data = r && r.ok ? await r.json() : null;
+      paint(data ? data.likes : Number(count.textContent) + 1, true);
+    });
+  }
+</script>

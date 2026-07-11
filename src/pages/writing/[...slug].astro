@@ -2,6 +2,7 @@
 // src/pages/writing/[...slug].astro
 // Renders one writing entry. KaTeX CSS loads only for posts with math: true.
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import LikeButton from '../../components/LikeButton.astro';
 import { getCollection, render, type CollectionEntry } from 'astro:content';
 
 export async function getStaticPaths() {
@@ -24,12 +25,15 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
 
   <article class="post">
     <header>
-      <p class="meta">
-        <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
-        {post.data.tags && post.data.tags.length > 0 && (
-          <span class="tags"> · {post.data.tags.join(' · ')}</span>
-        )}
-      </p>
+      <div class="meta-row">
+        <p class="meta">
+          <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
+          {post.data.tags && post.data.tags.length > 0 && (
+            <span class="tags"> · {post.data.tags.join(' · ')}</span>
+          )}
+        </p>
+        <LikeButton slug={post.id} />
+      </div>
       <h1>{post.data.title}</h1>
     </header>
     <div class="body">
@@ -59,11 +63,17 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     margin-inline: auto;
   }
   .post > header { margin-bottom: var(--space-12); }
+  .meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
   .meta {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
-    margin-bottom: var(--space-4);
   }
   .post h1 { line-height: 1.2; }
   /* Body is MDX output — :global since it's not scoped to this component. */

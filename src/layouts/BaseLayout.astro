@@ -2,6 +2,7 @@
 // src/layouts/BaseLayout.astro
 // Page shell. <head>, fonts, FOUC theme init. Top bar lives in SiteHeader.
 import '../styles/global.css';
+import '../styles/fonts.css';
 import SiteHeader from '../components/SiteHeader.astro';
 
 interface Props { title: string; description?: string; }
@@ -29,9 +30,10 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={new URL('/peter.jpg', Astro.site)} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" />
+    {/* Fonts are self-hosted (src/styles/fonts.css); preloading the two files
+        starts them alongside the CSS instead of after it. */}
+    <link rel="preload" href="/fonts/geist-latin-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin-400.woff2" as="font" type="font/woff2" crossorigin />
     <title>{title}</title>
     {/* Inline so the stored theme paints on first frame, before render. */}
     <script is:inline>

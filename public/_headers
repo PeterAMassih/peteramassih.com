@@ -1,0 +1,11 @@
+# Cache policy for stable public assets. The build adds its own immutable
+# rule for hashed /_astro/* files; these cover the unhashed paths.
+
+# Font files never change in place; a change means a new filename.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Article media is heavy and rarely changes; a day of caching spares
+# revisits the revalidation round-trips, and a re-render shows up within one.
+/assets/m2f/*
+  Cache-Control: public, max-age=86400

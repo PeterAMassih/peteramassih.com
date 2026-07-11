@@ -4,6 +4,12 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import LikeButton from '../../components/LikeButton.astro';
 import { getCollection, render, type CollectionEntry } from 'astro:content';
+// KaTeX styles ship from our own origin: the import bundles the CSS (its
+// fonts get hashed into /_astro/ with immutable caching), and the two
+// preloads below cover the faces almost every formula uses.
+import 'katex/dist/katex.min.css';
+import katexMainUrl from 'katex/dist/fonts/KaTeX_Main-Regular.woff2?url';
+import katexMathUrl from 'katex/dist/fonts/KaTeX_Math-Italic.woff2?url';
 
 export async function getStaticPaths() {
   const posts = await getCollection('writing', ({ data }) =>
@@ -20,7 +26,10 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
 
 <BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
   {post.data.math && (
-    <link slot="head" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" />
+    <Fragment slot="head">
+      <link rel="preload" href={katexMainUrl} as="font" type="font/woff2" crossorigin />
+      <link rel="preload" href={katexMathUrl} as="font" type="font/woff2" crossorigin />
+    </Fragment>
   )}
 
   <article class="post">

@@ -23,6 +23,11 @@ const CHAT_MAX_LEN = 120;
 const CHAT_WINDOW_MS = 5000;
 const CHAT_BURST = 4;
 
+// Emotes are cheaper than chat and spamming hearts is part of the fun,
+// so they get their own, looser budget.
+const EMOTES = ["wave", "heart"] as const;
+const EMOTE_BURST = 10;
+
 interface Player {
 	id: string;
 	name: string;
@@ -36,9 +41,10 @@ export class Room extends DurableObject<Env> {
 	// their socket via serializeAttachment, so a room woken from hibernation can
 	// rebuild everything from the sockets the runtime kept open for it.
 	private players = new Map<WebSocket, Player>();
-	// Chat timestamps per socket, for rate limiting. Deliberately not in the
-	// attachment: losing it across hibernation just grants a fresh burst.
+	// Chat and emote timestamps per socket, for rate limiting. Deliberately not
+	// in the attachment: losing them across hibernation just grants a fresh burst.
 	private chatTimes = new Map<WebSocket, number[]>();
+	private emoteTimes = new Map<WebSocket, number[]>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -77,7 +83,7 @@ export class Room extends DurableObject<Env> {
 		const player = this.players.get(ws);
 		if (!player || typeof raw !== "string") return;
 
-		let msg: { type?: unknown; x?: unknown; y?: unknown; text?: unknown };
+		let msg: { type?: unknown; x?: unknown; y?: unknown; text?: unknown; kind?: unknown };
 		try {
 			msg = JSON.parse(raw);
 		} catch {
@@ -96,15 +102,25 @@ export class Room extends DurableObject<Env> {
 			if (typeof msg.text !== "string") return;
 			const text = msg.text.trim().slice(0, CHAT_MAX_LEN);
 			if (!text) return;
-			const now = Date.now();
-			const recent = (this.chatTimes.get(ws) ?? []).filter((t) => now - t < CHAT_WINDOW_MS);
-			if (recent.length >= CHAT_BURST) return; // over the rate: drop silently
-			recent.push(now);
-			this.chatTimes.set(ws, recent);
+			if (!this.underLimit(this.chatTimes, ws, CHAT_BURST)) return;
 			// Everyone gets it, sender included — your own bubble is the server echo,
 			// so what you see is exactly what the room saw.
 			this.broadcast({ type: "chat", id: player.id, text });
+		} else if (msg.type === "emote") {
+			if (!EMOTES.includes(msg.kind as (typeof EMOTES)[number])) return;
+			if (!this.underLimit(this.emoteTimes, ws, EMOTE_BURST)) return;
+			this.broadcast({ type: "emote", id: player.id, kind: msg.kind });
 		}
+	}
+
+	// Sliding-window rate limit; returns false (and records nothing) when over.
+	private underLimit(times: Map<WebSocket, number[]>, ws: WebSocket, burst: number): boolean {
+		const now = Date.now();
+		const recent = (times.get(ws) ?? []).filter((t) => now - t < CHAT_WINDOW_MS);
+		if (recent.length >= burst) return false;
+		recent.push(now);
+		times.set(ws, recent);
+		return true;
 	}
 
 	async webSocketClose(ws: WebSocket): Promise<void> {
@@ -120,6 +136,7 @@ export class Room extends DurableObject<Env> {
 		if (!player) return;
 		this.players.delete(ws);
 		this.chatTimes.delete(ws);
+		this.emoteTimes.delete(ws);
 		this.broadcast({ type: "left", id: player.id });
 	}
 

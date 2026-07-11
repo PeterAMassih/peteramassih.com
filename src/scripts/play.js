@@ -19,6 +19,9 @@ const KEYS = {
 };
 
 const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
+const EMOTE_MS = 1200; // wave wiggle / heart float duration
+const SMOOTH_RATE = 12; // per second: how fast remote sprites chase their target
+const SNAP_DIST = 80; // farther than this is a spawn or teleport, not a walk: snap
 
 const canvas = document.getElementById('play-canvas');
 const ctx = canvas.getContext('2d');
@@ -28,8 +31,11 @@ const chatForm = document.getElementById('play-chat-form');
 const chatInput = document.getElementById('play-chat');
 
 let me = null; // my id, assigned by the server in init
-const players = new Map(); // id -> { x, y, color, name }
+// x/y are the network truth; rx/ry are where the sprite is drawn. Remote
+// sprites ease rx/ry toward x/y so 10 Hz updates read as walking, not teleports.
+const players = new Map(); // id -> { x, y, rx, ry, color, name }
 const bubbles = new Map(); // id -> { text, until }
+const effects = []; // running emotes: { id, kind, start }
 const held = new Set(); // movement keys currently down
 let dirty = false; // my position changed since the last network send
 let last = 0; // previous frame timestamp
@@ -48,12 +54,15 @@ socket.addEventListener('message', (e) => {
   if (msg.type === 'init') {
     me = msg.id;
     players.clear();
-    for (const p of msg.players) players.set(p.id, p);
+    for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y });
   } else if (msg.type === 'joined') {
-    players.set(msg.player.id, msg.player);
+    const p = msg.player;
+    players.set(p.id, { ...p, rx: p.x, ry: p.y });
   } else if (msg.type === 'moved' && msg.id !== me) {
     const p = players.get(msg.id);
-    if (p) { p.x = msg.x; p.y = msg.y; }
+    if (p) { p.x = msg.x; p.y = msg.y; } // targets only; rx/ry ease there in frame()
+  } else if (msg.type === 'emote') {
+    effects.push({ id: msg.id, kind: msg.kind, start: performance.now() });
   } else if (msg.type === 'chat') {
     bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
   } else if (msg.type === 'left') {
@@ -82,6 +91,12 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     chatInput.focus();
+    return;
+  }
+  if ((e.key === 'e' || e.key === 'q') && !e.repeat) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'emote', kind: e.key === 'e' ? 'wave' : 'heart' }));
+    }
     return;
   }
   const dir = KEYS[e.key];
@@ -123,6 +138,18 @@ function frame(now) {
     }
   }
 
+  // Your own sprite is drawn where you steered it; everyone else glides
+  // toward their latest network position (framerate-independent easing).
+  const k = 1 - Math.exp(-dt * SMOOTH_RATE);
+  for (const [id, p] of players) {
+    if (id === me) { p.rx = p.x; p.ry = p.y; continue; }
+    const gx = p.x - p.rx;
+    const gy = p.y - p.ry;
+    if (Math.hypot(gx, gy) > SNAP_DIST) { p.rx = p.x; p.ry = p.y; continue; }
+    p.rx += gx * k;
+    p.ry += gy * k;
+  }
+
   draw();
   requestAnimationFrame(frame);
 }
@@ -139,19 +166,34 @@ function draw() {
   ctx.stroke();
 
   const now = performance.now();
+  for (let i = effects.length - 1; i >= 0; i--) {
+    if (now - effects[i].start > EMOTE_MS) effects.splice(i, 1);
+  }
+
   for (const [id, p] of players) {
+    const wave = effects.find((f) => f.id === id && f.kind === 'wave');
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - SIZE / 2, p.y - SIZE / 2, SIZE, SIZE);
+    if (wave) {
+      // Wiggle: a decaying rock around the sprite's own center.
+      const t = (now - wave.start) / EMOTE_MS;
+      ctx.save();
+      ctx.translate(p.rx, p.ry);
+      ctx.rotate(Math.sin(t * Math.PI * 6) * 0.35 * (1 - t));
+      ctx.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
+      ctx.restore();
+    } else {
+      ctx.fillRect(p.rx - SIZE / 2, p.ry - SIZE / 2, SIZE, SIZE);
+    }
     if (id === me) {
       // A ring with a gap marks your own square, whatever its color.
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.strokeRect(p.x - SIZE / 2 - 3.5, p.y - SIZE / 2 - 3.5, SIZE + 7, SIZE + 7);
+      ctx.strokeRect(p.rx - SIZE / 2 - 3.5, p.ry - SIZE / 2 - 3.5, SIZE + 7, SIZE + 7);
     }
 
     ctx.font = '10px ui-monospace, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.fillText(p.name, p.x, p.y - SIZE / 2 - 8);
+    ctx.fillText(p.name, p.rx, p.ry - SIZE / 2 - 8);
 
     const bubble = bubbles.get(id);
     if (bubble) {
@@ -159,6 +201,27 @@ function draw() {
       else drawBubble(p, bubble.text);
     }
   }
+
+  // Hearts float up over everything, fading as they rise.
+  for (const f of effects) {
+    if (f.kind !== 'heart') continue;
+    const p = players.get(f.id);
+    if (!p) continue;
+    const t = (now - f.start) / EMOTE_MS;
+    drawHeart(p.rx, p.ry - SIZE / 2 - 24 - t * 22, 1 - t);
+  }
+}
+
+function drawHeart(x, y, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#e24b4a';
+  ctx.beginPath();
+  ctx.moveTo(x, y + 5);
+  ctx.bezierCurveTo(x - 8, y - 3, x - 4, y - 10, x, y - 4);
+  ctx.bezierCurveTo(x + 4, y - 10, x + 8, y - 3, x, y + 5);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawBubble(p, text) {
@@ -166,8 +229,8 @@ function drawBubble(p, text) {
   const w = Math.min(ctx.measureText(text).width + 14, 240);
   const h = 20;
   // Keep the bubble on the canvas even at the edges of the world.
-  const bx = clamp(p.x - w / 2, 4, WORLD.w - w - 4);
-  const by = clamp(p.y - SIZE / 2 - 42, 4, WORLD.h - h - 4);
+  const bx = clamp(p.rx - w / 2, 4, WORLD.w - w - 4);
+  const by = clamp(p.ry - SIZE / 2 - 42, 4, WORLD.h - h - 4);
 
   ctx.fillStyle = 'rgba(244, 240, 230, 0.95)';
   ctx.beginPath();

@@ -18,13 +18,18 @@ const KEYS = {
   ArrowRight: 'right', d: 'right',
 };
 
+const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
+
 const canvas = document.getElementById('play-canvas');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('play-status');
 const countEl = document.getElementById('play-count');
+const chatForm = document.getElementById('play-chat-form');
+const chatInput = document.getElementById('play-chat');
 
 let me = null; // my id, assigned by the server in init
-const players = new Map(); // id -> { x, y, color }
+const players = new Map(); // id -> { x, y, color, name }
+const bubbles = new Map(); // id -> { text, until }
 const held = new Set(); // movement keys currently down
 let dirty = false; // my position changed since the last network send
 let last = 0; // previous frame timestamp
@@ -49,8 +54,11 @@ socket.addEventListener('message', (e) => {
   } else if (msg.type === 'moved' && msg.id !== me) {
     const p = players.get(msg.id);
     if (p) { p.x = msg.x; p.y = msg.y; }
+  } else if (msg.type === 'chat') {
+    bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
   } else if (msg.type === 'left') {
     players.delete(msg.id);
+    bubbles.delete(msg.id);
   }
   countEl.textContent = players.size;
 });
@@ -67,6 +75,15 @@ setInterval(() => {
 // --- input ---
 
 window.addEventListener('keydown', (e) => {
+  if (document.activeElement === chatInput) {
+    if (e.key === 'Escape') chatInput.blur();
+    return; // typing a message, not steering
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    chatInput.focus();
+    return;
+  }
   const dir = KEYS[e.key];
   if (!dir) return;
   e.preventDefault(); // arrows would scroll the page
@@ -75,6 +92,16 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const dir = KEYS[e.key];
   if (dir) held.delete(dir);
+});
+
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (text && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'chat', text }));
+  }
+  chatInput.value = '';
+  chatInput.blur(); // back to walking
 });
 
 // --- simulation + render ---
@@ -111,6 +138,7 @@ function draw() {
   for (let y = 40; y < WORLD.h; y += 40) { ctx.moveTo(0, y); ctx.lineTo(WORLD.w, y); }
   ctx.stroke();
 
+  const now = performance.now();
   for (const [id, p] of players) {
     ctx.fillStyle = p.color;
     ctx.fillRect(p.x - SIZE / 2, p.y - SIZE / 2, SIZE, SIZE);
@@ -119,7 +147,36 @@ function draw() {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.strokeRect(p.x - SIZE / 2 - 3.5, p.y - SIZE / 2 - 3.5, SIZE + 7, SIZE + 7);
     }
+
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillText(p.name, p.x, p.y - SIZE / 2 - 8);
+
+    const bubble = bubbles.get(id);
+    if (bubble) {
+      if (now > bubble.until) bubbles.delete(id);
+      else drawBubble(p, bubble.text);
+    }
   }
+}
+
+function drawBubble(p, text) {
+  ctx.font = '11px ui-monospace, monospace';
+  const w = Math.min(ctx.measureText(text).width + 14, 240);
+  const h = 20;
+  // Keep the bubble on the canvas even at the edges of the world.
+  const bx = clamp(p.x - w / 2, 4, WORLD.w - w - 4);
+  const by = clamp(p.y - SIZE / 2 - 42, 4, WORLD.h - h - 4);
+
+  ctx.fillStyle = 'rgba(244, 240, 230, 0.95)';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, w, h, 6);
+  ctx.fill();
+
+  ctx.fillStyle = '#1d1f24';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, bx + w / 2, by + 14, w - 10);
 }
 
 requestAnimationFrame(frame);

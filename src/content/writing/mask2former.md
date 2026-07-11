@@ -1,7 +1,7 @@
 ---
 title: "Mask2Former, Dissected: One Transformer to Segment Them All"
 description: "A ground-up walk through Mask2Former (CVPR 2022): the lineage from FCNs to set prediction, every equation derived, the training recipe, and the ablations ranked by what they bought."
-pubDate: 2026-07-07
+pubDate: 2026-07-11
 tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
 series: "Peter's Patches"

@@ -470,10 +470,23 @@ function onMessage(msg, enterFrom) {
     players.delete(msg.id);
     bubbles.delete(msg.id);
   }
-  countEl.textContent = players.size;
 }
 
 connect(null);
+
+// The count is the whole world, not just this room: the same /presence
+// fan-out the homepage uses. The room you are in is a lower bound — right
+// after joining, the (30s-cached) response may not include you yet.
+const PRESENCE_URL = SOCKET_BASE.replace(/^ws/, 'http') + '/presence';
+function refreshCount() {
+  if (document.hidden) return;
+  fetch(PRESENCE_URL)
+    .then((r) => r.json())
+    .then(({ count }) => { countEl.textContent = Math.max(count, players.size); })
+    .catch(() => {});
+}
+refreshCount();
+setInterval(refreshCount, 30000);
 
 // Only send while actually moving: an idle tab sends nothing, so an idle
 // room can hibernate — that is what keeps the server free.
@@ -585,6 +598,7 @@ function sendPunch() {
 window.addEventListener('blur', () => held.clear());
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) held.clear();
+  else refreshCount();
 });
 
 // Touch pad (rendered only on coarse-pointer devices). Each finger is

@@ -13,11 +13,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <main>
     <header class="head">
       <h1>Play</h1>
-      <p>
-        A tiny shared world. Every square you see is a real visitor, connected
-        live to the same room. v0 is deliberately small: walk around, notice
-        you are not alone.
-      </p>
     </header>
 
     <canvas id="play-canvas" class="canvas" width="640" height="360" aria-label="Shared pixel world"></canvas>
@@ -27,18 +22,31 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       here now: <span id="play-count">–</span>
     </p>
 
-    <form id="play-chat-form" class="chatrow">
+    <div class="row">
       <input
-        id="play-chat"
+        id="play-name"
         type="text"
-        maxlength="120"
-        placeholder="say something…"
+        maxlength="16"
+        placeholder="your name"
         autocomplete="off"
-        aria-label="Chat message"
+        aria-label="Your name"
       />
-    </form>
+      <form id="play-chat-form">
+        <input
+          id="play-chat"
+          type="text"
+          maxlength="120"
+          placeholder="say something…"
+          autocomplete="off"
+          aria-label="Chat message"
+        />
+      </form>
+    </div>
 
-    <p class="hint muted">Arrows or A/D to walk, Space to jump. Enter to chat. E waves, Q sends a heart.</p>
+    <p class="hint muted">
+      Arrows to walk, Space to jump, Enter to chat. E waves, Q sends a heart.
+      Everyone you see is really here.
+    </p>
   </main>
 </BaseLayout>
 
@@ -50,8 +58,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     margin: var(--space-16) auto var(--space-16);
     padding: 0 var(--space-4);
   }
-  .head { margin-bottom: var(--space-6); }
-  .head p { margin-top: var(--space-2); max-width: 65ch; }
+  .head { margin-bottom: var(--space-4); }
   .canvas {
     width: 100%;
     display: block;
@@ -65,8 +72,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
   }
-  .chatrow { margin-top: var(--space-4); }
-  .chatrow input {
+  .row { margin-top: var(--space-4); display: flex; gap: var(--space-2); }
+  .row form { flex: 1; }
+  .row input {
     width: 100%;
     padding: 0.45rem 0.75rem;
     font-family: var(--font-mono);
@@ -77,6 +85,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     border-radius: 4px;
     transition: border-color var(--transition);
   }
-  .chatrow input:focus { outline: none; border-color: var(--color-text-muted); }
+  .row input:focus { outline: none; border-color: var(--color-text-muted); }
+  #play-name { width: 9rem; flex: none; }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
 </style>

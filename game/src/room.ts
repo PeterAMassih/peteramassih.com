@@ -28,6 +28,11 @@ const CHAT_BURST = 4;
 const EMOTES = ["wave", "heart"] as const;
 const EMOTE_BURST = 10;
 
+// Names: word characters and dashes only, so they stay renderable on the
+// canvas and safe to log. Renames are rare; the tight budget stops flicker.
+const NAME_RE = /^[\w-]{2,16}$/;
+const NAME_BURST = 3;
+
 interface Player {
 	id: string;
 	name: string;
@@ -45,6 +50,7 @@ export class Room extends DurableObject<Env> {
 	// in the attachment: losing them across hibernation just grants a fresh burst.
 	private chatTimes = new Map<WebSocket, number[]>();
 	private emoteTimes = new Map<WebSocket, number[]>();
+	private nameTimes = new Map<WebSocket, number[]>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -83,7 +89,14 @@ export class Room extends DurableObject<Env> {
 		const player = this.players.get(ws);
 		if (!player || typeof raw !== "string") return;
 
-		let msg: { type?: unknown; x?: unknown; y?: unknown; text?: unknown; kind?: unknown };
+		let msg: {
+			type?: unknown;
+			x?: unknown;
+			y?: unknown;
+			text?: unknown;
+			kind?: unknown;
+			name?: unknown;
+		};
 		try {
 			msg = JSON.parse(raw);
 		} catch {
@@ -110,6 +123,12 @@ export class Room extends DurableObject<Env> {
 			if (!EMOTES.includes(msg.kind as (typeof EMOTES)[number])) return;
 			if (!this.underLimit(this.emoteTimes, ws, EMOTE_BURST)) return;
 			this.broadcast({ type: "emote", id: player.id, kind: msg.kind });
+		} else if (msg.type === "name") {
+			if (typeof msg.name !== "string" || !NAME_RE.test(msg.name)) return;
+			if (!this.underLimit(this.nameTimes, ws, NAME_BURST)) return;
+			player.name = msg.name;
+			ws.serializeAttachment(player); // renames survive hibernation too
+			this.broadcast({ type: "named", id: player.id, name: player.name });
 		}
 	}
 
@@ -137,6 +156,7 @@ export class Room extends DurableObject<Env> {
 		this.players.delete(ws);
 		this.chatTimes.delete(ws);
 		this.emoteTimes.delete(ws);
+		this.nameTimes.delete(ws);
 		this.broadcast({ type: "left", id: player.id });
 	}
 

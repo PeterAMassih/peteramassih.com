@@ -35,6 +35,7 @@ const statusEl = document.getElementById('play-status');
 const countEl = document.getElementById('play-count');
 const chatForm = document.getElementById('play-chat-form');
 const chatInput = document.getElementById('play-chat');
+const nameInput = document.getElementById('play-name');
 
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
@@ -50,11 +51,120 @@ let last = 0; // previous frame timestamp
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
+// --- sprites ---
+// Hand-authored pixel frames, one character per pixel: h hair, s skin, e eyes,
+// t shirt (takes the player color), p pants, b boots, . transparent. Each
+// (color, frame) pair is rendered once to an offscreen canvas and stamped
+// with drawImage, so per-frame cost is one blit per player.
+const SPRITE_PX = 2; // screen pixels per sprite pixel: 12x16 art drawn 24x32
+const SPRITE_INK = { h: '#4a3320', s: '#f2c48a', e: '#1d1f24', p: '#2e3b57', b: '#3a2f28' };
+const FRAMES = {
+  idle: [
+    '....hhhh....',
+    '...hhhhhh...',
+    '...hssssh...',
+    '...sesses...',
+    '...ssssss...',
+    '....ssss....',
+    '...tttttt...',
+    '..tttttttt..',
+    '..stttttts..',
+    '..tttttttt..',
+    '...tttttt...',
+    '...pppppp...',
+    '...pp..pp...',
+    '...pp..pp...',
+    '...bb..bb...',
+    '...bb..bb...',
+  ],
+  walk0: [
+    '....hhhh....',
+    '...hhhhhh...',
+    '...hssssh...',
+    '...sesses...',
+    '...ssssss...',
+    '....ssss....',
+    '...tttttt...',
+    '..tttttttt..',
+    '..stttttts..',
+    '..tttttttt..',
+    '...tttttt...',
+    '...pppppp...',
+    '....pppp....',
+    '....pppp....',
+    '....bbbb....',
+    '...bb..bb...',
+  ],
+  walk1: [
+    '....hhhh....',
+    '...hhhhhh...',
+    '...hssssh...',
+    '...sesses...',
+    '...ssssss...',
+    '....ssss....',
+    '...tttttt...',
+    '..tttttttt..',
+    '..stttttts..',
+    '..tttttttt..',
+    '...tttttt...',
+    '...pppppp...',
+    '..pp....pp..',
+    '..pp....pp..',
+    '.bb......bb.',
+    '............',
+  ],
+  jump: [
+    '....hhhh....',
+    '...hhhhhh...',
+    '...hssssh...',
+    '...sesses...',
+    '...ssssss...',
+    '....ssss....',
+    '...tttttt...',
+    '.stttttttts.',
+    '..tttttttt..',
+    '..tttttttt..',
+    '...tttttt...',
+    '...pppppp...',
+    '...pp..pp...',
+    '..bb....bb..',
+    '............',
+    '............',
+  ],
+};
+const SPR_W = 12 * SPRITE_PX;
+const SPR_H = 16 * SPRITE_PX;
+
+const spriteCache = new Map(); // "color|frame" -> offscreen canvas
+function sprite(color, frame) {
+  const key = color + '|' + frame;
+  let c = spriteCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = SPR_W;
+  c.height = SPR_H;
+  const g = c.getContext('2d');
+  FRAMES[frame].forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === '.') continue;
+      g.fillStyle = row[x] === 't' ? color : SPRITE_INK[row[x]];
+      g.fillRect(x * SPRITE_PX, y * SPRITE_PX, SPRITE_PX, SPRITE_PX);
+    }
+  });
+  spriteCache.set(key, c);
+  return c;
+}
+
 // --- socket ---
 
 const socket = new WebSocket(SOCKET_URL);
 
-socket.addEventListener('open', () => { statusEl.textContent = 'connected'; });
+socket.addEventListener('open', () => {
+  statusEl.textContent = 'connected';
+  // Reclaim the identity from the last visit, if any.
+  const stored = nameInput.value.trim();
+  if (stored) socket.send(JSON.stringify({ type: 'name', name: stored }));
+});
 socket.addEventListener('close', () => { statusEl.textContent = 'disconnected — refresh to rejoin'; });
 
 socket.addEventListener('message', (e) => {
@@ -62,15 +172,18 @@ socket.addEventListener('message', (e) => {
   if (msg.type === 'init') {
     me = msg.id;
     players.clear();
-    for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y });
+    for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
   } else if (msg.type === 'joined') {
     const p = msg.player;
-    players.set(p.id, { ...p, rx: p.x, ry: p.y });
+    players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
   } else if (msg.type === 'moved' && msg.id !== me) {
     const p = players.get(msg.id);
     if (p) { p.x = msg.x; p.y = msg.y; } // targets only; rx/ry ease there in frame()
   } else if (msg.type === 'emote') {
     effects.push({ id: msg.id, kind: msg.kind, start: performance.now() });
+  } else if (msg.type === 'named') {
+    const p = players.get(msg.id);
+    if (p) p.name = msg.name;
   } else if (msg.type === 'chat') {
     bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
   } else if (msg.type === 'left') {
@@ -92,9 +205,10 @@ setInterval(() => {
 // --- input ---
 
 window.addEventListener('keydown', (e) => {
-  if (document.activeElement === chatInput) {
-    if (e.key === 'Escape') chatInput.blur();
-    return; // typing a message, not steering
+  const el = document.activeElement;
+  if (el && el.tagName === 'INPUT') {
+    if (e.key === 'Escape') el.blur();
+    return; // typing, not steering
   }
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -136,6 +250,18 @@ chatForm.addEventListener('submit', (e) => {
   chatInput.blur(); // back to walking
 });
 
+// Name field: remembered locally, applied on change (Enter or blur). The
+// server validates and broadcasts; the label updates from its echo.
+nameInput.value = localStorage.getItem('play-name') ?? '';
+nameInput.addEventListener('change', () => {
+  const name = nameInput.value.trim();
+  if (!/^[\w-]{2,16}$/.test(name)) return; // same rule the server enforces
+  localStorage.setItem('play-name', name);
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'name', name }));
+  }
+});
+
 // --- simulation + render ---
 
 function frame(now) {
@@ -150,9 +276,11 @@ function frame(now) {
     const dx = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
     if (dx) {
       // Stricter than the server's clamp so the sprite never clips the edge.
-      self.x = clamp(self.x + dx * SPEED * dt, SIZE / 2, WORLD.w - SIZE / 2);
+      self.x = clamp(self.x + dx * SPEED * dt, SPR_W / 2, WORLD.w - SPR_W / 2);
+      self.facing = dx > 0 ? 1 : -1;
       dirty = true;
     }
+    self.moving = !!dx;
 
     if (jumpQueued) {
       if (grounded) vy = -JUMP_V;
@@ -176,6 +304,9 @@ function frame(now) {
     if (Math.hypot(gx, gy) > SNAP_DIST) { p.rx = p.x; p.ry = p.y; continue; }
     p.rx += gx * k;
     p.ry += gy * k;
+    // Remote facing and gait are inferred from how the sprite is gliding.
+    if (Math.abs(gx) > 0.6) p.facing = gx > 0 ? 1 : -1;
+    p.moving = Math.abs(gx) > 0.6;
   }
 
   draw();
@@ -208,29 +339,30 @@ function draw() {
   }
 
   for (const [id, p] of players) {
+    const feetY = p.ry + SIZE / 2;
+    const airborne = p.ry < GROUND_Y - SIZE / 2 - 1;
+    const frame = airborne ? 'jump'
+      : p.moving ? (Math.floor(now / 140) % 2 ? 'walk1' : 'walk0')
+      : 'idle';
+    const img = sprite(p.color, frame);
     const wave = effects.find((f) => f.id === id && f.kind === 'wave');
-    ctx.fillStyle = p.color;
+
+    ctx.save();
+    ctx.translate(p.rx, feetY - SPR_H / 2);
     if (wave) {
       // Wiggle: a decaying rock around the sprite's own center.
       const t = (now - wave.start) / EMOTE_MS;
-      ctx.save();
-      ctx.translate(p.rx, p.ry);
       ctx.rotate(Math.sin(t * Math.PI * 6) * 0.35 * (1 - t));
-      ctx.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
-      ctx.restore();
-    } else {
-      ctx.fillRect(p.rx - SIZE / 2, p.ry - SIZE / 2, SIZE, SIZE);
     }
-    if (id === me) {
-      // A ring with a gap marks your own square, whatever its color.
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.strokeRect(p.rx - SIZE / 2 - 3.5, p.ry - SIZE / 2 - 3.5, SIZE + 7, SIZE + 7);
-    }
+    if ((p.facing ?? 1) < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -SPR_W / 2, -SPR_H / 2);
+    ctx.restore();
 
+    // Your own name reads brighter; that is how you find yourself.
     ctx.font = '10px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.fillText(p.name, p.rx, p.ry - SIZE / 2 - 8);
+    ctx.fillStyle = id === me ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.55)';
+    ctx.fillText(p.name, p.rx, feetY - SPR_H - 6);
 
     const bubble = bubbles.get(id);
     if (bubble) {
@@ -245,7 +377,7 @@ function draw() {
     const p = players.get(f.id);
     if (!p) continue;
     const t = (now - f.start) / EMOTE_MS;
-    drawHeart(p.rx, p.ry - SIZE / 2 - 24 - t * 22, 1 - t);
+    drawHeart(p.rx, p.ry + SIZE / 2 - SPR_H - 14 - t * 22, 1 - t);
   }
 }
 
@@ -267,7 +399,7 @@ function drawBubble(p, text) {
   const h = 20;
   // Keep the bubble on the canvas even at the edges of the world.
   const bx = clamp(p.rx - w / 2, 4, WORLD.w - w - 4);
-  const by = clamp(p.ry - SIZE / 2 - 42, 4, WORLD.h - h - 4);
+  const by = clamp(p.ry + SIZE / 2 - SPR_H - 38, 4, WORLD.h - h - 4);
 
   ctx.fillStyle = 'rgba(244, 240, 230, 0.95)';
   ctx.beginPath();

@@ -1,6 +1,6 @@
 ---
-title: "How Mask2Former Works"
-description: "How Mask2Former uses set prediction, masked attention, multi-scale features, and point-sampled losses."
+title: "Mask2Former, Dissected"
+description: "A ground-up walk through Mask2Former, from set prediction and masked attention to point-sampled losses and the ablation results."
 pubDate: 2026-07-11
 tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
@@ -20,12 +20,12 @@ Start here if any of this is new. Skip to §1 if words like attention, embedding
 
 **Images, pixels, and the job.** An image is a grid of pixels. Segmentation assigns labels to those pixels and decides which ones belong to the same region. Section 1 separates the three tasks built from that idea.
 
-**Feature maps.** A backbone converts the image into a smaller grid where each cell holds a vector that summarizes part of the image. That grid is a feature map. At stride 32, a 1024 by 1024 image becomes a 32 by 32 grid. Small objects can lose useful detail at this scale. §6 explains why Mask2Former also uses finer features.
+**Feature maps.** A backbone converts the image into a smaller grid where each cell holds a vector that summarizes part of the image. That grid is a feature map. The stride is the shrink factor. At stride 32, a 1024 by 1024 image becomes a 32 by 32 grid. Small objects can lose useful detail at this scale. §6 explains why Mask2Former also uses finer features.
 
 **Convolutions.** Most vision backbones use convolutions. A convolutional filter is a small grid of learned weights. At each image position, it multiplies those weights by the pixels beneath them and sums the products. Repeating this operation across the image produces a feature map that responds wherever the learned pattern appears. With a $3\times3$ filter $w$ and input $x$, the output at location $(i,j)$ is
 
 $$
-y(i,j) = \sum_{a=-1}^{1}\sum_{b=-1}^{1} w_{ab}\, x_{i+a,\,j+b},
+y(i,j) = \sum_{a=-1}^{1}\sum_{b=-1}^{1} w_{ab}\, x_{i+a,\,j+b}.
 $$
 
 Here $(a,b)$ indexes a position inside the filter. A layer applies many filters, adds learned biases, and passes the results through a nonlinearity such as ReLU. Stacking these layers produces a convolutional network.
@@ -193,7 +193,7 @@ The attention step mixes information from the image or from other queries. The f
 **IoU.** Intersection over union compares two regions $A$ and $B$ with nonempty union.
 
 $$
-\text{IoU}(A, B) = \frac{|A \cap B|}{|A \cup B|},
+\text{IoU}(A, B) = \frac{|A \cap B|}{|A \cup B|}.
 $$
 
 IoU is 1 when the regions are identical and 0 when they are disjoint. It is used throughout §1 to compare predicted and ground-truth regions.
@@ -216,7 +216,7 @@ IoU is 1 when the regions are identical and 0 when they are disjoint. It is used
 | $M_{l}$ | mask predictions of layer $l$, resized as logits to the next layer's attention resolution, then passed through the sigmoid and binarized at $0.5$ |
 | $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
-| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$ |
+| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$. This $\sigma$ is unrelated to §3's matching permutation |
 | $\mathbb{1}[\cdot]$ | the indicator, with $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
 | $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | BCE, Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
 | $K_{\text{pt}}$ | number of sampled points for mask losses, $12{,}544 = 112^2$ |
@@ -256,10 +256,10 @@ $$
 
 $$
 \text{AP} = \frac{1}{|\mathcal{T}|}\sum_{\tau\in\mathcal{T}}
-\frac{1}{101}\sum_{r\in\{0,0.01,\ldots,1\}} p_\tau^{\mathrm{interp}}(r),
+\frac{1}{101}\sum_{r\in\{0,0.01,\ldots,1\}} p_\tau^{\mathrm{interp}}(r).
 $$
 
-Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \dots, 0.95\}$, and $p_\tau^{\mathrm{interp}}(r)$ is interpolated precision at recall $r$. This is the per-category AP. COCO then averages over categories. When a cutoff keeps no detections, COCO records zero precision. A category with no ground-truth instances in the evaluation set is excluded from the mean. A duplicate detection cannot claim an object twice, so confidence ranking matters. This sketch omits crowd and ignore bookkeeping and the per-image detection cap.
+Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \dots, 0.95\}$, and $p_\tau^{\mathrm{interp}}(r) = \max_{r' \ge r} p_\tau(r')$ is the interpolated precision, the best precision the curve reaches at recall $r$ or beyond. This is the per-category AP. COCO then averages over categories. When a cutoff keeps no detections, COCO records zero precision. A category with no ground-truth instances in the evaluation set is excluded from the mean. A duplicate detection cannot claim an object twice, so confidence ranking matters. This sketch omits crowd and ignore bookkeeping and the per-image detection cap.
 
 </details>
 
@@ -270,7 +270,7 @@ $$
 =
 \underbrace{\frac{\sum_{(p,g)\in \mathit{TP}}\text{IoU}(p,g)}{|\mathit{TP}|}}_{\text{SQ}}
 \times
-\underbrace{\frac{|\mathit{TP}|}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}}_{\text{RQ}},
+\underbrace{\frac{|\mathit{TP}|}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}}_{\text{RQ}}.
 $$
 
 A match requires $\text{IoU} > 0.5$. PQ is computed per class, then averaged over classes with at least one true-positive, false-positive, or false-negative segment. SQ is the average IoU of the matched pairs. RQ is an F1-like term that penalizes missed and extra segments. Their product follows by multiplying and dividing by $|\mathit{TP}|$ when at least one match exists. If $|\mathit{TP}| = 0$ but the denominator is nonzero, PQ is $0$ and the factorization is not used. The next lemma explains why matches above the threshold are unique.
@@ -297,14 +297,14 @@ So every matching prediction covers more than half of $g$. Now suppose two predi
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching, pairing segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
 <figure class="viz">
-<video data-lazy controls muted playsinline preload="none" poster="/assets/m2f/query_becomes_segment_poster.webp" width="1920" height="1080" aria-label="Animation of query refinement and the three segmentation outputs">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/query_becomes_segment_poster.webp" width="1920" height="1080" aria-label="Animation of query refinement and the three segmentation outputs">
 <source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
 <source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
 </video>
 <figcaption>Fig. 1. An illustration of query refinement. Gold circles are query slots and gold fields are mask predictions. The fields sharpen across nine decoder layers. The arc represents self-attention, which lets queries exchange information. The apparent duplicate resolution is schematic. One-to-one training discourages duplicate predictions. The final panels show task-specific interpretations of the masks and classes. The paper trains a separate checkpoint for each task.</figcaption>
 </figure>
 
-The output semantics differ, but the underlying problem is still pixel grouping. Mask2Former asks whether one architecture can serve all three tasks without a task-specific architecture.
+The output semantics differ, but the underlying problem is still pixel grouping. Mask2Former asks whether one architecture can serve all three tasks.
 
 ## 2. Two paradigms
 
@@ -331,7 +331,7 @@ A plain per-pixel classifier outputs one category at each pixel. It has no varia
 Formally, mask classification predicts
 
 $$
-\{(m_i, c_i)\}_{i=1}^{N}, \qquad m_i \in [0,1]^{H\times W},\quad c_i \in \{1,\dots,K\}\cup\{\varnothing\},
+\{(m_i, c_i)\}_{i=1}^{N}, \qquad m_i \in [0,1]^{H\times W},\quad c_i \in \{1,\dots,K\}\cup\{\varnothing\}.
 $$
 
 The same prediction format supports all three tasks. Semantic targets contain one mask per class present in the image. Instance targets contain one mask per object. Panoptic targets contain one mask per thing or stuff segment. The architecture and loss keep the same form, while targets, checkpoints, and post-processing remain task-specific.
@@ -372,7 +372,7 @@ $$
 \text{cost}(i,j) = \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\!-\lambda_{\text{cls}}\,\hat p_{i}(c^{\text{gt}}_j) + \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big).
 $$
 
-The minus sign favors predictions that already assign high probability to the target class. The matcher uses class probability rather than log probability. Its mask terms use the same BCE and Dice forms used for training. The released code solves a rectangular predictions-by-targets problem over real targets. Padding with zero-cost no-object targets gives the equivalent square matching problem used in the proof below. The classification loss later trains every unmatched prediction as no-object.
+The minus sign favors predictions that already assign high probability to the target class. The matcher uses class probability rather than log probability. Its mask terms use the same binary cross-entropy (BCE) and Dice forms used for training. The released code solves a rectangular predictions-by-targets problem over real targets. Padding with zero-cost no-object targets gives the equivalent square matching problem used in the proof below. The classification loss later trains every unmatched prediction as no-object.
 
 In the square view, an assignment is a permutation $\sigma \in S_N$, where $S_N$ is the set of all $N!$ reorderings. Restricted to the real targets, it pairs every target with one unique prediction. Padded targets have zero cost, so their order is irrelevant. The total cost is
 
@@ -380,7 +380,7 @@ $$
 J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
-and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem in $O(N^3)$ time [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
+and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. A later bookkeeping refinement brings the runtime to $O(N^3)$. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
 
 The implementation calls `scipy`, but the underlying algorithm is useful to understand. Its dual supplies the correctness argument and explains the $O(N^3)$ runtime. The complete derivation is folded below.
 
@@ -530,7 +530,7 @@ The model's storage order carries no meaning, and the matching objective respect
 An independent nearest-target choice could assign two queries to one object and leave another unmatched. One-to-one training discourages these duplicates and enables inference without non-maximum suppression.
 
 <figure class="viz">
-<video data-lazy controls muted playsinline preload="none" poster="/assets/m2f/hungarian_matching_poster.webp" width="1920" height="1080" aria-label="Animation of Hungarian matching using cords between predictions and targets">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/hungarian_matching_poster.webp" width="1920" height="1080" aria-label="Animation of Hungarian matching using cords between predictions and targets">
 <source data-src="/assets/m2f/hungarian_matching.webm" type="video/webm">
 <source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
 </video>
@@ -539,7 +539,7 @@ An independent nearest-target choice could assign two queries to one object and 
 
 ### 3.2 The training loss
 
-The mask loss is binary cross-entropy (BCE) plus Dice,
+The mask loss is BCE plus Dice,
 
 $$
 \mathcal{L}_{\text{mask}} = \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}} + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}},
@@ -697,11 +697,11 @@ Global cross-attention can learn where an object is, but the authors argue that 
 A standard decoder layer updates queries by cross-attention over the whole feature map:
 
 $$
-\mathbf{X}_l = \operatorname{softmax}\!\big(\mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1},
+\mathbf{X}_l = \operatorname{softmax}\!\big(\mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1}.
 \tag{1}
 $$
 
-Here $\mathbf{Q}_l$ comes from the previous query state, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits the standard $1/\sqrt d$ scaling, the multi-head split, and the query and image position embeddings used by the implementation.
+Here $\mathbf{Q}_l$ comes from the previous query state, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits the standard $1/\sqrt d$ scaling, the multi-head split, and the query and image position embeddings used by the implementation. It also omits the self-attention and feed-forward steps that complete the layer, folding them into $\mathbf{X}_l$. The paper writes the recurrence the same way.
 
 Nothing restricts where a query looks. Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This does not show that global attention cannot localize. It shows that this baseline remains diffuse, even after training.
 
@@ -718,10 +718,10 @@ $$
 Now suppose the object covers 2 percent of the image, so $n_f = 0.02\,|\Omega|$, $n_b = 0.98\,|\Omega|$, and $n_b/n_f = 0.98/0.02 = 49$. With foreground logit margin $\mu_f - \mu_b = 2$ and $e^{-2} \approx 0.135$,
 
 $$
-\frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{7.62} \approx 0.13.
+\frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{7.615} \approx 0.13.
 $$
 
-In this toy model, the background wins because it has many more locations. Real attention logits are not two spikes, and sufficiently concentrated global attention can overcome the imbalance. The calculation only explains why explicit localization can make learning easier. It is not a proof that global attention must fail.
+In this toy model, the background wins because it has many more locations. Real attention logits are not two spikes, and sufficiently concentrated global attention can overcome the imbalance. The calculation only explains why explicit localization can make learning easier.
 
 ### 5.2 The masked update
 
@@ -736,7 +736,7 @@ $$
 \mathcal{M}_{l-1}(x) =
 \begin{cases}
 0 & \text{if } M_{l-1}(x) = 1,\\[2pt]
--\infty & \text{otherwise,}
+-\infty & \text{otherwise.}
 \end{cases}
 \tag{3}
 $$
@@ -792,12 +792,12 @@ the softmax of the original logits restricted to $S$. $\blacksquare$
 
 </details>
 
-The ablation compares four updates. Plain cross-attention reaches 37.8 AP, SMCA reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
+The ablation compares four updates. Plain cross-attention reaches 37.8 AP, spatially modulated co-attention (SMCA) [[Gao et al. 2021](#ref-gao2021)] reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
 
 Additive attention masking already existed in Transformer decoders [[Vaswani et al. 2017](#ref-vaswani2017)]. Mask2Former makes the mask spatial, query-specific, and dependent on the previous mask prediction. The prediction restricts the next read, and the next query state produces a new prediction.
 
 <figure class="viz">
-<video data-lazy controls muted playsinline preload="none" poster="/assets/m2f/masked_attention_poster.webp" width="1920" height="1080" aria-label="Animation of masked attention using a stencil over image locations">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/masked_attention_poster.webp" width="1920" height="1080" aria-label="Animation of masked attention using a stencil over image locations">
 <source data-src="/assets/m2f/masked_attention.webm" type="video/webm">
 <source data-src="/assets/m2f/masked_attention.mp4" type="video/mp4">
 </video>
@@ -832,7 +832,7 @@ Mask2Former reads one scale per decoder layer. Layers 1, 2, and 3 use strides 32
 Each feature also receives DETR's two-dimensional sinusoidal position encoding and a learned embedding that identifies its scale. The position coordinates are normalized per axis before the sine and cosine features are formed. The scale embedding follows Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
 
 <figure class="viz">
-<video data-lazy controls muted playsinline preload="none" poster="/assets/m2f/scales_breathe_poster.webp" width="1920" height="1080" aria-label="Animation of a query reading three feature scales from coarse to fine">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/scales_breathe_poster.webp" width="1920" height="1080" aria-label="Animation of a query reading three feature scales from coarse to fine">
 <source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
@@ -849,10 +849,10 @@ The default pixel decoder has six multi-scale deformable-attention layers over s
 For feature $z_q$ at normalized reference point $\hat p_q$,
 
 $$
-\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big],
+\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big].
 $$
 
-Here $m$, $l$, and $k$ index heads, levels, and sample points. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The offsets and weights are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations. The aggregation processes $MLK$ entries of width $C/M$, so it costs $O(LKC)$ per query apart from the learned projections. Dense attention would read every location at every level.
+Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $K$ sample points per level. This $K$ counts points, not classes, and this $M$ counts heads, not masks. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The offsets and weights are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations. The aggregation processes $MLK$ entries of width $C/M$, so it costs $O(LKC)$ per query apart from the learned projections. Dense attention would read every location at every level.
 
 </details>
 
@@ -864,15 +864,15 @@ Mask2Former changes the decoder layer in three ways without adding FLOPs. Togeth
 
 **Masked attention comes first.** The standard order is self-attention, then cross-attention, then the feed-forward network. Mask2Former uses masked attention, then self-attention, then the feed-forward network. Running cross-attention first gives each query image context before the queries interact. Restoring the original order costs 0.5 AP.
 
-**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. This also gives the first layer a useful gate. Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals that the decoder refines.
+**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. This also gives the first layer a useful gate. Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
 
-**Dropout is removed.** Restoring dropout lowers AP by 0.7 and PQ by 0.6 in the ablation. The experiment does not isolate the cause.
+**Dropout is removed.** Restoring dropout lowers AP by 0.7 and PQ by 0.6 in the ablation.
 
 ## 8. Matching and training on points
 
 ### 8.1 The memory problem and the estimator
 
-Dense mask losses are expensive. Mask2Former evaluates them at 12,544 sampled coordinates. Uniform points build matching costs, while prediction-dependent uncertain points train matched masks.
+Dense mask losses are expensive. Mask2Former evaluates them at sampled coordinates instead. Uniform points build matching costs, while prediction-dependent uncertain points train matched masks.
 
 MaskFormer computed dense mask costs for every prediction-target pair and dense losses again for matched pairs at every supervised head. This limited training to one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates these terms at $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points.
 
@@ -900,7 +900,7 @@ $$
 
 </details>
 
-This statement applies to additive point losses. Dice is a ratio of sampled sums, so its sampled value is not an unbiased estimate of dense Dice. The code and the paper rely on the empirical result in Table 5 rather than an exact equivalence proof.
+This statement applies to additive point losses. Dice is a ratio of sampled sums, so its sampled value is not an unbiased estimate of dense Dice. The code and the paper rely on the empirical result in the section 8.3 ablation rather than an exact equivalence proof.
 
 ### 8.2 Two sampling rules for two jobs
 
@@ -924,14 +924,14 @@ Independent point sets make the covariance term zero. Shared points can make it 
 
 **Training uses uncertain points.** For each matched mask, the PointRend sampler draws $3K_{\text{pt}}$ uniform candidates [[Kirillov et al. 2020](#ref-kirillov2020)]. It keeps the $0.75K_{\text{pt}}$ candidates whose prediction logits are closest to zero, then adds $0.25K_{\text{pt}}$ fresh uniform points. The uncertainty score depends on the prediction, not the ground truth. These points often lie near a predicted boundary, but uncertain interiors can also be selected.
 
-This training sampler is intentionally nonuniform and applies no importance correction. It therefore changes the training objective rather than providing an unbiased estimate of the dense loss. Table 5 shows that the changed objective preserves performance while reducing memory.
+This training sampler is intentionally nonuniform and applies no importance correction. It therefore changes the training objective rather than providing an unbiased estimate of the dense loss. The section 8.3 ablation shows that the changed objective preserves performance while reducing memory.
 
 <figure class="viz">
-<video data-lazy controls muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation of uniform matching points and prediction-dependent uncertain training points">
+<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation of uniform matching points and prediction-dependent uncertain training points">
 <source data-src="/assets/m2f/shoreline_probes.webm" type="video/webm">
 <source data-src="/assets/m2f/shoreline_probes.mp4" type="video/mp4">
 </video>
-<figcaption>Fig. 7. The shoreline is a hard-mask analogy, not the literal BCE or Dice loss. The balance represents equality in expectation for a uniform additive estimator. Matching reuses one uniform coordinate set across every cost. Training keeps 75 percent prediction-uncertain points and adds 25 percent fresh uniform points with equal loss weight. Selection never reads the ground truth. The final lattice represents 12,544 coordinates.</figcaption>
+<figcaption>Fig. 7. Point sampling for matching and training. The shoreline is a hard-mask analogy, not the literal BCE or Dice loss. The balance represents equality in expectation for a uniform additive estimator. Matching reuses one uniform coordinate set across every cost. Training keeps 75 percent prediction-uncertain points and adds 25 percent fresh uniform points with equal loss weight. Selection never reads the ground truth. The final lattice represents 12,544 coordinates.</figcaption>
 </figure>
 
 ### 8.3 Point-sampling ablation
@@ -978,7 +978,7 @@ Instance output flattens the $N\times K$ query-class probabilities and selects t
 $$
 s_{i,c} = \hat p_i(c)\,
 \frac{\sum_x m_i(x)\,\mathbb{1}[m_i(x)>0.5]}
-{\sum_x \mathbb{1}[m_i(x)>0.5] + \varepsilon},
+{\sum_x \mathbb{1}[m_i(x)>0.5] + \varepsilon}.
 $$
 
 The implementation uses $\varepsilon = 10^{-6}$, so an empty foreground scores zero.
@@ -997,9 +997,9 @@ Boundary AP uses the minimum of mask IoU and Boundary IoU [[Cheng et al. 2021c](
 
 With ResNet-50, Mask2Former reaches 51.9 PQ after 50 epochs. MaskFormer reports 46.5 after 300 epochs. The comparison includes architecture, loss, augmentation, batch size, and optimizer-setting changes, so it should not be read as a controlled convergence experiment.
 
-The detailed results show three tradeoffs. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
+The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
 
-The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. A Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$ on Cityscapes. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
+The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. A Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$ on Cityscapes, the instance AP on thing classes computed from the panoptic checkpoint. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
 
 ## 11. Ablations and interactions
 
@@ -1034,7 +1034,7 @@ Mask2Former combines several changes that support one another. Matching assigns 
 
 ## Appendix A. Implementation notes
 
-The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former). It was archived on January 1, 2025. Hugging Face provides `Mask2FormerForUniversalSegmentation` with `Mask2FormerImageProcessor` or `AutoImageProcessor`. The image processor exposes semantic, instance, and panoptic post-processing methods. The decoder core is shown below in simplified PyTorch-style pseudocode.
+The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former), built on Detectron2 [[Wu et al. 2019](#ref-wu2019)]. It was archived on January 1, 2025. Hugging Face provides `Mask2FormerForUniversalSegmentation` with `Mask2FormerImageProcessor` or `AutoImageProcessor`. The image processor exposes semantic, instance, and panoptic post-processing methods. The decoder core is shown below in simplified PyTorch-style pseudocode.
 
 ```python
 def decoder_layer(
@@ -1196,21 +1196,20 @@ The §1 lemma proves uniqueness for non-overlapping segments above 0.5 IoU. Trai
 39. <a name="ref-cheng2021vis"></a>Cheng et al. "Mask2Former for Video Instance Segmentation." 2021. [arXiv:2112.10764](https://arxiv.org/abs/2112.10764)
 40. <a name="ref-jain2023"></a>Jain et al. "OneFormer: One Transformer to Rule Universal Image Segmentation." CVPR 2023. [arXiv:2211.06220](https://arxiv.org/abs/2211.06220)
 41. <a name="ref-li2023"></a>Li et al. "Mask DINO: Towards a Unified Transformer-based Framework for Object Detection and Segmentation." CVPR 2023. [arXiv:2206.02777](https://arxiv.org/abs/2206.02777)
-42. <a name="ref-kirillov2023"></a>Kirillov et al. "Segment Anything." ICCV 2023. [arXiv:2304.02643](https://arxiv.org/abs/2304.02643)
-43. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
-44. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." CVPR 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
+42. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
+43. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." CVPR 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
 
 ## Citation
 
 Suggested citation
 
-> Massih, Peter. "How Mask2Former Works." *Peter's Patches*, no. 1, Jul 2026. https://peteramassih.com/writing/mask2former.
+> Massih, Peter. "Mask2Former, Dissected." *Peter's Patches*, no. 1, Jul 2026. https://peteramassih.com/writing/mask2former.
 
 BibTeX
 
 ```bibtex
 @article{massih2026mask2former,
-  title   = {How Mask2Former Works},
+  title   = {Mask2Former, Dissected},
   author  = {Massih, Peter},
   journal = {peteramassih.com},
   series  = {Peter's Patches},
@@ -1222,12 +1221,15 @@ BibTeX
 ```
 
 <script>
-// Videos load lazily and autoplay only for readers who allow motion.
-// Under prefers-reduced-motion they get controls and start nothing.
-// Posters are inline in the markup, so a box is never blank; the margin
-// below starts the real fetch shortly before the reader arrives.
+// Videos behave like GIFs: muted, looping, no visible controls. They load
+// lazily and autoplay only for readers who allow motion; under
+// prefers-reduced-motion they get controls and start nothing. Posters are
+// inline in the markup, so a box is never blank; the wide margin below
+// starts the fetch early enough that the loop is already running on arrival.
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 for (const v of document.querySelectorAll('video[data-lazy]')) {
+  // Clicking toggles playback, so motion stays stoppable without a control bar.
+  v.addEventListener('click', () => { v.paused ? v.play() : v.pause(); });
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -1238,11 +1240,12 @@ for (const v of document.querySelectorAll('video[data-lazy]')) {
       if (reduceMotion) {
         e.target.controls = true;
       } else {
-        e.target.play().catch(() => {});
+        // If the browser blocks autoplay (e.g. battery saver), fall back to controls.
+        e.target.play().catch(() => { e.target.controls = true; });
       }
       io.disconnect();
     }
-  }, { rootMargin: '240px 0px' });
+  }, { rootMargin: '1600px 0px' });
   io.observe(v);
 }
 </script>

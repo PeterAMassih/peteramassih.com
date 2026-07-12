@@ -1,12 +1,10 @@
 # patches/mask2former/viz/masked_attention.py
 """Storyboard B: masked_attention (~42 s + 2 s hold).
 
-Cross-attention forces a query to drink the whole image; the mask is a
-stencil that cuts the background strands, and the survivors thicken until the
-beam's total width is exactly what it was: renormalization as conserved
-thickness. The stencil and the understanding sharpen each other, breath by
-breath, with one failsafe breath where the hole collapses and the stencil
-dissolves for a layer (the empty-mask guard, never named).
+Cross-attention reads the whole image. The mask is a stencil that cuts the
+background strands, and every survivor is scaled by one common normalization
+factor. Their relative widths stay unchanged while total width is conserved.
+One failsafe beat shows the empty-mask guard opening the read for a layer.
 
 Strands are static beziers re-targeted by Transform between precomputed
 phases; the throat span never changes, so conservation is carried by the
@@ -105,29 +103,26 @@ class MaskedAttention(MovingCameraScene):
         self.clock += t
 
     def phase_targets(self, alive):
-        # Alive strands share the conserved total width and evenly split the
-        # throat; dead strands retract toward their origin and dim out. Slot
-        # order is a fixed shuffle so warm and cool strands interleave: the
-        # bundle mouth reads as a braid, not two sorted blocks.
-        idxs = [i for i in self.slot_order if i in set(alive)]
-        n = len(idxs)
-        # No cap: the survivors must sum to exactly TOTAL_WIDTH so the braid holds
-        # its width through the masking beat. That constancy is the renormalization
-        # the scene exists to show. At the fewest survivors (n=14) each strand is
-        # 6.6 wide, still a clean stroke.
-        w = TOTAL_WIDTH / max(n, 1)
+        # Masking preserves the ratios between allowed softmax weights. Each
+        # survivor keeps its base-width ratio and receives one common scale so
+        # their total remains TOTAL_WIDTH. Dead strands retract and disappear.
+        alive_set = set(alive)
+        idxs = [i for i in self.slot_order if i in alive_set]
+        total = sum(self.base_widths[i] for i in idxs)
+        cursor = -THROAT_W / 2
         targets = {}
-        for rank, i in enumerate(idxs):
-            slot = -THROAT_W / 2 + THROAT_W * (rank + 0.5) / n
+        for i in idxs:
+            share = self.base_widths[i] / max(total, 1e-9)
+            slot = cursor + THROAT_W * share / 2
+            cursor += THROAT_W * share
+            width = TOTAL_WIDTH * share
             warm = i < 14
             color = WARM if warm else SLATE
-            # Warm strands read brighter than the cool crowd, so the few warm
-            # among many cool is visible during the full drink (the small but
-            # nonzero foreground share: softmax never gives it zero). Widths
-            # stay equal, so the total mass is still conserved.
-            base = 0.62 if n < 30 else 0.5
+            # Opacity distinguishes subject and background. Width alone carries
+            # the attention-weight analogy.
+            base = 0.62 if len(idxs) < 30 else 0.5
             op = base if warm else base * 0.6
-            targets[i] = strand_curve(self.origins[i], slot, w, color, op)
+            targets[i] = strand_curve(self.origins[i], slot, width, color, op)
         for i in range(len(self.origins)):
             if i not in targets:
                 color = WARM if i < 14 else SLATE
@@ -159,6 +154,10 @@ class MaskedAttention(MovingCameraScene):
         cat_pts, bg_pts = make_origins()
         self.origins = cat_pts + bg_pts
         self.slot_order = list(np.random.default_rng(5).permutation(84))
+        # Positive, unequal base widths stand in for exp(logit). Masking keeps
+        # their ratios and changes only the shared normalization constant.
+        raw_widths = np.random.default_rng(19).uniform(0.7, 1.3, 84)
+        self.base_widths = TOTAL_WIDTH * raw_widths / raw_widths.sum()
 
         field = Rectangle(width=FIELD_W, height=FIELD_H).move_to(FIELD_C)
         field.set_stroke(opacity=0).set_fill(SLATE, opacity=0.1)

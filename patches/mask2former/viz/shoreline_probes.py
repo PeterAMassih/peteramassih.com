@@ -1,23 +1,17 @@
 # patches/mask2former/viz/shoreline_probes.py
-"""Storyboard E: shoreline_probes (~32 s + 2 s hold).
+"""Visual explanation of point-sampled mask losses.
 
-The disagreement between a predicted mask and the truth lives on a thin
-shoreline. Weighing the whole map dips the balance beam; a handful of probes
-that spark only on the shoreline levels it again: an unbiased estimate,
-proven by balance. Where probes may land differs between matching (the same
-constellation stamped fairly on every pair) and training (needles magnetize
-to the shoreline). The needles gather into a fine lattice for half a beat,
-the only number-shaped thing in the scene, then rest.
-
-Needle verdicts are real: each probe point is tested against the two sheets
-with an even-odd polygon test, and sparks only where exactly one contains it.
+The balance represents uniform sampling for an additive point loss. Matching
+reuses one uniform point set across all mask pairs. Training selects points
+whose prediction logits are uncertain, which the final shot represents with
+points near the predicted contour. The sampler does not inspect ground truth.
 """
 
 import numpy as np
 from manim import *  # noqa: F403 -- manim scenes conventionally star-import
 
 from shapes import DUCK, silhouette, warped
-from tokens import BACKGROUND, EMBER, GOLD, GREEN, INK, MUTED, SLATE
+from tokens import BACKGROUND, EMBER, FONT_BODY, GOLD, GREEN, INK, MUTED, SLATE
 
 config.background_color = BACKGROUND
 
@@ -45,10 +39,8 @@ def inside(p, poly):
 
 
 def sheet_pair(center, scale, seed, offset):
-    # The prediction nearly matches the truth: disagreement must live on a
-    # thin irregular band, not in fat lobes. The band is built explicitly as
-    # (truth minus pred) union (pred minus truth) so both kinds of miss glow,
-    # and it sits opaque on top so ember never tints agreeing pixels.
+    # A hard-mask analogy. The symmetric difference shows where binary masks
+    # disagree. BCE and soft Dice also receive signal away from this band.
     truth = silhouette(DUCK, scale, GREEN, fill_opacity=0.35)
     truth.set_stroke(GREEN, width=1.4, opacity=0.7).move_to(center)
     pred = silhouette(warped(DUCK, 0.04, seed), scale * 0.99, GOLD,
@@ -75,7 +67,7 @@ class ShorelineProbes(MovingCameraScene):
         self.clock = 0.0
         self.camera.background_color = BACKGROUND
 
-        # ---- shot 1 (0:00-0:06): the shoreline ------------------------------
+        # ---- shot 1 (0:00-0:06): a hard-mask shoreline ----------------------
         truth, pred, shore = sheet_pair(SHEET_C, 1.5, 21, (0.1, 0.07))
         truth.shift(LEFT * 7)
         pred.shift(RIGHT * 7)
@@ -87,7 +79,7 @@ class ShorelineProbes(MovingCameraScene):
         self.hold(2.0)
         shore.set_fill(opacity=0).set_stroke(opacity=0)
         self.add(shore)
-        # Agreement stays quiet; disagreement ignites.
+        # In the binary analogy, agreement is zero error and disagreement glows.
         self.beat(shore.animate.set_fill(EMBER, opacity=0.8), rt=1.2)
 
         frame = self.camera.frame
@@ -150,8 +142,8 @@ class ShorelineProbes(MovingCameraScene):
                   the_map.animate.scale(0.2)
                   .move_to(pan_center(-1) + UP * 0.24), rt=2.0)
         the_map.add_updater(lambda m: m.move_to(pan_center(-1) + UP * 0.24))
-        # The dense loss: exact, and heavy. Positive angle drops the left
-        # arm: the loaded pan must be the one that sinks.
+        # The dense hard-mask error is exact and heavy. Positive angle drops
+        # the left arm, so the loaded pan sinks.
         self.beat(theta.animate.set_value(0.14), rt=1.8)
 
         dup_truth, dup_pred, dup_shore = sheet_pair(SHEET_C, 1.5, 21,
@@ -168,8 +160,6 @@ class ShorelineProbes(MovingCameraScene):
             for j in range(9):
                 c = np.array([SHEET_C[0] - 2.15 + 0.307 * i,
                               SHEET_C[1] - 1.4 + 0.35 * j, 0.0])
-                if not (inside(c, poly_truth) or inside(c, poly_pred)):
-                    continue
                 p = c + np.array([rng.uniform(-0.11, 0.11),
                                   rng.uniform(-0.11, 0.11), 0.0])
                 hot = on_shore(p)
@@ -208,9 +198,12 @@ class ShorelineProbes(MovingCameraScene):
         for s, off in zip(sparks, heap):
             s.add_updater(
                 lambda m, off=off, pc=pan_center: m.move_to(pc(1) + off))
-        # Their weight is what levels the beam: equal to the dense map, so the
-        # raised right pan sinks back to level and carries the sparks down.
-        self.beat(theta.animate.set_value(0.0), rt=1.6,
+        expectation_note = Text("equal in expectation", font=FONT_BODY,
+                                font_size=24, color=MUTED)
+        expectation_note.move_to(PIVOT + DOWN * 1.55)
+        # The level beam represents equality in expectation, not equality for
+        # the single finite sample drawn on screen.
+        self.beat(theta.animate.set_value(0.0), FadeIn(expectation_note), rt=1.6,
                   rate_func=rate_functions.ease_in_out_sine)
         self.hold(1.0)
         the_map.suspend_updating()
@@ -219,7 +212,7 @@ class ShorelineProbes(MovingCameraScene):
         beam.suspend_updating()
 
         # ---- shot 4 (0:20-0:26): two rules for two jobs ---------------------
-        self.beat(dup.animate.set_opacity(0.15),
+        self.beat(dup.animate.set_opacity(0.15), FadeOut(expectation_note),
                   rain.animate.set_opacity(0.15),
                   rt=1.0)
 
@@ -247,49 +240,53 @@ class ShorelineProbes(MovingCameraScene):
                             for o in offs])
             stamps.append(dots)
 
-        # Training: needles rain, then magnetize to the shoreline.
+        # Training draws 3K uniform candidates over the full image, keeps .75K
+        # near the prediction's zero-logit contour, and adds .25K fresh uniform
+        # points. Candidate selection never reads the target.
         train_rng = np.random.default_rng(17)
-        tt_poly = polygon_of(train_t, n=160)
-        tp_poly = polygon_of(train_p, n=160)
-        _tdots = []
-        for i in range(10):
+        candidate_dots = VGroup()
+        candidate_positions = []
+        for i in range(12):
             for j in range(5):
-                c = np.array([2.4 - 1.3 + 0.28 * i,
-                              1.7 - 0.8 + 0.33 * j, 0.0])
-                if not (inside(c, tt_poly) or inside(c, tp_poly)):
-                    continue
-                d = Dot(c + np.array([train_rng.uniform(-0.06, 0.06),
-                                      train_rng.uniform(-0.06, 0.06), 0.0]),
-                        radius=0.04).set_fill(INK, opacity=0.7)
+                p = np.array([1.15 + 0.265 * i,
+                              0.85 + 0.42 * j, 0.0])
+                p += np.array([train_rng.uniform(-0.08, 0.08),
+                               train_rng.uniform(-0.08, 0.08), 0.0])
+                d = Dot(p, radius=0.04).set_fill(INK, opacity=0.7)
                 d.set_stroke(opacity=0)
-                _tdots.append(d)
-        train_dots = VGroup(*_tdots)
-        train_dots.shift(UP * 2.2).set_opacity(0)
+                candidate_positions.append(p)
+                candidate_dots.add(d)
+        candidate_dots.shift(UP * 2.2).set_opacity(0)
 
-        self.add(train_dots)
+        self.add(candidate_dots)
         self.beat(LaggedStart(*[FadeIn(s, scale=1.25) for s in stamps],
                               lag_ratio=0.45),
                   LaggedStart(*[AnimationGroup(
                       d.animate.shift(DOWN * 2.2).set_opacity(0.7))
-                      for d in train_dots], lag_ratio=0.015), rt=1.5)
+                      for d in candidate_dots], lag_ratio=0.01), rt=1.5)
 
-        shore_poly = polygon_of(train_s, n=100)
-        keep = list(range(0, len(shore_poly), 2))
-        magnet_rng = np.random.default_rng(23)
-        anims = []
-        for k, d in enumerate(train_dots):
-            if k % 3 == 0:
-                # Wasted cold needles go dim; they never disappear.
-                anims.append(d.animate.set_opacity(0.22))
-            else:
-                q = shore_poly[keep[magnet_rng.integers(0, len(keep))]]
-                # Ink rim keeps the ember dot legible on the ember band.
-                anims.append(d.animate.move_to(q)
-                             .set_fill(EMBER, opacity=0.9)
-                             .set_stroke(INK, width=1.2, opacity=0.9))
-        self.beat(*anims, rt=1.2)
-        self.hold(0.8)
-        self.hold(1.0)
+        uncertain_curve = polygon_of(train_p, n=180)
+        distances = [min(np.linalg.norm(p - q) for q in uncertain_curve)
+                     for p in candidate_positions]
+        selected_ids = set(np.argsort(distances)[:15])  # .75K of a 20-point final set
+        selected = VGroup(*[candidate_dots[i] for i in sorted(selected_ids)])
+        rejected = VGroup(*[candidate_dots[i] for i in range(60)
+                            if i not in selected_ids])
+        self.beat(rejected.animate.set_opacity(0.03),
+                  *[d.animate.set_fill(EMBER, opacity=0.9)
+                    .set_stroke(INK, width=1.2, opacity=0.9)
+                    for d in selected], rt=1.0)
+
+        fresh_rng = np.random.default_rng(23)
+        fresh = VGroup(*[
+            Dot([fresh_rng.uniform(1.15, 4.07),
+                 fresh_rng.uniform(0.85, 2.53), 0.0], radius=0.04)
+            .set_fill(INK, opacity=0.9)
+            .set_stroke(INK, width=1.2, opacity=0.9)
+            for _ in range(5)  # .25K fresh uniform points
+        ])
+        self.beat(FadeIn(fresh, lag_ratio=0.12), rt=0.6)
+        self.hold(1.4)
 
         # ---- shot 5 (0:26-0:32): residue ------------------------------------
         # The rained needles arrange themselves into a fine lattice, half a
@@ -300,8 +297,6 @@ class ShorelineProbes(MovingCameraScene):
             for j in range(9):
                 c = np.array([SHEET_C[0] - 2.15 + 0.307 * i,
                               SHEET_C[1] - 1.4 + 0.35 * j, 0.0])
-                if not (inside(c, poly_truth) or inside(c, poly_pred)):
-                    continue
                 lattice.append(np.array([SHEET_C[0] - 2.15 + 0.307 * i,
                                          SHEET_C[1] - 1.32 + 0.33 * j, 0.0]))
         # The lattice is the subject of this beat: shot 4's leftovers recede.
@@ -309,7 +304,8 @@ class ShorelineProbes(MovingCameraScene):
                     for n, q in zip(needles, lattice)],
                   pairs.animate.set_opacity(0.15),
                   train.animate.set_opacity(0.15),
-                  train_dots.animate.set_opacity(0.12),
+                  selected.animate.set_opacity(0.12),
+                  fresh.animate.set_opacity(0.12),
                   *[s.animate(rate_func=smooth).set_opacity(0.15)
                     for s in stamps], rt=1.6)
         self.hold(0.7)
@@ -326,7 +322,8 @@ class ShorelineProbes(MovingCameraScene):
                   .set_stroke(opacity=0.7),
                   pairs.animate.set_opacity(0.35),
                   train.animate.set_opacity(0.35),
-                  train_dots.animate.set_opacity(0.3), rt=1.0)
+                  selected.animate.set_opacity(0.3),
+                  fresh.animate.set_opacity(0.3), rt=1.0)
         self.hold(1.3)
         print(f"scene clock: {self.clock:.2f} s")
         self.hold(2.0)

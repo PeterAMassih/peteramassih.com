@@ -1,10 +1,10 @@
 # patches/mask2former/viz/scales_breathe.py
 """Storyboard D: scales_breathe (~30 s + 2 s hold).
 
-At 1/32 resolution a small object does not exist; at 1/8 everything exists
-but there is far too much of it. The decoder breathes: one scale per layer,
-coarse to fine, three times. The rejected alternative, all scales fused into
-one slab, visibly sags with weight and slows the orb to a crawl.
+At stride 32 a small object can be difficult to localize because few spatial
+cells cover it. Stride 8 retains more detail but has sixteen times as many
+tokens. The decoder reads one scale per layer, coarse to fine, three times.
+The fused slab is a qualitative cost analogy, not proportional timing.
 
 Depth is staged with sheared panes and a moving camera; frost is an overlay
 whose opacity is the resolution. The orb's own field is a miniature scene
@@ -55,7 +55,7 @@ def water_blob(scale=1.0):
 
 
 def duck_mass():
-    # At 1/32 the duck is only a mass; features are not representable.
+    # The coarse pane shows weaker spatial localization, not absent information.
     pts = [(-0.7, 0.25), (0.0, 0.45), (0.7, 0.3), (0.9, -0.1), (0.3, -0.4),
            (-0.5, -0.35)]
     vm = VMobject()
@@ -105,7 +105,7 @@ class ScalesBreathe(MovingCameraScene):
         pane32 = parallelogram(P32_C, TINT_32)
         c32 = VGroup(water_blob(1.2).move_to(P32_C + np.array([-0.5, -0.3, 0])),
                      duck_mass().move_to(P32_C + np.array([1.3, 0.15, 0])))
-        frost32 = frost(P32_C, 0.88)   # near-opaque: the duckling truly vanishes at stride 32
+        frost32 = frost(P32_C, 0.88)   # near-opaque visual analogy for lost detail
 
         pane16 = parallelogram(P16_C, TINT_16)
         smudge = water_blob(0.22).move_to(P16_C + DUCKLING_LOCAL)
@@ -144,8 +144,8 @@ class ScalesBreathe(MovingCameraScene):
                               lag_ratio=0.06), rt=1.4)
         self.hold(0.3)
 
-        # The dive: a traveling duckling dissolves on the way down, because at
-        # 1/32 it is literally not representable.
+        # The traveling duckling dissolves to illustrate weaker localization at
+        # coarse resolution. The feature may still encode object information.
         traveler = silhouette(DUCK, 0.24, SLATE, fill_opacity=0.85)
         traveler.move_to(P8_C + DUCKLING_LOCAL)
         self.add(traveler)

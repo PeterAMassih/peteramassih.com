@@ -3,10 +3,10 @@
 
 The model outputs a set, so the loss must pair predictions with ground truths
 by content, not order. Shot map and timings follow storyboards.md section 3.
-Every cord survives the whole scene as one object: a straight line in shot 1,
-a three-strand braid from shot 3 (the three cost terms: class, BCE, Dice).
-Length is cost, ember tint is strain, and the side coil is the total cost as
-one physical rope.
+Every cord survives the whole scene as one object and becomes a three-strand
+braid for class, BCE, and Dice. Positions, cord lengths, and swaps are designed
+for the analogy. They are not learned coordinates, measured costs, or solver
+steps.
 """
 
 import numpy as np
@@ -23,8 +23,8 @@ COIL_C = np.array([3.6, 1.6, 0.0])  # near the disc, so a swap visibly shortens 
 SHELF_Y = -3.15
 SHELF_X = (3.2, 6.4)
 
-# Offsets in segment space from the disc center. Lookalikes are deliberately
-# close: distance on the disc must read as dissimilarity. The 0.88 factor pulls
+# Schematic offsets from the disc center. Lookalikes are deliberately close so
+# distance reads as dissimilarity. The 0.88 factor pulls
 # the farthest garbage predictions in so their shapes clear the dashed rim
 # (radius 2.75) instead of poking past it.
 _OFFSET = {
@@ -124,8 +124,8 @@ class Cord:
 
 
 class Coil:
-    """The total assignment cost as one rope, coiled at the side. Arc length
-    tracks the live sum of cord lengths, so every swap shortens it on screen."""
+    """A schematic total cost. Cord geometry is hand-authored for the analogy
+    and is not a solver trace or a measured Mask2Former cost."""
 
     def __init__(self, cords):
         self.cords = cords
@@ -322,8 +322,8 @@ class HungarianMatching(MovingCameraScene):
         self.hold(0.2)
 
         def swap(cord_a, cord_b, rt, ang_a=-1.6, ang_b=-1.6):
-            # Endpoints slide along the disc, never jumping: each traces an
-            # arc to the other's ground truth.
+            # Hand-authored endpoint swaps illustrate a lower-cost assignment.
+            # They are not Hungarian or Jonker-Volgenant algorithm steps.
             end_a = cord_a.end_mob
             end_b = cord_b.end_mob
             vp_a = VectorizedPoint(end_a.get_center())

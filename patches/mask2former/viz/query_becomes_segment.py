@@ -149,13 +149,16 @@ class QueryBecomesSegment(Scene):
                   rt=3.2)
         self.hold(0.9)
 
-        # Two orbs contest the same duck: self-attention as a short
-        # negotiation. An arc joins the claimants while they and their
-        # overlapping fields pulse in step; then one of them yields.
+        # Two fields overlap. The arc shows query communication, while the text
+        # names the one-to-one training constraint that discourages duplicates.
+        # The later separation is schematic, not a traced causal mechanism.
         arc = ArcBetweenPoints(orbs[0].get_top() + UP * 0.04,
                                orbs[1].get_top() + UP * 0.04, angle=-PI / 2)
         arc.set_stroke(GOLD, width=2.2, opacity=0.85)
+        match_note = Text("one target per query", font=FONT_BODY, font_size=22,
+                          color=MUTED).move_to([0.1, 2.25, 0])
         self.beat(Create(arc),
+                  FadeIn(match_note),
                   orbs[0].animate(rate_func=there_and_back).scale(1.35),
                   orbs[1].animate(rate_func=there_and_back).scale(1.35),
                   glow_a.animate(rate_func=there_and_back)
@@ -164,7 +167,7 @@ class QueryBecomesSegment(Scene):
                   .set_fill(opacity=0.3),
                   rt=0.9)
         self.hold(0.4)
-        self.beat(FadeOut(arc),
+        self.beat(FadeOut(arc), FadeOut(match_note),
                   Transform(glow_b, soft_field(
                       soft_blob(7, 1.0, DUCK_B + np.array([0.2, 0.3, 0])),
                       GOLD, 0.2)), rt=0.95)

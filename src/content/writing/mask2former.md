@@ -546,7 +546,7 @@ $$
 \qquad \lambda_{\text{ce}} = \lambda_{\text{dice}} = 5,
 $$
 
-and the total loss adds class cross-entropy. The class loss has weight $2$, while the no-object class is down-weighted by $0.1$.
+and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}} + \lambda_{\text{cls}}\,\mathcal{L}_{\text{cls}}$, where $\mathcal{L}_{\text{cls}} = -\log \hat p_i(c^{\text{gt}})$ is plain cross-entropy against the matched target's class $c^{\text{gt}}$, with $\lambda_{\text{cls}} = 2$ on matched queries and $0.1$ on $\varnothing$. The gradients show why these are the right terms.
 
 **BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is
 
@@ -554,66 +554,58 @@ $$
 \ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
-For BCE, the logit gradient is
-
-$$
-\frac{\partial \ell_{\text{ce}}}{\partial z_x} = \sigma(z_x) - g_x.
-$$
-
-It is bounded and remains useful for a confident mistake. The same expression applies to bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes it by the number of matched masks.
-
-<details class="proof">
-<summary>BCE gradient</summary>
-
-The two logarithms differentiate through the sigmoid. Since $\sigma'(z) = \sigma(z)(1-\sigma(z))$,
+The two logarithms differentiate through the sigmoid, by the chain rule in the form $(\log u)' = u'/u$. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$ (differentiate $\sigma(z) = (1+e^{-z})^{-1}$ and factor the result),
 
 $$
 \begin{aligned}
-\frac{d}{dz}\log\sigma(z) &= \frac{\sigma'(z)}{\sigma(z)} = 1 - \sigma(z),\\[2pt]
-\frac{d}{dz}\log\big(1-\sigma(z)\big) &= \frac{-\sigma'(z)}{1-\sigma(z)} = -\sigma(z),\\[6pt]
-\frac{\partial \ell_{\text{ce}}}{\partial z_x}
-&= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big]\\[2pt]
-&= \sigma(z_x) - g_x.
+\frac{d}{dz}\log\sigma(z) &= \frac{\sigma'(z)}{\sigma(z)} = 1 - \sigma(z) && \text{chain rule, then cancel } \sigma(z),\\[2pt]
+\frac{d}{dz}\log\big(1-\sigma(z)\big) &= \frac{-\sigma'(z)}{1-\sigma(z)} = -\sigma(z) && \text{chain rule, then cancel } 1-\sigma(z).
 \end{aligned}
 $$
 
-</details>
+Substitute both, then expand and cancel:
 
-**Dice.** Mask2Former uses a soft Dice loss that normalizes overlap by predicted and target size [[Milletari et al. 2016](#ref-milletari2016)]. Write $O = \sum_x m_xg_x$ and $S = \sum_xm_x + \sum_xg_x$. The released implementation is
+$$
+\begin{aligned}
+\frac{\partial \ell_{\text{ce}}}{\partial z_x}
+&= -\big[g_x\big(1 - \sigma(z_x)\big) - (1-g_x)\,\sigma(z_x)\big] && \text{substitute}\\[2pt]
+&= -\big[g_x - g_x\sigma(z_x) - \sigma(z_x) + g_x\sigma(z_x)\big] && \text{expand}\\[2pt]
+&= \sigma(z_x) - g_x && \text{cancel, then distribute the minus}.
+\end{aligned}
+$$
+
+Clean, well conditioned (the gradient is bounded by 1 whatever the logit, so a confident mistake still gets a useful signal), and independent per point. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes it by the number of matched masks. That per-point independence is also a weakness. Summed over a dense grid, the total gradient a segment receives scales with its area, so large segments dominate the update and small ones barely register.
+
+**Dice.** Mask2Former uses a soft Dice loss that normalizes overlap by predicted and target size [[Milletari et al. 2016](#ref-milletari2016)]. Write $O = \sum_x m_xg_x$ for the overlap and $S = \sum_xm_x + \sum_xg_x$ for the size sum. The released implementation is
 
 $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2O+1}{S+1}.
 $$
 
-Dice couples all sampled points through one region-level score. Its probability gradient still passes through the sigmoid, so it can weaken near saturation. BCE and Dice therefore provide different training signals. The derivative is folded below.
-
-<details class="proof">
-<summary>Dice gradient</summary>
-
-Use a smoothing constant $\varepsilon$ and write $\mathcal{L}_{\text{dice}} = 1-(2O+\varepsilon)/(S+\varepsilon)$. The released code uses $\varepsilon=1$. For one probability $m_x$,
+The added $1$s smooth the empty-mask case, and Milletari's original squares each sum in the denominator. Dice couples all sampled points through one region-level score. To see how, write the smoothing constant as $\varepsilon = 1$ and differentiate with respect to the single probability $m_x$. Every other term of each sum is constant, so
 
 $$
 \frac{\partial O}{\partial m_x} = g_x, \qquad \frac{\partial S}{\partial m_x} = 1.
 $$
 
-The quotient rule gives
+Then, using the quotient rule in the form $(u/v)' = (u'v - uv')/v^2$,
 
 $$
 \begin{aligned}
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
-&= -\frac{2(\partial O/\partial m_x)(S+\varepsilon)
--(2O+\varepsilon)(\partial S/\partial m_x)}{(S+\varepsilon)^2}\\[4pt]
-&= -\frac{2g_x(S+\varepsilon)-(2O+\varepsilon)}{(S+\varepsilon)^2}.
+&= -\,\frac{\partial}{\partial m_x}\!\left(\frac{2O+\varepsilon}{S+\varepsilon}\right) && \text{drop the constant } 1\\[4pt]
+&= -\,\frac{2\,(\partial O/\partial m_x)\,(S+\varepsilon) - (2O+\varepsilon)\,(\partial S/\partial m_x)}{(S+\varepsilon)^2} && \text{quotient rule}\\[4pt]
+&= -\,\frac{2\,g_x\,(S+\varepsilon) - (2O+\varepsilon)}{(S+\varepsilon)^2} && \text{insert the partials}.
 \end{aligned}
 $$
 
-</details>
+Read the fraction as a whole. The numerator is of order $S$, so each point's gradient scales like $1/S$, and summed over the region's roughly $S$ points the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in one specific sense. Tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the unsmoothed loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price lands one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. Dice does not. Summing the two losses is the standard combination. BCE supplies gradient at every point, and Dice makes that gradient scale-invariant.
 
-**Focal loss.** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Mask2Former uses BCE with weight $5$. This change is part of the updated training recipe, but the paper does not isolate its individual effect.
+**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, cross-entropy scaled down on already-confident predictions so easy background points stop dominating the gradient. Mask2Former reverts to plain BCE at weight $5$. Focal loss exists to fight the extreme foreground-background imbalance of dense evaluation, and §8's point sampling removes most of that imbalance at the source, so the simpler and better-conditioned loss suffices. The paper does not isolate this change's individual effect.
 
-**No-object class.** Most queries are unmatched in a typical image. Down-weighting the no-object class prevents those queries from dominating the class loss. This follows DETR.
+**The $\varnothing$ down-weighting.** With $N = 100$ queries and typically 5 to 20 real segments in an image, no-object outnumbers real matches by roughly 4 to 19 times. At full weight, predicting nothing becomes the dominant gradient. Down-weighting the class term to $0.1$ on unmatched queries is the inexpensive fix, inherited from DETR.
 
-**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers. The final prediction receives the main loss and the preceding nine receive auxiliary losses. These losses matter because the thresholded intermediate masks become attention masks in the next layer.
+**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, ten supervised predictions per forward pass through the same shared heads. In most papers auxiliary losses are an optimization nicety. Here they are structural. The thresholded intermediate masks become attention masks in §5, and being a useful attention gate is otherwise never optimized.
 
 ## 4. The architecture
 
@@ -806,14 +798,16 @@ Additive attention masking already existed in Transformer decoders [[Vaswani et 
 
 ### 5.3 Gradients and empty masks
 
-The attention gate is Boolean, so gradients do not pass through the threshold. Auxiliary losses train every intermediate mask directly. Residual connections preserve the previous query state alongside each new update.
+The attention gate is Boolean, so gradients do not pass through the threshold. The learning signal for mask quality arrives only through §3.2's per-layer auxiliary losses, and that proxy happens to be the right objective. The mask loss is minimized exactly at $m = g$. For BCE that holds pointwise. For soft Dice it follows from $2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x$, with equality only at $m = g$. One line to check: $m_x + g_x - 2m_xg_x = m_x(1-g_x) + g_x(1-m_x) \ge 0$ for $m_x \in [0,1]$ and binary $g_x$, vanishing only at $m_x = g_x$, then sum over $x$. Better, the gate is already exactly right once every point's error $|m_x - g_x|$ falls below $0.5$, well before the mask itself converges. Imperfect intermediate masks therefore already make good gates. Residual connections preserve the previous query state alongside each new update, so one bad read cannot erase a query.
 
-The implementation also handles an empty predicted region. Masking every location would make softmax undefined because all logits would be $-\infty$. The code removes the restriction for every head of the affected query for that layer, giving it unrestricted cross-attention.
+The implementation also handles an empty predicted region. The detail lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
 
 ```python
 attn_mask = (mask_logits.sigmoid() < 0.5).flatten(2)   # True = forbidden
 attn_mask[attn_mask.all(dim=-1)] = False               # the guard rail
 ```
+
+One poisoned row would not stay contained. The following self-attention averages all $N$ queries together, so a single NaN spreads to every query in one step, then into the loss and every gradient behind it. The guard is also what keeps the masking proposition's hypothesis true, since flipping the row to fully unmasked makes the allowed set $S$ the whole grid instead of empty.
 
 ### 5.4 Did it work?
 
@@ -1113,7 +1107,7 @@ Relabeling by $\pi$ turns the cost of $\sigma$ into the cost of $\pi\circ\sigma$
 <details class="proof">
 <summary>Answer</summary>
 
-They do not learn through the Boolean gate. Auxiliary losses train each intermediate mask directly.
+They do not learn through the Boolean gate. Per-layer deep supervision trains every intermediate mask directly. The auxiliary losses are load-bearing.
 
 </details>
 

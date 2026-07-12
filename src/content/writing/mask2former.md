@@ -100,7 +100,7 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location.
+$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location. In practice the model runs several of these lookups in parallel, each on its own slice of the $d$ feature dimensions. Each slice is called a head, and the head outputs are concatenated and projected back to width $d$.
 
 <figure class="viz">
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
@@ -593,7 +593,7 @@ $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2O+1}{S+1}.
 $$
 
-The added $1$s smooth the empty-mask case, and Milletari's original squares each sum in the denominator. Dice couples all sampled points through one region-level score. Writing the smoothing constant as $\varepsilon = 1$, the gradient at a single point is
+The added $1$s smooth the empty-mask case, and Milletari's original uses sums of squares in the denominator. Dice couples all sampled points through one region-level score. Writing the smoothing constant as $\varepsilon = 1$, the gradient at a single point is
 
 $$
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
@@ -624,11 +624,11 @@ $$
 
 Read the fraction as a whole. The numerator is of order $S$, so each point's gradient scales like $1/S$, and summed over the region's roughly $S$ points the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in one specific sense. Tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the unsmoothed loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price lands one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. Dice does not. Summing the two losses is the standard combination. BCE supplies gradient at every point, and Dice makes that gradient scale-invariant.
 
-**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, cross-entropy scaled down on already-confident predictions so easy background points stop dominating the gradient. Mask2Former reverts to plain BCE at weight $5$. Focal loss exists to fight the extreme foreground-background imbalance of dense evaluation, and §8's point sampling removes most of that imbalance at the source, so the simpler and better-conditioned loss suffices. The paper does not isolate this change's individual effect.
+**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, cross-entropy scaled down on already-confident predictions so easy background points stop dominating the gradient. Mask2Former reverts to plain BCE at weight $5$. Focal loss exists to fight the extreme foreground-background imbalance of dense evaluation, and §8's point sampling removes most of that imbalance at the source, so the simpler and better-conditioned loss suffices. The paper never measures this change on its own.
 
 **The $\varnothing$ down-weighting.** With $N = 100$ queries and typically 5 to 20 real segments in an image, no-object outnumbers real matches by roughly 4 to 19 times. At full weight, predicting nothing becomes the dominant gradient. Down-weighting the class term to $0.1$ on unmatched queries is the inexpensive fix, inherited from DETR.
 
-**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, ten supervised predictions per forward pass through the same shared heads. In most papers auxiliary losses are an optimization nicety. Here they are structural. The thresholded intermediate masks become attention masks in §5, and being a useful attention gate is otherwise never optimized.
+**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, ten supervised predictions per forward pass through the same shared heads. In the released criterion, Hungarian matching is recomputed for each of the ten outputs, so every intermediate prediction trains toward its own assignment. In most papers auxiliary losses are an optimization nicety. Here they are structural. The thresholded intermediate masks become attention masks in §5, and being a useful attention gate is otherwise never optimized.
 
 ## 4. The architecture
 
@@ -807,7 +807,7 @@ the softmax of the original logits restricted to $S$. $\blacksquare$
 
 </details>
 
-The ablation compares four updates. Plain cross-attention reaches 37.8 AP, spatially modulated co-attention (SMCA) [[Gao et al. 2021](#ref-gao2021)] reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
+The paper's R50 ablation on COCO compares four updates. Plain cross-attention reaches 37.8 AP, spatially modulated co-attention (SMCA) [[Gao et al. 2021](#ref-gao2021)] reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
 
 Additive attention masking already existed in Transformer decoders [[Vaswani et al. 2017](#ref-vaswani2017)]. Mask2Former makes the mask spatial, query-specific, and dependent on the previous mask prediction. The prediction restricts the next read, and the next query state produces a new prediction.
 
@@ -881,7 +881,7 @@ Mask2Former changes the decoder layer in three ways without adding FLOPs. Togeth
 
 **Masked attention comes first.** The standard order is self-attention, then cross-attention, then the feed-forward network. Mask2Former uses masked attention, then self-attention, then the feed-forward network. Running cross-attention first gives each query image context before the queries interact. Restoring the original order costs 0.5 AP.
 
-**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. This also gives the first layer a useful gate. Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
+**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. The query positional embeddings stay learnable, as in DETR. Every decoder layer adds them to the query features when computing attention, and they appear as `query_pos` in Appendix A. Direct supervision also gives the first layer a useful gate. Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
 
 **Dropout is removed.** Restoring dropout lowers AP by 0.7 and PQ by 0.6 in the ablation.
 
@@ -960,7 +960,7 @@ This training sampler is intentionally nonuniform and applies no importance corr
 | points | masks | 43.1 | 51.4 | **47.3** | 18 GB |
 | **points** | **points** | **43.7** | **51.9** | 47.2 | **6 GB** |
 
-Using points for the training loss reduces reported memory from 18 GB to 6 GB. AP and mIoU stay the same in the dense-matching rows, while PQ rises from 50.3 to 50.8. Using points for matching raises AP from 41.0 to 43.1 with dense training, then to 43.7 with point training. The table measures the effect, but it does not isolate why point-based matching improves the assignment.
+Using points for the training loss reduces reported training memory from 18 GB to 6 GB in the paper's R50 COCO ablation. AP and mIoU stay the same in the dense-matching rows, while PQ rises from 50.3 to 50.8. Using points for matching raises AP from 41.0 to 43.1 with dense training, then to 43.7 with point training. The table measures the effect. Why point-based matching improves the assignment is left open.
 
 ## 9. Training recipe
 
@@ -990,7 +990,7 @@ Post-processing follows MaskFormer. Semantic output sums the masks weighted by e
 
 Panoptic output first keeps queries whose best class is not no-object and whose class probability exceeds $0.8$. Each pixel chooses the kept query with the largest class-probability times mask-probability score. The pixel is written only if the winning query's mask probability is at least $0.5$. For each query, the code divides the number of pixels it wins by the number of pixels in its own thresholded mask and discards the segment when this ratio is below $0.8$. The final segment is the intersection of the winning pixels and that thresholded mask. Stuff segments with the same class are merged. Rejected pixels remain void.
 
-Instance output flattens the $N\times K$ query-class probabilities and selects the highest-scoring pairs. The same query mask can therefore appear with more than one class before the top-pair cutoff. For a selected pair $(i,c)$, the final score multiplies its class probability by the average mask probability over the predicted foreground.
+Instance output flattens the $N\times K$ query-class probabilities and selects the highest-scoring pairs. The released code keeps the top 100 pairs per image. The same query mask can therefore appear with more than one class before the top-pair cutoff. For a selected pair $(i,c)$, the final score multiplies its class probability by the average mask probability over the predicted foreground.
 
 $$
 s_{i,c} = \hat p_i(c)\,
@@ -1012,9 +1012,9 @@ The largest models reported in the paper achieve the following results.
 
 Boundary AP uses the minimum of mask IoU and Boundary IoU [[Cheng et al. 2021c](#ref-cheng2021biou)]. Multi-scale in the semantic row means test-time inference over several input sizes. It is unrelated to the decoder schedule. The 57.7 mIoU model also uses FaPN instead of the default MSDeformAttn pixel decoder.
 
-With ResNet-50, Mask2Former reaches 51.9 PQ after 50 epochs. MaskFormer reports 46.5 after 300 epochs. The comparison includes architecture, loss, augmentation, batch size, and optimizer-setting changes, so it should not be read as a controlled convergence experiment.
+With ResNet-50, Mask2Former reaches 51.9 PQ after 50 epochs. MaskFormer reports 46.5 after 300 epochs. The comparison includes architecture, loss, augmentation, batch size, and optimizer-setting changes, so it should not be read as a controlled convergence experiment. The paper's appendix isolates one of these variables. Trained with standard augmentation instead of LSJ, R50 Mask2Former converges in 25 epochs, so the short schedule is not an artifact of the augmentation.
 
-The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
+The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. COCO buckets objects by mask area, small under 32 by 32 pixels and large over 96 by 96. Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
 
 The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. A Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$ on Cityscapes, the instance AP on thing classes computed from the panoptic checkpoint. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
 
@@ -1148,7 +1148,7 @@ Sharing one uniform coordinate set makes the cost matrix efficient to build. For
 <details class="proof">
 <summary>Answer</summary>
 
-The ablation shows a larger gain for instance and panoptic segmentation than for semantic segmentation. Identity separation is a plausible explanation, but the experiment does not isolate the cause.
+The ablation shows a larger gain for instance and panoptic segmentation than for semantic segmentation. Identity separation is a plausible explanation, but the experiment cannot single it out.
 
 </details>
 

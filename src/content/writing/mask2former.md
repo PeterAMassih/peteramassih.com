@@ -100,7 +100,7 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set.
+$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location.
 
 <figure class="viz">
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
@@ -179,7 +179,7 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <figcaption>Fig. 0b. One attention lookup. The query is scored against every location's key. Softmax turns the scores into positive weights that sum to 1. The output is the weighted average of the values. §5 shows how Mask2Former excludes locations before this average is computed.</figcaption>
 </figure>
 
-**Transformers and decoders.** A Transformer layer combines attention with a per-token network and residual connections. Omitting normalization, it applies two updates in order.
+**Transformers and decoders.** A Transformer layer combines attention with a per-token network and residual connections. Each token carries a vector $x$. Omitting normalization, the layer applies two updates in order.
 
 $$
 x \,\leftarrow\, x + \operatorname{Attention}(x,\ \text{context}), \qquad
@@ -263,7 +263,7 @@ Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \do
 
 </details>
 
-**Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every evaluated pixel receives a class and an instance id, with identities on things and plain categories on stuff. After the standard void and crowd exclusions, write $\mathit{TP}$ for matched pairs, $\mathit{FP}$ for unmatched predictions, and $\mathit{FN}$ for unmatched ground-truth segments. Quality is
+**Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every evaluated pixel receives a class and an instance id, with identities on things and plain categories on stuff. Evaluation first sets aside void pixels, which carry no label, and crowd regions, which group objects the annotators could not separate. Write $\mathit{TP}$ for matched pairs, $\mathit{FP}$ for unmatched predictions, and $\mathit{FN}$ for unmatched ground-truth segments. Quality is
 
 $$
 \text{PQ} = \frac{\sum_{(p,g)\in \mathit{TP}}\text{IoU}(p,g)}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}
@@ -278,7 +278,7 @@ A match requires $\text{IoU} > 0.5$. PQ is computed per class, then averaged ove
 **Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one. Each segment can match at most one segment from the other set.*
 
 <details class="proof">
-<summary>Proof</summary>
+<summary>Proof: a majority overlap can only happen once</summary>
 
 **Proof.** Suppose a prediction $p$ has $\text{IoU}(p, g) > \tfrac12$. Then
 
@@ -382,7 +382,7 @@ $$
 
 and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. A later bookkeeping refinement brings the runtime to $O(N^3)$. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
 
-The implementation calls `scipy`, but the underlying algorithm is useful to understand. Its dual supplies the correctness argument and explains the $O(N^3)$ runtime. The complete derivation is folded below.
+The implementation calls `scipy`, but the underlying algorithm is useful to understand. A companion maximization problem, the dual, supplies the correctness argument and explains the $O(N^3)$ runtime. The complete derivation is folded below.
 
 <details class="proof">
 <summary>The linear program, the duality proof, and a worked 3&#215;3 run</summary>
@@ -505,7 +505,7 @@ The minimum assignment cost has one property the model needs.
 **Proposition (the matching objective ignores prediction order).** *Let $\mathcal{J} = \min_{\sigma\in S_N} J(\sigma)$, with the costs evaluated on the model's current predictions. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{J}$ unchanged.*
 
 <details class="proof">
-<summary>Proof</summary>
+<summary>Proof: relabeling only reindexes the search space</summary>
 
 **Proof.** Let $\pi \in S_N$ relabel the predictions, so that position $i$ now holds the prediction originally at position $\pi(i)$. Under the relabeling, assignment $\sigma$ pairs target $j$ with the prediction originally at position $\pi(\sigma(j))$, so its cost is
 
@@ -554,6 +554,15 @@ $$
 \ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
+Its gradient through the logit collapses to one clean expression,
+
+$$
+\frac{\partial \ell_{\text{ce}}}{\partial z_x} = \sigma(z_x) - g_x.
+$$
+
+<details class="proof">
+<summary>The BCE gradient, step by step</summary>
+
 The two logarithms differentiate through the sigmoid, by the chain rule in the form $(\log u)' = u'/u$. With $\sigma'(z) = \sigma(z)\big(1-\sigma(z)\big)$ (differentiate $\sigma(z) = (1+e^{-z})^{-1}$ and factor the result),
 
 $$
@@ -574,6 +583,8 @@ $$
 \end{aligned}
 $$
 
+</details>
+
 Clean, well conditioned (the gradient is bounded by 1 whatever the logit, so a confident mistake still gets a useful signal), and independent per point. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes it by the number of matched masks. That per-point independence is also a weakness. Summed over a dense grid, the total gradient a segment receives scales with its area, so large segments dominate the update and small ones barely register.
 
 **Dice.** Mask2Former uses a soft Dice loss that normalizes overlap by predicted and target size [[Milletari et al. 2016](#ref-milletari2016)]. Write $O = \sum_x m_xg_x$ for the overlap and $S = \sum_xm_x + \sum_xg_x$ for the size sum. The released implementation is
@@ -582,7 +593,17 @@ $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2O+1}{S+1}.
 $$
 
-The added $1$s smooth the empty-mask case, and Milletari's original squares each sum in the denominator. Dice couples all sampled points through one region-level score. To see how, write the smoothing constant as $\varepsilon = 1$ and differentiate with respect to the single probability $m_x$. Every other term of each sum is constant, so
+The added $1$s smooth the empty-mask case, and Milletari's original squares each sum in the denominator. Dice couples all sampled points through one region-level score. Writing the smoothing constant as $\varepsilon = 1$, the gradient at a single point is
+
+$$
+\frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
+= -\,\frac{2\,g_x\,(S+\varepsilon) - (2O+\varepsilon)}{(S+\varepsilon)^2}.
+$$
+
+<details class="proof">
+<summary>The Dice gradient, step by step</summary>
+
+Differentiate with respect to the single probability $m_x$. Every other term of each sum is constant, so
 
 $$
 \frac{\partial O}{\partial m_x} = g_x, \qquad \frac{\partial S}{\partial m_x} = 1.
@@ -598,6 +619,8 @@ $$
 &= -\,\frac{2\,g_x\,(S+\varepsilon) - (2O+\varepsilon)}{(S+\varepsilon)^2} && \text{insert the partials}.
 \end{aligned}
 $$
+
+</details>
 
 Read the fraction as a whole. The numerator is of order $S$, so each point's gradient scales like $1/S$, and summed over the region's roughly $S$ points the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in one specific sense. Tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the unsmoothed loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price lands one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. Dice does not. Summing the two losses is the standard combination. BCE supplies gradient at every point, and Dice makes that gradient scale-invariant.
 
@@ -616,7 +639,7 @@ $$
 m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)\big).
 $$
 
-The class head predicts what the query represents. The mask head maps the same query into an embedding and compares it with every pixel embedding to predict where the segment lies. Masks are produced at stride 4 and then upsampled. The paper uses either a ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)] backbone. MaskFormer used an FPN pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard decoder layers over one stride-32 feature map.
+The class head is one linear layer with weights $W_{\text{cls}}$ and bias $b_{\text{cls}}$. It predicts what the query represents. The mask head is a small multi-layer perceptron (MLP). It maps the same query into an embedding and compares it with every pixel embedding to predict where the segment lies. Masks are produced at stride 4 and then upsampled. The paper uses either a ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)] backbone. MaskFormer used a feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard decoder layers over one stride-32 feature map.
 
 <figure class="viz">
 <svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former architecture from image and backbone features to pixel decoder, Transformer decoder, class predictions, and mask predictions.">
@@ -746,7 +769,7 @@ $$
 *which is exactly the softmax of the original logits restricted to $S$.*
 
 <details class="proof">
-<summary>Proof</summary>
+<summary>Proof: the forbidden exponentials become exact zeros</summary>
 
 **Proof.** Fix an index $i$ and write its softmax entry from the definition:
 
@@ -835,7 +858,7 @@ Each feature also receives DETR's two-dimensional sinusoidal position encoding a
 
 ### 6.3 The pixel decoder
 
-The default pixel decoder has six multi-scale deformable-attention layers over strides 8, 16, and 32. It then fuses the result with stride-4 backbone features to produce pixel embeddings. Each location samples a small learned set of points from every feature level instead of attending densely to all locations [[Zhu et al. 2021](#ref-zhu2021)]. The exact operator and cost are folded below.
+The default pixel decoder has six multi-scale deformable-attention (MSDeformAttn) layers over strides 8, 16, and 32. It then fuses the result with stride-4 backbone features to produce pixel embeddings. Each location samples a small learned set of points from every feature level instead of attending densely to all locations [[Zhu et al. 2021](#ref-zhu2021)]. The exact operator and cost are folded below.
 
 <details class="proof">
 <summary>Multi-scale deformable attention</summary>
@@ -846,7 +869,7 @@ $$
 \text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big].
 $$
 
-Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $K$ sample points per level. This $K$ counts points, not classes, and this $M$ counts heads, not masks. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The offsets and weights are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations. The aggregation processes $MLK$ entries of width $C/M$, so it costs $O(LKC)$ per query apart from the learned projections. Dense attention would read every location at every level.
+Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $K$ sample points per level, and $x^l$ is the feature map at level $l$. This $K$ counts points, not classes, and this $M$ counts heads, not masks. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The offsets and weights are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations. The aggregation processes $MLK$ entries of width $C/M$, so it costs $O(LKC)$ per query apart from the learned projections. Dense attention would read every location at every level.
 
 </details>
 
@@ -941,7 +964,7 @@ Using points for the training loss reduces reported memory from 18 GB to 6 GB. A
 
 ## 9. Training recipe
 
-The table compares Mask2Former's training recipe with MaskFormer's.
+The table compares Mask2Former's training recipe with MaskFormer's. In the decoder row, SA, CA, and MA abbreviate self-attention, cross-attention, and masked attention.
 
 | | MaskFormer | Mask2Former |
 |---|---|---|

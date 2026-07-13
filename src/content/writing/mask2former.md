@@ -8,7 +8,7 @@ series: "Peter's Patches"
 part: 1
 ---
 
-**In short.** Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] uses one model design for panoptic, instance, and semantic segmentation, with a separate checkpoint for each task. Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls from MaskFormer's 300 epochs to 50. In Mask2Former's point-loss ablation, reported memory falls from 18 GB to 6 GB.
+**In short.** By late 2021, universal segmentation architectures existed and kept losing. MaskFormer handled panoptic, instance, and semantic segmentation with one design, and trailed the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed the gap without abandoning the paradigm, by rebuilding the decoder and the training recipe. Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls to 50 epochs and reported training memory to 6 GB.
 
 **Contents.** [0. Background](#0-the-background-you-need) · [1. The problem](#1-the-segmentation-problem) · [2. Two paradigms](#2-two-paradigms) · [3. Set prediction](#3-set-prediction-and-matching) · [4. Architecture](#4-the-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-matching-and-training-on-points) · [9. Training](#9-training-recipe) · [10. Results](#10-results) · [11. Ablations](#11-ablations-and-interactions) · [12. Limitations](#12-limitations) · [13. Later work](#13-later-work) · [14. Conclusion](#14-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [Appendix B](#appendix-b-questions-and-answers) · [References](#references) · [Citation](#citation)
 
@@ -356,7 +356,7 @@ The matrix says where and the label says what. The model emits mask probabilitie
 <figcaption>Fig. 2. One dog query and its predicted mask. The right panel shows a coarse binary view of the same mask. A Swin-L checkpoint trained on COCO panoptic segmentation processed the public-domain photograph.</figcaption>
 </figure>
 
-Universal architectures still trailed specialized systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former keeps the mask-classification format and changes the decoder and training procedure.
+Universal architectures still trailed specialized systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
 
 ## 3. Set prediction and matching
 
@@ -1047,7 +1047,9 @@ The same group extended Mask2Former to video instance segmentation [[Cheng et al
 
 ## 14. Conclusion
 
-Mask2Former combines several changes that support one another. Matching assigns one target to each selected query. Masked attention keeps the next image read inside the query's current region. Multi-scale features restore spatial detail, and point sampling makes the mask losses affordable. Masked attention produces the largest measured gain, while the other changes improve accuracy, memory, or training time.
+Mask2Former's changes support one another rather than stack. Matching gives each query one target. Deep supervision makes every intermediate mask worth trusting. Masked attention turns those masks into the next layer's reading list, and point sampling makes the loop affordable enough to train. That is why §11's one-at-a-time deltas never add up to the whole. The parts were built as a loop, not a list.
+
+The headline numbers were passed within a year, as headline numbers are. What the successors in §13 kept is the loop. A query states a hypothesis about a segment, the image grades it, and the next layer reads only where the hypothesis points. That design outlived its own results table.
 
 ## Appendix A. Implementation notes
 

@@ -1142,43 +1142,22 @@ Later systems changed the objectives and supported outputs but kept this query-t
 The reference implementation is [`facebookresearch/Mask2Former`](https://github.com/facebookresearch/Mask2Former), built on Detectron2 [[Wu et al. 2019](#ref-wu2019)]. It was archived on January 1, 2025. Hugging Face provides `Mask2FormerForUniversalSegmentation` with `Mask2FormerImageProcessor` or `AutoImageProcessor`. The image processor exposes semantic, instance, and panoptic post-processing methods. The decoder core is shown below in simplified PyTorch-style pseudocode.
 
 ```python
-def decoder_layer(
-    x, feats_l, size_l, pos_l, lvl_emb, query_pos,
-    prev_mask_logits, pixel_embeddings, num_heads,
-):
+def decoder_layer(x, feats_l, size_l, pos_l, lvl_emb, query_pos, prev_mask_logits, pixel_embeddings, num_heads):
     # x: (N,B,C) · feats_l: (H_l*W_l,B,C) · size_l: (H_l,W_l)
-    m = F.interpolate(
-        prev_mask_logits,
-        size=size_l,
-        mode="bilinear",
-        align_corners=False,
-    )
+    m = F.interpolate(prev_mask_logits, size=size_l, mode="bilinear", align_corners=False)
     attn_mask = (m.sigmoid() < 0.5).flatten(2)  # (B,N,H_l*W_l)
-    attn_mask = attn_mask[:, None].repeat(
-        1, num_heads, 1, 1
-    ).flatten(0, 1).detach()                     # (B*num_heads,N,H_l*W_l)
-    attn_mask[attn_mask.all(dim=-1)] = False    # Prevent all-masked softmax.
+    attn_mask = attn_mask[:, None].repeat(1, num_heads, 1, 1).flatten(0, 1).detach()  # (B*num_heads,N,H_l*W_l)
+    attn_mask[attn_mask.all(dim=-1)] = False  # Prevent all-masked softmax.
 
     # The scale embedding is part of both the key and value memory.
     feats_l = feats_l + lvl_emb
-    x = norm1(x + cross_attn(
-        q=with_pos(x, query_pos),
-        k=with_pos(feats_l, pos_l),
-        v=feats_l,
-        attn_mask=attn_mask,
-    ))
-    x = norm2(x + self_attn(
-        q=with_pos(x, query_pos),
-        k=with_pos(x, query_pos),
-        v=x,
-    ))
+    x = norm1(x + cross_attn(q=with_pos(x, query_pos), k=with_pos(feats_l, pos_l), v=feats_l, attn_mask=attn_mask))
+    x = norm2(x + self_attn(q=with_pos(x, query_pos), k=with_pos(x, query_pos), v=x))
     x = norm3(x + ffn(x))
 
     h = decoder_norm(x).transpose(0, 1)
     cls_logits = class_head(h)
-    mask_logits = einsum(
-        "bnc,bchw->bnhw", mask_head(h), pixel_embeddings
-    )
+    mask_logits = einsum("bnc,bchw->bnhw", mask_head(h), pixel_embeddings)
     return x, cls_logits, mask_logits
 ```
 

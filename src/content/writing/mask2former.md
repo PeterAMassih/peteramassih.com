@@ -191,9 +191,7 @@ x \,\leftarrow\, x + \operatorname{Attention}(x,\ x), \qquad
 x \,\leftarrow\, x + \operatorname{FFN}(x).
 $$
 
-The first attention step reads image features. The second lets queries exchange information. The feed-forward network then processes each query independently. Residual connections add each update to the current state. Mask2Former stacks nine decoder layers, and each query produces one candidate segment.
-
-Here $\operatorname{Attention}(x,\text{image})$ uses $x$ to form queries and image features to form keys and values. The second update is self-attention, so all three come from the query set.
+The first attention step reads image features, using $x$ to form queries and the image features to form keys and values. The second is self-attention and lets queries exchange information. The feed-forward network then processes each query independently. Residual connections add each update to the current state. Mask2Former stacks nine decoder layers, and each query produces one candidate segment.
 
 **Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Plain gradient descent illustrates the basic update. It computes $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, then moves a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The step size $\eta$ is the learning rate. Mask2Former uses AdamW rather than this plain update, as §9 explains. Sections 3 and 8 define the loss and show how predictions receive training signals.
 
@@ -256,7 +254,7 @@ i \in \mathit{TP} \iff \max_{g \in \mathcal{G}_i} \text{IoU}(\bar m_i, g) \ge \t
 \end{gathered}
 $$
 
-where the sums visit every pixel $x$ of the grid $\Omega$. COCO receives binary masks. Mask2Former's released inference code obtains $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$, which is $1$ on claimed pixels and $0$ elsewhere. The ground-truth mask $g(x)$ is also binary. On $0/1$ values a product acts as an AND, so the numerator counts the intersection. The combination $\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)$ acts as an OR, so the denominator counts the union. Finally $\mathcal{G}_i$ holds the ground truths of the same class and image that remain unclaimed when prediction $i$ takes its turn. If $\mathcal{G}_i$ is empty the max is $-\infty$, an automatic false positive. A true positive claims its match, so a duplicate detection cannot score twice. Everything else is a false positive.
+where the sums visit every pixel $x$ of the grid $\Omega$. COCO receives binary masks. Mask2Former's released inference code obtains $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$, which is $1$ on claimed pixels and $0$ elsewhere. The ground-truth mask $g(x)$ is also binary. On $0/1$ values a product acts as an AND, so the numerator counts the intersection. The combination $\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)$ acts as an OR, so the denominator counts the union. Finally $\mathcal{G}_i$ holds the ground truths of the same class and image that remain unclaimed when prediction $i$ takes its turn. If $\mathcal{G}_i$ is empty the max is $-\infty$, an automatic false positive. Once a true positive claims a ground truth, later duplicates become false positives, which makes confidence ranking matter. Everything else is a false positive.
 
 After matching within each image, COCO gathers the detections for each class across the dataset and sorts them by score. At any score cutoff, precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff traces the precision-recall curve. COCO summarizes its interpolated precision at 101 recall levels and averages over ten IoU thresholds [[Lin et al. 2014](#ref-lin2014)]:
 
@@ -270,7 +268,7 @@ $$
 \frac{1}{101}\sum_{r\in\{0,0.01,\ldots,1\}} p_\tau^{\mathrm{interp}}(r).
 $$
 
-Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \dots, 0.95\}$, and $p_\tau^{\mathrm{interp}}(r) = \max_{r' \ge r} p_\tau(r')$ is the interpolated precision, the best precision the curve reaches at recall $r$ or beyond. This is the per-category AP. COCO then averages over categories. When a cutoff keeps no detections, COCO records zero precision. A category with no ground-truth instances in the evaluation set is excluded from the mean. A duplicate detection cannot claim an object twice, so confidence ranking matters. This sketch omits crowd and ignore bookkeeping and the per-image detection cap.
+Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \dots, 0.95\}$, and $p_\tau^{\mathrm{interp}}(r) = \max_{r' \ge r} p_\tau(r')$ is the interpolated precision, the best precision the curve reaches at recall $r$ or beyond. This is the per-category AP. COCO then averages over categories. When a cutoff keeps no detections, COCO records zero precision. A category with no ground-truth instances in the evaluation set is excluded from the mean. This sketch omits crowd and ignore bookkeeping and the per-image detection cap.
 
 </details>
 
@@ -360,7 +358,7 @@ m_i \;\longrightarrow\;
 \end{pmatrix}.
 $$
 
-The matrix says where and the label says what. The model emits mask probabilities rather than hard zeros and ones.
+The model emits mask probabilities rather than hard zeros and ones.
 
 <figure class="viz">
 <img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="A photograph of a French bulldog with its predicted mask in gold, followed by a coarse grid view of the same mask.">
@@ -393,7 +391,7 @@ $$
 
 and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. A later bookkeeping refinement brings the runtime to $O(N^3)$. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
 
-The implementation calls `scipy`, but the underlying argument is useful to understand. The linear-program relaxation has an optimal permutation vertex. A companion maximization problem supplies a lower bound, and the Hungarian method reaches that bound by growing a matching on zero reduced-cost edges. The three parts are folded separately.
+The linear-program relaxation has an optimal permutation vertex. A companion maximization problem supplies a lower bound, and the Hungarian method reaches that bound by growing a matching on zero reduced-cost edges.
 
 <details class="proof">
 <summary>Why the assignment relaxation has an optimal permutation</summary>
@@ -406,9 +404,9 @@ $$
 \textstyle\sum_j x_{ij} = 1\ (\forall i),\quad \sum_i x_{ij} = 1\ (\forall j).
 $$
 
-The relaxation lets a prediction split fractionally across targets, which no real assignment can do. Total unimodularity guarantees that an optimal vertex is still a whole-number permutation. The next argument proves that property from the constraint matrix.
+The relaxation lets a prediction split fractionally across targets, which no real assignment can do. Total unimodularity guarantees that an optimal vertex is still a whole-number permutation.
 
-The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*. Every square submatrix has determinant $-1$, $0$, or $+1$.
+The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure is what makes the matrix *totally unimodular*.
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
@@ -416,7 +414,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 *Base case* ($k = 1$). $B$ is a single entry, $0$ or $1$, so $\det B \in \{0, 1\}$.
 
-*Inductive step* ($k > 1$). Suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column. Otherwise every column holds exactly two, the most any column can carry. That gives three cases.
+*Inductive step* ($k > 1$). Suppose the claim holds at every order below $k$. If some column of $B$ holds fewer than two 1s, take such a column. Otherwise every column holds exactly two, the most any column can carry.
 
 - *Zero 1s.* The column is all zeros, so $\det B = 0$.
 - *One 1,* at row $r$, column $c$ of $B$. [Laplace-expand](https://en.wikipedia.org/wiki/Laplace_expansion) along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
@@ -445,7 +443,7 @@ $$
 
 and dual feasibility is exactly the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ staying nonnegative everywhere.
 
-**The optimality certificate.** Take any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, and sum the reduced cost $\tilde c(i,j) = \text{cost}(i,j) - u_i - v_j$ along an assignment $\sigma$:
+**The optimality certificate.** Take any row potentials $u_1,\dots,u_N$ and column potentials $v_1,\dots,v_N$, and sum the reduced costs along an assignment $\sigma$:
 
 $$
 \begin{aligned}
@@ -479,7 +477,7 @@ This equality is [complementary slackness](https://en.wikipedia.org/wiki/Linear_
 <details class="proof">
 <summary>A worked 3&#215;3 Hungarian run and the O(N³) bound</summary>
 
-**The primal-dual algorithm.** Instead of checking all $N!$ assignments, the Hungarian method searches for feasible potentials and a complete matching on tight edges. It maintains two invariants. Reduced costs stay nonnegative, and matched edges stay tight. Consider three predictions against three targets, with prediction $i$ in row $i$, target $j$ in column $j$, and the costs collected in a matrix written $C$ for this example only.
+**The primal-dual algorithm.** Instead of checking all $N!$ assignments, the Hungarian method grows a matching while keeping matched edges tight and every reduced cost nonnegative. Consider three predictions against three targets, with prediction $i$ in row $i$, target $j$ in column $j$, and the costs collected in a matrix written $C$ for this example only.
 
 $$
 C = \begin{pmatrix} 4 & 1 & 3\\ 2 & 0 & 5\\ 3 & 2 & 2 \end{pmatrix}.
@@ -497,7 +495,7 @@ A reduced cost is the pairing cost after subtracting the current row and column 
 
 The tool for getting unstuck is the augmenting path. Call a row or column free while it has no partner. An augmenting path starts at a free row, steps to a column through a zero, steps from that column to its partner row through the matched edge, steps to a new column through another zero, and keeps alternating until it lands on a free column. Flip every edge along it, matched becoming unmatched and back. Each interior row and column trades one partner for another while the two free endpoints gain one, so the matching grows by exactly one pair. Matching as far as possible means flipping augmenting paths until none exists.
 
-None exists here. From the free row 2 the only zero leads to column 2, column 2's partner is row 1, and row 1 owns no other zero to continue through. Dead end.
+None exists here. From the free row 2 the only zero leads to column 2, column 2's partner is row 1, and row 1 owns no other zero to continue through.
 
 **Create a new zero.** The rows and columns just visited form the alternating tree, here rows $I = \{2, 1\}$ and columns $J = \{2\}$. These names are local to this example. Progress needs a zero on an edge from a row in $I$ to a column outside $J$. Take the smallest remaining reduced cost on such an edge.
 
@@ -519,7 +517,7 @@ $$
 
 **Augment.** The purchased zero at $(2,1)$ extends the search. Row 2 now reaches column 1, column 1's partner row 3 joins, and row 3 owns a zero in column 3, which is free. That is an augmenting path, row 2 to column 1 to row 3 to column 3. Flip it. Row 2 takes column 1, row 3 moves to column 3, row 1 keeps column 2, and the matching is perfect.
 
-**Read off the certificate.** In the original matrix the assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $(2 + 1 + 2) + (1 - 1 + 0) = 5$. Primal equals dual, so by the lemma no assignment can cost less, and enumerating all $3! = 6$ permutations confirms it. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality that just closed is complementary slackness checked by hand. On a larger instance nothing new happens. Match through zeros until stuck, buy the cheapest escape zero, augment the moment a free column comes into reach, and stop when every row has a partner.
+**Read off the certificate.** In the original matrix the assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $(2 + 1 + 2) + (1 - 1 + 0) = 5$. Primal equals dual, so by the lemma no assignment can cost less. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality that just closed is complementary slackness checked by hand. In general, match through zeros until stuck, buy the cheapest escape zero, augment the moment a free column comes into reach, and stop when every row has a partner.
 
 Each augmentation adds one edge, so at most $N$ augmentations finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. For every column outside the tree, keep its current slack $\min_{i\in I}\tilde c(i,j)$ and update it in $O(N)$ when a row joins. Each $\delta$ is then read from the slacks rather than found by rescanning the matrix. Every lift either reaches a free column and enables an augmentation, or adds a matched column and its partner row to the tree. Thus at most $N$ lifts occur between augmentations, giving $O(N^3)$ work overall. The Jonker-Volgenant routine called by `scipy` is a faster-constant refinement of the same primal-dual idea.
 
@@ -550,7 +548,7 @@ The minimum cost is invariant even when several assignments tie. When the optimu
 
 </details>
 
-The model's storage order carries no meaning, and the matching objective respects that. Once the assignment is fixed, it determines which target supplies each query's training signal. §8 shows that changing only the matching cost improves AP by more than two points.
+Once the assignment is fixed, it determines which target supplies each query's training signal. §8 shows that changing only the matching cost improves AP by more than two points.
 
 An independent nearest-target choice could assign two queries to one object and leave another unmatched. One-to-one training discourages these duplicates and enables inference without non-maximum suppression.
 
@@ -584,7 +582,7 @@ w(y_i) =
 \end{cases}
 $$
 
-The factor $2$ applies to the whole classification loss. The $0.1$ is an additional relative weight inside cross-entropy for no-object entries. In a minibatch of $B$ images, the implementation takes the same weighted mean over all $BN$ query slots. The BCE and Dice terms are averaged over the matched masks, with their point evaluations defined in §8. Their gradients explain why the two mask terms complement each other.
+The factor $2$ applies to the whole classification loss. The $0.1$ is an additional relative weight inside cross-entropy for no-object entries. In a minibatch of $B$ images, the implementation takes the same weighted mean over all $BN$ query slots. The BCE and Dice terms are averaged over the matched masks, with their point evaluations defined in §8.
 
 **BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is
 
@@ -660,7 +658,7 @@ $$
 
 </details>
 
-When $S>0$, the unsmoothed form gives an exact view of area scaling. Tile $k$ disjoint copies of the same prediction and target pattern. Then $O$ becomes $kO$ and $S$ becomes $kS$, so the Dice value is unchanged. In the derivative above with $\varepsilon=0$, the numerator grows by $k$ while the denominator grows by $k^2$. Each copied point therefore receives $1/k$ of the original derivative. If both masks are empty, the unsmoothed ratio is undefined, which is one reason the implementation adds $1$. Dice adds a region-normalized overlap signal. It does not make the BCE component scale-invariant.
+When $S>0$, the unsmoothed form gives an exact view of area scaling. Tile $k$ disjoint copies of the same prediction and target pattern. Then $O$ becomes $kO$ and $S$ becomes $kS$, so the Dice value is unchanged. In the derivative above with $\varepsilon=0$, the numerator grows by $k$ while the denominator grows by $k^2$. Each copied point therefore receives $1/k$ of the original derivative. If both masks are empty, the unsmoothed ratio is undefined, which is one reason the implementation adds $1$. This area normalization does not make the BCE component scale-invariant.
 
 Dice pays a price one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 where $g_x = 1$. The chain rule then multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. BCE therefore supplies a direct logit gradient at every point, while Dice adds region-normalized overlap.
 
@@ -668,7 +666,7 @@ Dice pays a price one step further back, in logit space. When the prediction con
 
 **The $\varnothing$ down-weighting.** With $N$ queries and $T$ real segments, $N-T$ query slots are trained as no-object. Their ratio to matched slots is $(N-T)/T$. With $N=100$, this ratio is $19$ when $T=5$ and $4$ when $T=20$. Giving no-object entries a relative class weight of $0.1$ prevents the unmatched slots from overwhelming the classification term. Mask2Former inherits this weighting from DETR.
 
-**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, giving ten supervised outputs through the same shared heads. The training objective applies the loss above to all ten. In the released criterion, Hungarian matching is recomputed for each output, so every intermediate prediction trains toward its own assignment. The thresholded intermediate masks become attention masks in §5, which makes these auxiliary losses part of the model's feedback loop rather than an optional optimization aid.
+**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, giving ten outputs trained with the loss above through the same shared heads. In the released criterion, Hungarian matching is recomputed for each output, so every intermediate prediction trains toward its own assignment. The thresholded intermediate masks become attention masks in §5, which makes these auxiliary losses part of the model's feedback loop rather than an optional optimization aid.
 
 ## 4. The architecture
 
@@ -758,7 +756,7 @@ $$
 
 Here $\mathbf{Q}_l$ comes from the previous full-layer state $\mathbf{X}_{l-1}$, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits LayerNorm, the standard $1/\sqrt d$ scaling, the multi-head split, and the position embeddings. LayerNorm, self-attention, and the feed-forward network then turn this intermediate state into the full output $\mathbf{X}_l$. The paper writes $\mathbf{X}_l$ on the left of its simplified recurrence. The tilde here prevents that sublayer output from being confused with the complete layer output.
 
-Nothing restricts where a query looks. Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This does not show that global attention cannot localize. It shows that this baseline remains diffuse, even after training.
+Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This does not show that global attention cannot localize. It shows that this baseline remains diffuse, even after training.
 
 One toy calculation shows the effect of having many background locations. Let $n_f$ foreground locations share logit $\mu_f$, and let $n_b$ background locations share logit $\mu_b$. Their foreground attention mass is
 
@@ -803,7 +801,7 @@ $$
 
 $Z_{l-1}$ contains the previous output's mask logits. Each query's logits are bilinearly resized to the current attention resolution, passed through the sigmoid, and thresholded at $0.5$ to form $B_{l-1}$. The initial logits $Z_0$ are predicted directly from the supervised learnable queries (§7).
 
-Adding $-\infty$ before softmax gives forbidden locations zero weight and renormalizes the allowed weights to sum to 1. Zeroing weights after softmax would leave their sum below 1 unless they were normalized again. The proof is folded below.
+Adding $-\infty$ before softmax gives forbidden locations zero weight and renormalizes the allowed weights to sum to 1. Zeroing weights after softmax would leave their sum below 1 unless they were normalized again.
 
 **Proposition (additive $-\infty$ masking is exact renormalization).** *Let $z \in \mathbb{R}^{n}$ be logits and $S \subseteq \{1,\dots,n\}$ a nonempty allowed set (an index set, not §3.2's size sum), with $\mathcal{M}_i = 0$ for $i\in S$ and $\mathcal{M}_i = -\infty$ otherwise. Then*
 
@@ -892,7 +890,7 @@ The thresholded gate needs less than exact probability convergence. If $g_x=1$ a
 
 </details>
 
-The implementation also guards against an empty predicted region. If a query's thresholded mask is empty at some scale, every attention logit would be $-\infty$ and softmax would be undefined. The code makes each affected row fully unmasked for one layer. The exact guard and its reason are folded below.
+The implementation also guards against an empty predicted region. If a query's thresholded mask is empty at some scale, every attention logit would be $-\infty$ and softmax would be undefined. The code makes each affected row fully unmasked for one layer.
 
 <details class="proof">
 <summary>How the implementation handles an empty attention mask</summary>
@@ -965,7 +963,7 @@ Without direct supervision, learnable queries match zero initialization on AP an
 
 ### 8.1 The memory problem and the estimator
 
-Dense mask losses are expensive. Mask2Former evaluates them at sampled coordinates instead. Uniform points build matching costs, while prediction-dependent uncertain points train matched masks.
+Uniform points build matching costs, while prediction-dependent uncertain points train matched masks.
 
 MaskFormer computed dense mask costs for every prediction-target pair and dense losses again for matched pairs at every supervised head. This limited training to one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates these terms at $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points.
 
@@ -1003,8 +1001,6 @@ This is unbiased for the continuous bilinear-sampling objective $\int_{[0,1]^2}\
 
 ### 8.2 Two sampling rules for two jobs
 
-The two sampling rules serve different parts of training.
-
 **Matching uses shared uniform points.** One set of normalized coordinates is sampled uniformly and reused for every prediction and target mask in the image. Reuse makes the cost matrix cheaper to build. A conditional variance argument for shared samples is folded below. It is not a claim made by the paper.
 
 <details class="proof">
@@ -1023,7 +1019,7 @@ Independent point sets make the covariance term zero. Shared points can make it 
 
 **Training uses uncertain points.** For each matched mask, the PointRend sampler draws $3K_{\text{pt}}$ uniform candidates [[Kirillov et al. 2020](#ref-kirillov2020)]. It keeps the $0.75K_{\text{pt}}$ candidates whose prediction logits are closest to zero, then adds $0.25K_{\text{pt}}$ fresh uniform points. The uncertainty score depends on the prediction, not the ground truth. These points often lie near a predicted boundary, but uncertain interiors can also be selected.
 
-This training sampler is intentionally nonuniform and applies no importance correction. Its selected coordinates are treated as fixed when gradients are computed, so it does not provide an unbiased estimate of the dense loss. Instead, it concentrates the stochastic training signal on uncertain regions. The §8.3 ablation shows that this signal preserves performance while reducing memory.
+This training sampler is intentionally nonuniform and applies no importance correction. Its selected coordinates are treated as fixed when gradients are computed, so it does not provide an unbiased estimate of the dense loss. Instead, it concentrates the stochastic training signal on uncertain regions.
 
 <figure class="viz">
 <video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation of uniform matching points and prediction-dependent uncertain training points">
@@ -1042,7 +1038,7 @@ This training sampler is intentionally nonuniform and applies no importance corr
 | points | masks | 43.1 | 51.4 | **47.3** | 18 GB |
 | **points** | **points** | **43.7** | **51.9** | 47.2 | **6 GB** |
 
-Using points for the training loss reduces reported training memory from 18 GB to 6 GB in the paper's R50 COCO ablation. AP and mIoU stay the same in the dense-matching rows, while PQ rises from 50.3 to 50.8. Using points for matching raises AP from 41.0 to 43.1 with dense training, then to 43.7 with point training. The table measures the effect. Why point-based matching improves the assignment is left open.
+Point-sampled training cuts reported memory from 18 GB to 6 GB in the paper's R50 COCO ablation without lowering AP or mIoU in the dense-matching comparison. Point-based matching provides the larger accuracy gain, including 2.1 AP with dense training. Why it improves the assignment is left open.
 
 ## 9. Training recipe
 
@@ -1096,7 +1092,7 @@ Boundary AP uses the minimum of mask IoU and Boundary IoU [[Cheng et al. 2021c](
 
 With ResNet-50, Mask2Former reaches 51.9 PQ after 50 epochs. MaskFormer reports 46.5 after 300 epochs. The comparison includes architecture, loss, augmentation, batch size, and optimizer-setting changes, so it should not be read as a controlled convergence experiment. The paper's appendix isolates one of these variables. Trained with standard augmentation instead of LSJ, R50 Mask2Former converges in 25 epochs, so the short schedule is not an artifact of the augmentation.
 
-The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. COCO assigns size buckets by mask area. Small means below $32^2$ pixels and large means above $96^2$ pixels.
+Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. COCO assigns size buckets by mask area. Small means below $32^2$ pixels and large means above $96^2$ pixels.
 
 Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause.
 
@@ -1123,7 +1119,7 @@ The sequential substitutions show how the complete system was assembled. Retrain
 
 ## 12. Limitations
 
-**Universal means one architecture, not one checkpoint.** The paper trains separate models for each dataset and task. A panoptic COCO checkpoint reaches 41.7 instance AP, compared with 43.7 for instance-specific training. Its semantic score is 61.7 mIoU, compared with 61.5 for semantic-specific training. Results differ across ADE20K and Cityscapes, so panoptic training does not consistently replace task-specific training.
+**Universal means one architecture, not one checkpoint.** A panoptic COCO checkpoint reaches 41.7 instance AP, compared with 43.7 for instance-specific training. Its semantic score is 61.7 mIoU, compared with 61.5 for semantic-specific training. Results differ across ADE20K and Cityscapes, so panoptic training does not consistently replace task-specific training.
 
 **Small objects remain weaker.** Small-object AP is 29.1, compared with 71.2 for large objects. The paper lists fuller use of the feature pyramid as future work. Mask2Former is also slower than MaskFormer, and its query count must be chosen for the expected number of segments.
 
@@ -1133,9 +1129,9 @@ The same group extended Mask2Former to video instance segmentation [[Cheng et al
 
 ## 14. Conclusion
 
-Mask2Former works because its changes form a feedback loop. Matching assigns one target to each query. Deep supervision trains every intermediate mask. Each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable. The ablation gains in §11 overlap because these parts depend on one another.
+Mask2Former works because its changes form a feedback loop. Matching assigns one target to each query. Deep supervision trains every intermediate mask. Each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable.
 
-Later systems changed the objectives and supported outputs but kept this query-to-mask refinement loop. That loop, rather than any one benchmark result, is Mask2Former's lasting contribution.
+The query-to-mask refinement loop, rather than any one benchmark result, is Mask2Former's lasting contribution.
 
 ## Appendix A. Implementation notes
 

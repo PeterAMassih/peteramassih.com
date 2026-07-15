@@ -97,7 +97,9 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
   .body :global(h2) { margin-top: var(--space-8); margin-bottom: var(--space-3); }
   .body :global(h3) { margin-top: var(--space-6); margin-bottom: var(--space-2); }
-  .body :global(ul), .body :global(ol) { margin-top: var(--space-4); padding-left: var(--space-6); }
+  .body :global(ul), .body :global(ol) { margin-top: var(--space-4); }
+  .body :global(ul) { padding-left: var(--space-6); }
+  .body :global(ol) { padding-left: var(--space-8); }
   .body :global(li) { margin-top: var(--space-1); }
   .body :global(blockquote) {
     margin: var(--space-6) 0;
@@ -105,8 +107,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     border-left: 2px solid var(--color-border);
     color: var(--color-text-muted);
   }
-  /* Proof folds: closed by default so the story reads without the machinery.
-     Native details/summary, the marker arrow is the whole affordance. */
+  /* Proof folds stay closed by default so the argument reads without the
+     machinery. Native details/summary preserves keyboard behavior. */
   .body :global(details.proof) {
     margin-top: var(--space-4);
     padding-left: var(--space-4);
@@ -114,11 +116,17 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   }
   .body :global(details.proof summary) {
     cursor: pointer;
+    padding: var(--space-2) 0;
     font-size: var(--text-sm);
     color: var(--color-text-muted);
     transition: color 150ms;
   }
   .body :global(details.proof summary:hover) { color: var(--color-text); }
+  .body :global(details.proof[open] > summary) { color: var(--color-text); }
+  .body :global(details.proof summary:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
   /* Wide math and tables scroll inside their own box; the page never
      scrolls horizontally on narrow screens. */
   .body :global(.katex-display) {

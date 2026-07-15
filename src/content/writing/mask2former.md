@@ -8,7 +8,9 @@ series: "Peter's Patches"
 part: 1
 ---
 
-**In short.** By late 2021, universal segmentation architectures existed and kept losing. MaskFormer handled panoptic, instance, and semantic segmentation with one design, and trailed the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed the gap without abandoning the paradigm, by rebuilding the decoder and the training recipe. Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls to 50 epochs and reported training memory to 6 GB.
+**In short.** By late 2021, universal segmentation architectures were strong on semantic and panoptic segmentation but still trailed specialized instance systems. MaskFormer handled all three tasks with one design, yet lagged the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed that gap without abandoning the paradigm by rebuilding the decoder and the training recipe.
+
+Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls to 50 epochs and reported training memory to 6 GB.
 
 **Contents.** [0. Background](#0-the-background-you-need) · [1. The problem](#1-the-segmentation-problem) · [2. Two paradigms](#2-two-paradigms) · [3. Set prediction](#3-set-prediction-and-matching) · [4. Architecture](#4-the-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-matching-and-training-on-points) · [9. Training](#9-training-recipe) · [10. Results](#10-results) · [11. Ablations](#11-ablations-and-interactions) · [12. Limitations](#12-limitations) · [13. Later work](#13-later-work) · [14. Conclusion](#14-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [Appendix B](#appendix-b-questions-and-answers) · [References](#references) · [Citation](#citation)
 
@@ -29,6 +31,8 @@ y(i,j) = \sum_{a=-1}^{1}\sum_{b=-1}^{1} w_{ab}\, x_{i+a,\,j+b}.
 $$
 
 Here $(a,b)$ indexes a position inside the filter. A layer applies many filters, adds learned biases, and passes the results through a nonlinearity such as ReLU. Stacking these layers produces a convolutional network.
+
+The equation shows one input channel. A practical image convolution also sums over input channels before adding the learned bias. Deep-learning libraries call the displayed operation convolution, although it is technically cross-correlation because the filter is not flipped.
 
 <figure class="viz">
 <svg class="m2f-conv" style="min-width: 560px" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One convolution step. A 3 by 3 filter lines up with an input patch and produces one value in the output feature map.">
@@ -84,7 +88,7 @@ $$
 u^\top v = \sum_k u_k v_k = \|u\|\,\|v\|\cos\theta,
 $$
 
-so it is positive when the vectors point in similar directions, zero when they are orthogonal, and negative when they point apart. Mask2Former forms each mask by taking a dot product between a query-derived vector and every pixel embedding, then applying a sigmoid.
+Here $u^\top$ is the row-vector transpose of $u$, and $\|u\|$ is its Euclidean length. The dot product is positive when the vectors point in similar directions, zero when they are orthogonal, and negative when they point apart. Mask2Former forms each mask by taking a dot product between a query-derived vector and every pixel embedding, then applying a sigmoid.
 
 **Softmax.** The scores before softmax are called logits. For logits $z_1, \dots, z_n$, softmax assigns each option a weight
 
@@ -94,13 +98,13 @@ $$
 
 which are positive and sum to 1. Softmax can put almost all its weight on a small region, but it does not forbid other locations. Mask2Former adds that restriction explicitly. Sending a forbidden entry's score to $-\infty$ removes it, and the remaining weights still sum to 1.
 
-**Attention.** Attention is a differentiable lookup. A query is compared with a key at every image location. Softmax turns those comparisons into weights, and the output is the weighted average of the corresponding values. With $N$ queries and $n$ image locations, stack the queries in $Q \in \mathbb{R}^{N\times d}$ and the image keys and values in $K, V \in \mathbb{R}^{n\times d}$.
+**Attention.** Attention is a differentiable lookup. A query is compared with a key at every image location. Softmax turns those comparisons into weights, and the output is the weighted average of the corresponding values. With $N$ queries and $n$ image locations, stack the queries in $Q \in \mathbb{R}^{N\times d}$ and the image keys and values in $K, V \in \mathbb{R}^{n\times d}$. Here $\mathbb{R}$ denotes the real numbers, and $N\times d$ means $N$ rows of length $d$.
 
 $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location. In practice the model runs several of these lookups in parallel, each on its own slice of the $d$ feature dimensions. Each slice is called a head, and the head outputs are concatenated and projected back to width $d$.
+$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location. In practice the model runs several lookups in parallel. Each head learns its own query, key, and value projections into a smaller feature space. The head outputs are concatenated and projected back to width $d$.
 
 <figure class="viz">
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
@@ -179,16 +183,19 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <figcaption>Fig. 0b. One attention lookup. The query is scored against every location's key. Softmax turns the scores into positive weights that sum to 1. The output is the weighted average of the values. §5 shows how Mask2Former excludes locations before this average is computed.</figcaption>
 </figure>
 
-**Transformers and decoders.** A Transformer layer combines attention with a per-token network and residual connections. Each token carries a vector $x$. Omitting normalization, the layer applies two updates in order.
+**Transformers and decoders.** A Transformer decoder layer combines two attention steps with a per-token network and residual connections. Each query carries a vector $x$. Omitting normalization and learned projections, Mask2Former applies three updates in order.
 
 $$
-x \,\leftarrow\, x + \operatorname{Attention}(x,\ \text{context}), \qquad
+x \,\leftarrow\, x + \operatorname{Attention}(x,\ \text{image}), \qquad
+x \,\leftarrow\, x + \operatorname{Attention}(x,\ x), \qquad
 x \,\leftarrow\, x + \operatorname{FFN}(x).
 $$
 
-The attention step mixes information from the image or from other queries. The feed-forward network then processes each token independently. Residual connections add both updates to the existing token state. Mask2Former stacks nine decoder layers, and each query produces one candidate segment.
+The first attention step reads image features. The second lets queries exchange information. The feed-forward network then processes each query independently. Residual connections add each update to the current state. Mask2Former stacks nine decoder layers, and each query produces one candidate segment.
 
-**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Training repeats one step. Compute the gradient $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, then move every weight a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$, where $\eta$ is the learning rate. Sections 3 and 8 define Mask2Former's loss and explain how its predictions receive training signals.
+Here $\operatorname{Attention}(x,\text{image})$ uses $x$ to form queries and image features to form keys and values. The second update is self-attention, so all three come from the query set.
+
+**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Plain gradient descent illustrates the basic update. It computes $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, then moves a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The step size $\eta$ is the learning rate. Mask2Former uses AdamW rather than this plain update, as §9 explains. Sections 3 and 8 define the loss and show how predictions receive training signals.
 
 **IoU.** Intersection over union compares two regions $A$ and $B$ with nonempty union.
 
@@ -209,14 +216,16 @@ IoU is 1 when the regions are identical and 0 when they are disjoint. It is used
 | $C$ | shared feature dimension of queries and image features (256 in the reference implementation) |
 | $N$ | number of object queries (100 by default, 200 for the largest models) |
 | $K$, $\varnothing$ | number of classes, and the "no-object" class appended to them. This $K$ is unrelated to §0's key matrix |
-| $(m_i, c_i)$ | prediction $i$, with a soft mask $m_i \in [0,1]^{H\times W}$ and class $c_i \in \{1,\dots,K\}\cup\{\varnothing\}$ |
+| $(m_i, c_i)$ | prediction $i$, with a soft mask $m_i \in [0,1]^{H\times W}$ and class $c_i \in \{1,\dots,K\}\cup\{\varnothing\}$. The closed interval includes limiting hard values. Finite sigmoid outputs lie in $(0,1)$ |
 | $\hat p_i(c)$ | predicted probability that query $i$ has class $c$ |
 | $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
+| $\widetilde{\mathbf{X}}_l$ | intermediate residual state immediately after adding the cross-attention output in layer $l$, before LayerNorm and the remaining sublayers |
 | $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
-| $M_{l}$ | mask predictions of layer $l$, resized as logits to the next layer's attention resolution, then passed through the sigmoid and binarized at $0.5$ |
-| $\mathcal{M}_{l}$ | the additive attention mask built from $M_{l}$. It is $0$ on foreground and $-\infty$ elsewhere |
+| $Z_l$ | mask logits predicted at output $l$, one logit map per query |
+| $B_l(i,x)$ | binary gate for query $i$ at location $x$, obtained by resizing $Z_l$, applying the sigmoid, and thresholding at $0.5$ |
+| $\mathcal{M}_{l}(i,x)$ | additive attention mask built from $B_l(i,x)$. It is $0$ on allowed locations and $-\infty$ elsewhere |
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
-| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which squashes a real score into $[0,1]$. This $\sigma$ is unrelated to §3's matching permutation |
+| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which maps finite real scores into $(0,1)$ and approaches the endpoints in the limit. This $\sigma$ is unrelated to §3's matching permutation |
 | $\mathbb{1}[\cdot]$ | the indicator, with $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
 | $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | BCE, Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
 | $K_{\text{pt}}$ | number of sampled points for mask losses, $12{,}544 = 112^2$ |
@@ -236,9 +245,9 @@ where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$
 **Instance segmentation** returns one scored mask per detected thing. Mask AP ranks predictions by confidence and measures precision and recall across IoU thresholds from $0.50$ to $0.95$ [[Lin et al. 2014](#ref-lin2014)].
 
 <details class="proof">
-<summary>The core of COCO mask AP</summary>
+<summary>How COCO mask AP is computed</summary>
 
-For each class, predictions are ranked by score. A prediction is a true positive when its best unclaimed ground-truth match clears the current IoU threshold.
+For each image and class, predictions are processed in descending score order. A prediction is a true positive when its best still-unclaimed ground truth of the same class in that image clears the current IoU threshold.
 
 $$
 \begin{gathered}
@@ -247,7 +256,9 @@ i \in \mathit{TP} \iff \max_{g \in \mathcal{G}_i} \text{IoU}(\bar m_i, g) \ge \t
 \end{gathered}
 $$
 
-where the sums visit every pixel $x$ of the grid $\Omega$, and $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$ is the binarized mask, $1$ on the pixels the prediction claims and $0$ elsewhere, with $g(x)$ the same for the ground truth. On $0/1$ values a product acts as an AND, so each numerator term is $1$ exactly when both masks contain the pixel, and the sum counts the intersection. The combination $\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)$ acts as an OR, $1$ when either mask contains the pixel, so the denominator counts the union, and the fraction is §0's intersection over union computed by sums. Finally $\mathcal{G}_i$ holds the ground truths of the class still unclaimed when prediction $i$ takes its turn, all of them for the top-scoring prediction. If $\mathcal{G}_i$ is empty the max is $-\infty$, an automatic false positive. A true positive claims its match, so a duplicate detection of an already-claimed object cannot score twice. Everything else is a false positive. Now fix a score cutoff and keep only the predictions above it. Precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff from strict to loose traces the precision-recall curve, and AP is the area under that curve, averaged over ten IoU thresholds in the COCO style [[Lin et al. 2014](#ref-lin2014)]:
+where the sums visit every pixel $x$ of the grid $\Omega$. COCO receives binary masks. Mask2Former's released inference code obtains $\bar m_i(x) = \mathbb{1}[m_i(x) > 0.5]$, which is $1$ on claimed pixels and $0$ elsewhere. The ground-truth mask $g(x)$ is also binary. On $0/1$ values a product acts as an AND, so the numerator counts the intersection. The combination $\bar m_i(x) + g(x) - \bar m_i(x)\, g(x)$ acts as an OR, so the denominator counts the union. Finally $\mathcal{G}_i$ holds the ground truths of the same class and image that remain unclaimed when prediction $i$ takes its turn. If $\mathcal{G}_i$ is empty the max is $-\infty$, an automatic false positive. A true positive claims its match, so a duplicate detection cannot score twice. Everything else is a false positive.
+
+After matching within each image, COCO gathers the detections for each class across the dataset and sorts them by score. At any score cutoff, precision is the fraction of kept predictions that are true positives, and recall is the fraction of ground truths recovered. Sweeping the cutoff traces the precision-recall curve. COCO summarizes its interpolated precision at 101 recall levels and averages over ten IoU thresholds [[Lin et al. 2014](#ref-lin2014)]:
 
 $$
 P = \frac{|\mathit{TP}|}{|\mathit{TP}| + |\mathit{FP}|}, \qquad
@@ -278,7 +289,7 @@ A match requires $\text{IoU} > 0.5$. PQ is computed per class, then averaged ove
 **Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one. Each segment can match at most one segment from the other set.*
 
 <details class="proof">
-<summary>Proof: a majority overlap can only happen once</summary>
+<summary>Why PQ matches above 0.5 IoU are unique</summary>
 
 **Proof.** Suppose a prediction $p$ has $\text{IoU}(p, g) > \tfrac12$. Then
 
@@ -356,7 +367,7 @@ The matrix says where and the label says what. The model emits mask probabilitie
 <figcaption>Fig. 2. One dog query and its predicted mask. The right panel shows a coarse binary view of the same mask. A Swin-L checkpoint trained on COCO panoptic segmentation processed the public-domain photograph.</figcaption>
 </figure>
 
-Universal architectures still trailed specialized systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
+Universal architectures still trailed specialized instance systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
 
 ## 3. Set prediction and matching
 
@@ -382,10 +393,10 @@ $$
 
 and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. A later bookkeeping refinement brings the runtime to $O(N^3)$. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
 
-The implementation calls `scipy`, but the underlying algorithm is useful to understand. A companion maximization problem, the dual, supplies the correctness argument and explains the $O(N^3)$ runtime. The complete derivation is folded below.
+The implementation calls `scipy`, but the underlying argument is useful to understand. The linear-program relaxation has an optimal permutation vertex. A companion maximization problem supplies a lower bound, and the Hungarian method reaches that bound by growing a matching on zero reduced-cost edges. The three parts are folded separately.
 
 <details class="proof">
-<summary>The linear program, the duality proof, and a worked 3&#215;3 run</summary>
+<summary>Why the assignment relaxation has an optimal permutation</summary>
 
 **As a linear program.** Encode an assignment as $x \in \{0,1\}^{N\times N}$ with $x_{ij} = 1$ when prediction $i$ takes target $j$. Relaxing the integrality to $x \ge 0$ gives a linear program, a minimization of a linear objective over real variables subject only to linear equalities and inequalities,
 
@@ -397,7 +408,7 @@ $$
 
 The relaxation lets a prediction split fractionally across targets, which no real assignment can do. Total unimodularity guarantees that an optimal vertex is still a whole-number permutation. The next argument proves that property from the constraint matrix.
 
-The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*, every square submatrix having determinant $-1$, $0$, or $+1$.
+The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure makes the matrix *totally unimodular*. Every square submatrix has determinant $-1$, $0$, or $+1$.
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
@@ -413,9 +424,18 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
-Total unimodularity forces integrality. The feasible set is nonempty, since any permutation matrix sits in it, and bounded, since every $x_{ij} \in [0,1]$, so the minimum is [attained at a vertex](https://en.wikipedia.org/wiki/Fundamental_theorem_of_linear_programming). Attainment at a vertex is standard. A bounded polyhedron is the convex hull of its finitely many vertices (the Minkowski-Weyl theorem), and a linear objective on a mix $x = \sum_t \theta_t v_t$ of the vertices $v_t$, with weights $\theta_t \ge 0$ summing to $1$, equals the same mix of the vertex values, so no point can beat the best vertex. At a vertex, enough of the $x_{ij} \ge 0$ constraints are tight to pin $x$ down. Those tight constraints hold their variables at $0$, and the surviving [basic variables](https://en.wikipedia.org/wiki/Basic_feasible_solution) $x_B$ are fixed by the equality constraints. Dropping the one redundant equality (one is redundant because the prediction constraints and the target constraints each sum to the same equation $\sum_{i,j} x_{ij} = N$, so any single constraint follows from the other $2N-1$) leaves a square nonsingular submatrix $B$ with $B x_B = b$, where $b$ is a vector of ones. [Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule) writes each entry of $x_B$ as a ratio of two determinants, $B$ with one column swapped for $b$ over $\det B$. The numerator is an integer matrix's determinant, hence an integer, and $\det B = \pm 1$ makes every entry an integer. With $x \ge 0$ and every row and column summing to $1$, each holds a single $1$ and the rest $0$, a permutation matrix. The relaxation is therefore exact, its optimum a genuine assignment with nothing to round.
+The feasible set is nonempty because it contains every permutation matrix. It is bounded because every $x_{ij}\in[0,1]$. A linear objective therefore [reaches its minimum at a vertex](https://en.wikipedia.org/wiki/Fundamental_theorem_of_linear_programming). To see why, the Minkowski-Weyl theorem lets us write any feasible point as a convex combination $x=\sum_t\theta_t v_t$ of vertices, with $\theta_t\ge0$ and $\sum_t\theta_t=1$. Its objective value is the same weighted average of the vertex values, so it cannot beat the best vertex.
 
-So much for the primal. Every linear program has a companion maximization, [its dual](https://en.wikipedia.org/wiki/Dual_linear_program), whose value never exceeds the primal minimum. Here the dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
+It remains to show that every vertex is integral. At a vertex, enough constraints are tight to determine the solution. The tight nonnegativity constraints hold some variables at $0$, and the surviving [basic variables](https://en.wikipedia.org/wiki/Basic_feasible_solution) $x_B$ are fixed by the equality constraints. One equality is redundant because the prediction constraints and target constraints both sum to $\sum_{i,j}x_{ij}=N$. Drop it, and the remaining basis gives a square nonsingular submatrix $B$ with $Bx_B=b$, where $b$ is a vector of ones.
+
+[Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule) writes each entry of $x_B$ as a ratio of integer determinants. Total unimodularity gives $\det B=\pm1$, so every basic variable is an integer. With $x\ge0$ and every row and column summing to $1$, each row and column contains one $1$ and the rest $0$. Every vertex is therefore a permutation matrix, so the relaxation admits an optimal permutation with no rounding.
+
+</details>
+
+<details class="proof">
+<summary>The dual certificate for optimality</summary>
+
+The assignment minimization has a companion maximization, [its dual](https://en.wikipedia.org/wiki/Dual_linear_program), whose value never exceeds the original minimum. The dual attaches a potential to each constraint, $u_i$ per row and $v_j$ per column,
 
 $$
 \max_{u,v\in\mathbb{R}^N}\ \sum_i u_i + \sum_j v_j
@@ -452,7 +472,12 @@ $$
 
 So $\sum_i u_i + \sum_j v_j$ lower-bounds the cost of every assignment. The tight $\sigma$ uses only edges with $\tilde c(\sigma(j),\, j) = 0$, so its first sum vanishes and $J(\sigma) = \sum_i u_i + \sum_j v_j$. That equals the lower bound, so no assignment costs less. $\blacksquare$
 
-A full assignment sitting on tight edges is a certificate that meets that bound. The equality is [complementary slackness](https://en.wikipedia.org/wiki/Linear_programming#Complementary_slackness). An optimal $x$ puts weight only where $\tilde c = 0$.
+This equality is [complementary slackness](https://en.wikipedia.org/wiki/Linear_programming#Complementary_slackness). With respect to an optimal dual solution, an optimal assignment uses only edges with $\tilde c=0$.
+
+</details>
+
+<details class="proof">
+<summary>A worked 3&#215;3 Hungarian run and the O(N³) bound</summary>
 
 **The primal-dual algorithm.** Instead of checking all $N!$ assignments, the Hungarian method searches for feasible potentials and a complete matching on tight edges. It maintains two invariants. Reduced costs stay nonnegative, and matched edges stay tight. Consider three predictions against three targets, with prediction $i$ in row $i$, target $j$ in column $j$, and the costs collected in a matrix written $C$ for this example only.
 
@@ -466,7 +491,7 @@ $$
 \tilde c = C - u - v = \begin{pmatrix} 2 & 0 & 2\\ 1 & 0 & 5\\ 0 & 0 & 0 \end{pmatrix}.
 $$
 
-Read a reduced cost as regret, how much worse a pairing is than the best deal available to its row and column. Every row and every column now holds a zero, and the column pass cannot wipe out a row's zero, because that zero sits in a column whose minimum is already $0$, so $v_j = 0$ there and the entry survives untouched.
+A reduced cost is the pairing cost after subtracting the current row and column potentials. It measures how far an edge sits above the current dual baseline. Every row and every column now holds a zero. The column pass cannot remove a row's zero because that zero sits in a column whose minimum is already $0$, so $v_j=0$ there and the entry stays unchanged.
 
 **Match on zeros.** Pair rows to columns through tight edges only, never reusing a row or a column. Row 1 takes column 2 and row 3 takes column 1. Row 2's only zero sits in column 2, already taken, so the matching stalls at two pairs.
 
@@ -505,7 +530,7 @@ The minimum assignment cost has one property the model needs.
 **Proposition (the matching objective ignores prediction order).** *Let $\mathcal{J} = \min_{\sigma\in S_N} J(\sigma)$, with the costs evaluated on the model's current predictions. Relabeling the predictions by any permutation $\pi$ leaves $\mathcal{J}$ unchanged.*
 
 <details class="proof">
-<summary>Proof: relabeling only reindexes the search space</summary>
+<summary>Why prediction order cannot change the matching minimum</summary>
 
 **Proof.** Let $\pi \in S_N$ relabel the predictions, so that position $i$ now holds the prediction originally at position $\pi(i)$. Under the relabeling, assignment $\sigma$ pairs target $j$ with the prediction originally at position $\pi(\sigma(j))$, so its cost is
 
@@ -539,14 +564,27 @@ An independent nearest-target choice could assign two queries to one object and 
 
 ### 3.2 The training loss
 
-The mask loss is BCE plus Dice,
+Each supervised output uses classification on all $N$ queries and mask losses only on queries matched to real targets. After matching, let $y_i$ be the real class assigned to a matched query and $\varnothing$ for an unmatched query. The released criterion combines the three terms as
 
 $$
-\mathcal{L}_{\text{mask}} = \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}} + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}},
-\qquad \lambda_{\text{ce}} = \lambda_{\text{dice}} = 5,
+\mathcal{L} = 2\,\mathcal{L}_{\text{cls}} + 5\,\mathcal{L}_{\text{ce}} + 5\,\mathcal{L}_{\text{dice}}.
 $$
 
-and the total loss adds classification, $\mathcal{L} = \mathcal{L}_{\text{mask}} + \lambda_{\text{cls}}\,\mathcal{L}_{\text{cls}}$, where $\mathcal{L}_{\text{cls}} = -\log \hat p_i(c^{\text{gt}})$ is plain cross-entropy against the matched target's class $c^{\text{gt}}$, with $\lambda_{\text{cls}} = 2$ on matched queries and $0.1$ on $\varnothing$. The gradients show why these are the right terms.
+For one image, the classification term is weighted cross-entropy over the query slots,
+
+$$
+\mathcal{L}_{\text{cls}}
+= \frac{\sum_{i=1}^{N} w(y_i)\big[-\log \hat p_i(y_i)\big]}
+{\sum_{i=1}^{N} w(y_i)},
+\qquad
+w(y_i) =
+\begin{cases}
+1 & y_i \ne \varnothing,\\
+0.1 & y_i = \varnothing.
+\end{cases}
+$$
+
+The factor $2$ applies to the whole classification loss. The $0.1$ is an additional relative weight inside cross-entropy for no-object entries. In a minibatch of $B$ images, the implementation takes the same weighted mean over all $BN$ query slots. The BCE and Dice terms are averaged over the matched masks, with their point evaluations defined in §8. Their gradients explain why the two mask terms complement each other.
 
 **BCE.** At a point $x$ with mask logit $z_x$, prediction $m_x = \sigma(z_x)$, and target $g_x \in \{0,1\}$, the loss is
 
@@ -585,7 +623,7 @@ $$
 
 </details>
 
-Clean, well conditioned (the gradient is bounded by 1 whatever the logit, so a confident mistake still gets a useful signal), and independent per point. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes it by the number of matched masks. That per-point independence is also a weakness. Summed over a dense grid, the total gradient a segment receives scales with its area, so large segments dominate the update and small ones barely register.
+The gradient lies between $-1$ and $1$, and a confident error still produces a substantial update. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes by the number of matched masks. BCE has no mask-level normalization for foreground area. Under dense evaluation, or uniform sampling in expectation, a large foreground contributes more positive terms for comparable pointwise errors than a small foreground. The uncertainty sampler in §8 can change those proportions by favoring logits near zero.
 
 **Dice.** Mask2Former uses a soft Dice loss that normalizes overlap by predicted and target size [[Milletari et al. 2016](#ref-milletari2016)]. Write $O = \sum_x m_xg_x$ for the overlap and $S = \sum_xm_x + \sum_xg_x$ for the size sum. The released implementation is
 
@@ -622,24 +660,26 @@ $$
 
 </details>
 
-Read the fraction as a whole. The numerator is of order $S$, so each point's gradient scales like $1/S$, and summed over the region's roughly $S$ points the total gradient a segment receives is roughly independent of its area. The scale invariance is exact in one specific sense. Tile $k$ disjoint copies of the same prediction and target pattern, and every sum scales by $k$, leaving the unsmoothed loss unchanged. Dice weights a ten-pixel object and a sky-sized region equally. Its price lands one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 exactly where $g_x = 1$, and the chain rule multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. Dice does not. Summing the two losses is the standard combination. BCE supplies gradient at every point, and Dice makes that gradient scale-invariant.
+When $S>0$, the unsmoothed form gives an exact view of area scaling. Tile $k$ disjoint copies of the same prediction and target pattern. Then $O$ becomes $kO$ and $S$ becomes $kS$, so the Dice value is unchanged. In the derivative above with $\varepsilon=0$, the numerator grows by $k$ while the denominator grows by $k^2$. Each copied point therefore receives $1/k$ of the original derivative. If both masks are empty, the unsmoothed ratio is undefined, which is one reason the implementation adds $1$. Dice adds a region-normalized overlap signal. It does not make the BCE component scale-invariant.
 
-**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, cross-entropy scaled down on already-confident predictions so easy background points stop dominating the gradient. Mask2Former reverts to plain BCE at weight $5$. Focal loss exists to fight the extreme foreground-background imbalance of dense evaluation, and §8's point sampling removes most of that imbalance at the source, so the simpler and better-conditioned loss suffices. The paper never measures this change on its own.
+Dice pays a price one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 where $g_x = 1$. The chain rule then multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. BCE therefore supplies a direct logit gradient at every point, while Dice adds region-normalized overlap.
 
-**The $\varnothing$ down-weighting.** With $N = 100$ queries and typically 5 to 20 real segments in an image, no-object outnumbers real matches by roughly 4 to 19 times. At full weight, predicting nothing becomes the dominant gradient. Down-weighting the class term to $0.1$ on unmatched queries is the inexpensive fix, inherited from DETR.
+**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, which down-weights already-confident predictions so easy background points contribute less. Mask2Former uses plain BCE at weight $5$. One plausible reason is that §8's training sampler spends most of its budget on uncertain locations rather than easy background, reducing the imbalance that focal loss was designed to address. The paper does not isolate this change, so the explanation remains an inference.
 
-**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, ten supervised predictions per forward pass through the same shared heads. In the released criterion, Hungarian matching is recomputed for each of the ten outputs, so every intermediate prediction trains toward its own assignment. In most papers auxiliary losses are an optimization nicety. Here they are structural. The thresholded intermediate masks become attention masks in §5, and being a useful attention gate is otherwise never optimized.
+**The $\varnothing$ down-weighting.** With $N$ queries and $T$ real segments, $N-T$ query slots are trained as no-object. Their ratio to matched slots is $(N-T)/T$. With $N=100$, this ratio is $19$ when $T=5$ and $4$ when $T=20$. Giving no-object entries a relative class weight of $0.1$ prevents the unmatched slots from overwhelming the classification term. Mask2Former inherits this weighting from DETR.
+
+**Deep supervision.** The model predicts once from $\mathbf{X}_0$ and after each of nine decoder layers, giving ten supervised outputs through the same shared heads. The training objective applies the loss above to all ten. In the released criterion, Hungarian matching is recomputed for each output, so every intermediate prediction trains toward its own assignment. The thresholded intermediate masks become attention masks in §5, which makes these auxiliary losses part of the model's feedback loop rather than an optional optimization aid.
 
 ## 4. The architecture
 
-Mask2Former keeps MaskFormer's three-part structure. A **backbone** produces image features. A **pixel decoder** turns them into a feature pyramid and a stride-4 pixel embedding map $\mathcal{E}_{\text{pixel}}$. A **Transformer decoder** processes $N$ queries against the image features. Each query $q_i$ produces a class distribution and a mask.
+Mask2Former keeps MaskFormer's three-part structure. A **backbone** produces image features. A **pixel decoder** turns them into a feature pyramid and a stride-4 pixel embedding map $\mathcal{E}_{\text{pixel}}$. A **Transformer decoder** processes $N$ queries against the image features. At any supervised output, let $q_i\in\mathbb{R}^C$ be the LayerNorm-normalized feature of query $i$. It produces a class distribution and a mask.
 
 $$
 \hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i + b_{\text{cls}}), \qquad
 m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)\big).
 $$
 
-The class head is one linear layer with weights $W_{\text{cls}}$ and bias $b_{\text{cls}}$. It predicts what the query represents. The mask head is a small multi-layer perceptron (MLP). It maps the same query into an embedding and compares it with every pixel embedding to predict where the segment lies. Masks are produced at stride 4 and then upsampled. The paper uses either a ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)] backbone. MaskFormer used a feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard decoder layers over one stride-32 feature map.
+The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{cls}}\in\mathbb{R}^{K+1}$, including one output for no-object. It predicts what the query represents. The mask MLP maps $\mathbb{R}^C$ to $\mathbb{R}^C$. Both its output and $\mathcal{E}_{\text{pixel}}(x)$ have width $C$, so their dot product produces one mask logit at pixel $x$. Masks are produced at stride 4 and then upsampled. The paper uses either a ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)] backbone. MaskFormer used a feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard decoder layers over one stride-32 feature map.
 
 <figure class="viz">
 <svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former architecture from image and backbone features to pixel decoder, Transformer decoder, class predictions, and mask predictions.">
@@ -709,14 +749,14 @@ Global cross-attention can learn where an object is, but the authors argue that 
 
 ### 5.1 Why localization helps
 
-A standard decoder layer updates queries by cross-attention over the whole feature map:
+A standard cross-attention sublayer reads the whole feature map. To keep that sublayer distinct from the complete decoder layer, write its residual state as $\widetilde{\mathbf{X}}_l$:
 
 $$
-\mathbf{X}_l = \operatorname{softmax}\!\big(\mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1}.
+\widetilde{\mathbf{X}}_l = \operatorname{softmax}\!\big(\mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1}.
 \tag{1}
 $$
 
-Here $\mathbf{Q}_l$ comes from the previous query state, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits the standard $1/\sqrt d$ scaling, the multi-head split, and the query and image position embeddings used by the implementation. It also omits the self-attention and feed-forward steps that complete the layer, folding them into $\mathbf{X}_l$. The paper writes the recurrence the same way.
+Here $\mathbf{Q}_l$ comes from the previous full-layer state $\mathbf{X}_{l-1}$, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits LayerNorm, the standard $1/\sqrt d$ scaling, the multi-head split, and the position embeddings. LayerNorm, self-attention, and the feed-forward network then turn this intermediate state into the full output $\mathbf{X}_l$. The paper writes $\mathbf{X}_l$ on the left of its simplified recurrence. The tilde here prevents that sublayer output from being confused with the complete layer output.
 
 Nothing restricts where a query looks. Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This does not show that global attention cannot localize. It shows that this baseline remains diffuse, even after training.
 
@@ -740,23 +780,28 @@ In this toy model, the background wins because it has many more locations. Real 
 
 ### 5.2 The masked update
 
-Masked attention assumes that a query can update from features inside its current segment, while self-attention carries information between queries. The mask is added before the cross-attention softmax.
+Masked attention assumes that a query can update from features inside its current segment, while self-attention carries information between queries. The mask is added before the cross-attention softmax. Replacing Equation 1's global read gives
 
 $$
-\mathbf{X}_l = \operatorname{softmax}\!\big(\mathcal{M}_{l-1} + \mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1},
+\widetilde{\mathbf{X}}_l = \operatorname{softmax}\!\big(\mathcal{M}_{l-1} + \mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1},
 \tag{2}
 $$
 
 $$
-\mathcal{M}_{l-1}(x) =
+\begin{aligned}
+B_{l-1}(i,x)
+&= \mathbb{1}\!\left[\sigma\!\left(\operatorname{resize}(Z_{l-1})_i(x)\right) \ge 0.5\right],\\[4pt]
+\mathcal{M}_{l-1}(i,x)
+&=
 \begin{cases}
-0 & \text{if } M_{l-1}(x) = 1,\\[2pt]
+0 & \text{if } B_{l-1}(i,x) = 1,\\[2pt]
 -\infty & \text{otherwise.}
 \end{cases}
+\end{aligned}
 \tag{3}
 $$
 
-$M_{l-1}$ is the query's mask from the previous layer. Its logits are bilinearly resized to the current attention resolution, passed through the sigmoid, and thresholded at $0.5$. The initial mask $M_0$ is predicted directly from the supervised learnable queries (§7).
+$Z_{l-1}$ contains the previous output's mask logits. Each query's logits are bilinearly resized to the current attention resolution, passed through the sigmoid, and thresholded at $0.5$ to form $B_{l-1}$. The initial logits $Z_0$ are predicted directly from the supervised learnable queries (§7).
 
 Adding $-\infty$ before softmax gives forbidden locations zero weight and renormalizes the allowed weights to sum to 1. Zeroing weights after softmax would leave their sum below 1 unless they were normalized again. The proof is folded below.
 
@@ -769,7 +814,7 @@ $$
 *which is exactly the softmax of the original logits restricted to $S$.*
 
 <details class="proof">
-<summary>Proof: the forbidden exponentials become exact zeros</summary>
+<summary>Why masking before softmax renormalizes exactly</summary>
 
 **Proof.** Fix an index $i$ and write its softmax entry from the definition:
 
@@ -821,16 +866,45 @@ Additive attention masking already existed in Transformer decoders [[Vaswani et 
 
 ### 5.3 Gradients and empty masks
 
-The attention gate is Boolean, so gradients do not pass through the threshold. The learning signal for mask quality arrives only through §3.2's per-layer auxiliary losses, and that proxy happens to be the right objective. The mask loss is minimized exactly at $m = g$. For BCE that holds pointwise. For soft Dice it follows from $2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x$, with equality only at $m = g$. One line to check: $m_x + g_x - 2m_xg_x = m_x(1-g_x) + g_x(1-m_x) \ge 0$ for $m_x \in [0,1]$ and binary $g_x$, vanishing only at $m_x = g_x$, then sum over $x$. Better, the gate is already exactly right once every point's error $|m_x - g_x|$ falls below $0.5$, well before the mask itself converges. Imperfect intermediate masks therefore already make good gates. Residual connections preserve the previous query state alongside each new update, so one bad read cannot erase a query.
+The attention gate is Boolean, so gradients do not pass through the threshold. Intermediate masks instead learn from the per-layer auxiliary losses in §3.2. Those losses compare each intermediate prediction directly with the target mask. On a binary target grid, the gate becomes correct as soon as every prediction falls on the right side of $0.5$. The exact statement and the boundary caveat are folded below.
 
-The implementation also handles an empty predicted region. The detail lives in the official code and not the paper, and without it training produces NaNs (not-a-number, the value floating-point math returns for $0/0$) within minutes. If a query's thresholded mask is empty at some scale, every logit is $-\infty$ and the softmax is $0/0$. The code detects such rows and flips them to fully unmasked, quietly falling back to plain cross-attention for that query at that layer:
+<details class="proof">
+<summary>When mask supervision gives the correct binary gate</summary>
+
+First assume the evaluated targets are binary. As a function of probability on the closed interval $[0,1]$, BCE is minimized pointwise at $m_x=g_x$. A finite sigmoid output lies in $(0,1)$, so the logit-parameterized loss approaches this endpoint infimum as $z_x\to+\infty$ for $g_x=1$ or $z_x\to-\infty$ for $g_x=0$. For soft Dice,
+
+$$
+2\sum_x m_x g_x \le \sum_x m_x + \sum_x g_x,
+$$
+
+because for $m_x\in[0,1]$ and binary $g_x$,
+
+$$
+m_x + g_x - 2m_xg_x
+= m_x(1-g_x) + g_x(1-m_x) \ge 0.
+$$
+
+Equality holds only when $m_x=g_x$ at every evaluated binary point, so soft Dice also has its closed-domain minimum of zero only at the target mask. Finite sigmoid logits approach that endpoint solution rather than attaining it exactly.
+
+The released sampler reads the ground-truth mask with bilinear interpolation. Points near a boundary can therefore have fractional targets $g_x\in(0,1)$. BCE is still minimized at that fractional value, but the Dice equality argument above no longer applies pointwise. The proof is exact on the binary grid and explains why direct mask supervision is aligned with the gate. It is not a proof that the sampled BCE-plus-Dice objective has its minimum at every fractional boundary value.
+
+The thresholded gate needs less than exact probability convergence. If $g_x=1$ and $|m_x-g_x|<0.5$, then $m_x>0.5$. If $g_x=0$ under the same condition, then $m_x<0.5$. Every gate decision is therefore correct once the pointwise errors are below $0.5$.
+
+</details>
+
+The implementation also guards against an empty predicted region. If a query's thresholded mask is empty at some scale, every attention logit would be $-\infty$ and softmax would be undefined. The code makes each affected row fully unmasked for one layer. The exact guard and its reason are folded below.
+
+<details class="proof">
+<summary>How the implementation handles an empty attention mask</summary>
 
 ```python
 attn_mask = (mask_logits.sigmoid() < 0.5).flatten(2)   # True = forbidden
-attn_mask[attn_mask.all(dim=-1)] = False               # the guard rail
+attn_mask[attn_mask.all(dim=-1)] = False               # Fall back to global attention.
 ```
 
-One poisoned row would not stay contained. The following self-attention averages all $N$ queries together, so a single NaN spreads to every query in one step, then into the loss and every gradient behind it. The guard is also what keeps the masking proposition's hypothesis true, since flipping the row to fully unmasked makes the allowed set $S$ the whole grid instead of empty.
+Without the guard, the row's softmax denominator is zero, which can introduce a NaN. The following self-attention mixes information across queries, so that invalid value can contaminate other query states, the loss, and the gradients. Flipping the row to fully unmasked also keeps the §5.2 proposition's hypothesis true. Its allowed set $S$ becomes the whole grid rather than the empty set.
+
+</details>
 
 ### 5.4 Did it work?
 
@@ -861,15 +935,15 @@ Each feature also receives DETR's two-dimensional sinusoidal position encoding a
 The default pixel decoder has six multi-scale deformable-attention (MSDeformAttn) layers over strides 8, 16, and 32. It then fuses the result with stride-4 backbone features to produce pixel embeddings. Each location samples a small learned set of points from every feature level instead of attending densely to all locations [[Zhu et al. 2021](#ref-zhu2021)]. The exact operator and cost are folded below.
 
 <details class="proof">
-<summary>Multi-scale deformable attention</summary>
+<summary>The MSDeformAttn operator and its cost</summary>
 
 For feature $z_q$ at normalized reference point $\hat p_q$,
 
 $$
-\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{K} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big].
+\text{MSDeformAttn}\big(z_q, \hat p_q, \{x^l\}\big) = \sum_{m=1}^{M} W_m \Big[ \sum_{l=1}^{L}\sum_{k=1}^{P} A_{mlqk}\; W'_m\, x^l\big(\psi_l(\hat p_q) + \Delta p_{mlqk}\big) \Big].
 $$
 
-Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $K$ sample points per level, and $x^l$ is the feature map at level $l$. This $K$ counts points, not classes, and this $M$ counts heads, not masks. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The offsets and weights are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations. The aggregation processes $MLK$ entries of width $C/M$, so it costs $O(LKC)$ per query apart from the learned projections. Dense attention would read every location at every level.
+Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $P$ sample points per level, and $x^l$ is the feature map at level $l$. This $M$ counts heads, not masks. $W'_m$ projects values into head $m$, $W_m$ projects that head back to width $C$, and $\psi_l$ maps the normalized reference point into level $l$. The two-dimensional offsets $\Delta p_{mlqk}\in\mathbb{R}^2$ and nonnegative weights $A_{mlqk}$ are predicted from $z_q$, with $\sum_{l,k}A_{mlqk}=1$ for each head $m$ and query $q$. Bilinear interpolation reads fractional locations, and samples outside a feature map contribute zero. The aggregation processes $M\!\times\!L\!\times\!P$ entries of width $C/M$, so it costs $O(LPC)$ per query apart from the learned projections. Dense attention would read every location at every level.
 
 </details>
 
@@ -881,7 +955,9 @@ Mask2Former changes the decoder layer in three ways without adding FLOPs. Togeth
 
 **Masked attention comes first.** The standard order is self-attention, then cross-attention, then the feed-forward network. Mask2Former uses masked attention, then self-attention, then the feed-forward network. Running cross-attention first gives each query image context before the queries interact. Restoring the original order costs 0.5 AP.
 
-**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. The query positional embeddings stay learnable, as in DETR. Every decoder layer adds them to the query features when computing attention, and they appear as `query_pos` in Appendix A. Direct supervision also gives the first layer a useful gate. Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
+**Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. The query positional embeddings stay learnable, as in DETR. Every decoder layer adds them to the query features when computing attention, and they appear as `query_pos` in the appendix. Direct supervision also gives the first layer a useful gate.
+
+Without direct supervision, learnable queries match zero initialization on AP and PQ but improve mIoU from 45.5 to 47.0. Adding supervision reaches 43.7 AP, 51.9 PQ, and 47.2 mIoU. The paper compares the supervised initial predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
 
 **Dropout is removed.** Restoring dropout lowers AP by 0.7 and PQ by 0.6 in the ablation.
 
@@ -893,18 +969,24 @@ Dense mask losses are expensive. Mask2Former evaluates them at sampled coordinat
 
 MaskFormer computed dense mask costs for every prediction-target pair and dense losses again for matched pairs at every supervised head. This limited training to one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates these terms at $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points.
 
-The implementation samples normalized continuous coordinates and reads masks with bilinear interpolation. For an additive point loss such as BCE, the mean over uniform samples is an unbiased estimate of the spatial average, and its variance falls as $1/K_{\text{pt}}$. The derivation is folded below.
+The implementation samples normalized continuous coordinates. At coordinate $u$, it bilinearly interpolates the prediction logit map $Z$ and target mask $G$:
+
+$$
+z(u)=\operatorname{bilinear}(Z,u), \qquad g(u)=\operatorname{bilinear}(G,u).
+$$
+
+BCE is applied directly to $z(u)$ with target $g(u)$. Dice first applies $\sigma$ to $z(u)$. This order matters because $\sigma(\operatorname{bilinear}(Z,u))$ is not generally equal to bilinear interpolation of $\sigma(Z)$. For an additive point loss such as BCE, the mean over uniform samples is an unbiased estimate of the spatial average, and its variance falls as $1/K_{\text{pt}}$. The derivation is folded below.
 
 <details class="proof">
-<summary>Uniform point estimator</summary>
+<summary>Why uniform points are unbiased for additive losses</summary>
 
-Let $u_1,\dots,u_{K_{\text{pt}}}$ be independent uniform points in the unit square, and let $\ell(u)$ be the additive loss on the interpolated masks. The Monte Carlo average is
+Condition on the current prediction logits and target mask. Let $u_1,\dots,u_{K_{\text{pt}}}$ be independent uniform points in the unit square, and let $\ell(u)$ be any additive loss evaluated from $z(u)$ and $g(u)$, with finite variance. For BCE, $\ell(u)$ is the numerically stable BCE-with-logits loss. The Monte Carlo average is
 
 $$
 \hat{\mathcal{L}} = \frac{1}{K_{\text{pt}}}\sum_{k=1}^{K_{\text{pt}}}\ell(u_k)
 $$
 
-Linearity of expectation gives the spatial mean. Independence removes the covariance terms in the variance.
+The expectation $\mathbb{E}$ is the average over repeated point draws, and the variance $\operatorname{Var}$ measures how much the estimate changes between draws. Linearity of expectation gives the spatial mean. Independence removes the covariance terms in the variance.
 
 $$
 \mathbb{E}[\hat{\mathcal{L}}]
@@ -917,18 +999,18 @@ $$
 
 </details>
 
-This statement applies to additive point losses. Dice is a ratio of sampled sums, so its sampled value is not an unbiased estimate of dense Dice. The code and the paper rely on the empirical result in the section 8.3 ablation rather than an exact equivalence proof.
+This is unbiased for the continuous bilinear-sampling objective $\int_{[0,1]^2}\ell(u)\,du$, which need not equal the arithmetic mean over raster pixels. In the released criterion, target masks are padded to the batch shape and the returned validity mask is not applied, so sampled padded areas remain part of that implementation objective. The unbiased statement applies to additive point losses. Dice is a ratio of sampled sums, so its sampled value is not unbiased in general. The code and the paper rely on the empirical result in the §8.3 ablation rather than an exact equivalence proof.
 
 ### 8.2 Two sampling rules for two jobs
 
 The two sampling rules serve different parts of training.
 
-**Matching uses shared uniform points.** One set of normalized coordinates is sampled uniformly and reused for every prediction and target mask in the image. Reuse makes the cost matrix cheaper to build. Sharing can also reduce the variance of a cost difference when the two sampled costs are positively correlated, but that is a conditional observation rather than a claim made by the paper.
+**Matching uses shared uniform points.** One set of normalized coordinates is sampled uniformly and reused for every prediction and target mask in the image. Reuse makes the cost matrix cheaper to build. A conditional variance argument for shared samples is folded below. It is not a claim made by the paper.
 
 <details class="proof">
-<summary>The conditional covariance argument</summary>
+<summary>When shared points reduce comparison variance</summary>
 
-Let $A$ and $B$ be two additive cost estimates evaluated on the same $K_{\text{pt}}$ uniform points. Then
+Let $A$ and $B$ be two additive cost estimates evaluated on the same $K_{\text{pt}}$ uniform points. Covariance measures whether the two estimates move together across repeated draws. Then
 
 $$
 \operatorname{Var}[A-B]
@@ -941,7 +1023,7 @@ Independent point sets make the covariance term zero. Shared points can make it 
 
 **Training uses uncertain points.** For each matched mask, the PointRend sampler draws $3K_{\text{pt}}$ uniform candidates [[Kirillov et al. 2020](#ref-kirillov2020)]. It keeps the $0.75K_{\text{pt}}$ candidates whose prediction logits are closest to zero, then adds $0.25K_{\text{pt}}$ fresh uniform points. The uncertainty score depends on the prediction, not the ground truth. These points often lie near a predicted boundary, but uncertain interiors can also be selected.
 
-This training sampler is intentionally nonuniform and applies no importance correction. It therefore changes the training objective rather than providing an unbiased estimate of the dense loss. The section 8.3 ablation shows that the changed objective preserves performance while reducing memory.
+This training sampler is intentionally nonuniform and applies no importance correction. Its selected coordinates are treated as fixed when gradients are computed, so it does not provide an unbiased estimate of the dense loss. Instead, it concentrates the stochastic training signal on uncertain regions. The §8.3 ablation shows that this signal preserves performance while reducing memory.
 
 <figure class="viz">
 <video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation of uniform matching points and prediction-dependent uncertain training points">
@@ -980,7 +1062,7 @@ The table compares Mask2Former's training recipe with MaskFormer's. In the decod
 COCO inference resizes the shorter image side to 800 pixels and caps the longer side at 1333. Most models use 100 queries. The largest panoptic and instance models use 200. In the R50 ablation, 100 queries gives the best AP and mIoU, while 200 raises PQ from 51.9 to 52.2. The best setting depends on how many segments an image contains.
 
 <details class="proof">
-<summary>Training settings for the other datasets</summary>
+<summary>Training settings beyond COCO</summary>
 
 [Cityscapes](https://www.cityscapes-dataset.com/examples/) [[Cordts et al. 2016](#ref-cordts2016)] uses 90,000 iterations with 512 by 1024 crops. [ADE20K](https://ade20k.csail.mit.edu/) [[Zhou et al. 2017](#ref-zhou2017)] uses 640 by 640 crops for panoptic and instance training. Semantic crop size varies by backbone. [Mapillary Vistas](https://www.mapillary.com/dataset/vistas) [[Neuhold et al. 2017](#ref-neuhold2017)] uses 300,000 iterations with 1024 by 1024 crops.
 
@@ -1014,7 +1096,11 @@ Boundary AP uses the minimum of mask IoU and Boundary IoU [[Cheng et al. 2021c](
 
 With ResNet-50, Mask2Former reaches 51.9 PQ after 50 epochs. MaskFormer reports 46.5 after 300 epochs. The comparison includes architecture, loss, augmentation, batch size, and optimizer-setting changes, so it should not be read as a controlled convergence experiment. The paper's appendix isolates one of these variables. Trained with standard augmentation instead of LSJ, R50 Mask2Former converges in 25 epochs, so the short schedule is not an artifact of the augmentation.
 
-The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. COCO buckets objects by mask area, small under 32 by 32 pixels and large over 96 by 96. Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
+The detailed results show three contrasts. Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.1. COCO assigns size buckets by mask area. Small means below $32^2$ pixels and large means above $96^2$ pixels.
+
+Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause.
+
+Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
 
 The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. A Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$ on Cityscapes, the instance AP on thing classes computed from the panoptic checkpoint. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
 
@@ -1047,9 +1133,9 @@ The same group extended Mask2Former to video instance segmentation [[Cheng et al
 
 ## 14. Conclusion
 
-Mask2Former's changes support one another rather than stack. Matching gives each query one target. Deep supervision makes every intermediate mask worth trusting. Masked attention turns those masks into the next layer's reading list, and point sampling makes the loop affordable enough to train. That is why §11's one-at-a-time deltas never add up to the whole. The parts were built as a loop, not a list.
+Mask2Former works because its changes form a feedback loop. Matching assigns one target to each query. Deep supervision trains every intermediate mask. Each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable. The ablation gains in §11 overlap because these parts depend on one another.
 
-The headline numbers were passed within a year, as headline numbers are. What the successors in §13 kept is the loop. A query states a hypothesis about a segment, the image grades it, and the next layer reads only where the hypothesis points. That design outlived its own results table.
+Later systems changed the objectives and supported outputs but kept this query-to-mask refinement loop. That loop, rather than any one benchmark result, is Mask2Former's lasting contribution.
 
 ## Appendix A. Implementation notes
 
@@ -1096,79 +1182,71 @@ def decoder_layer(
     return x, cls_logits, mask_logits
 ```
 
-The heads run once on $\mathbf{X}_0$ before the loop and after each of nine decoder layers. The initial prediction supplies $M_0$. The final output receives the main loss, and the preceding nine outputs receive auxiliary losses.
+The heads run once on $\mathbf{X}_0$ before the loop and after each of nine decoder layers. The initial prediction supplies $Z_0$. The final output receives the main loss, and the preceding nine outputs receive auxiliary losses.
 
 ## Appendix B. Questions and answers
 
-**Prove that adding $-\infty$ before the softmax renormalizes over the allowed set, and say precisely what post-softmax zeroing breaks.**
+These questions revisit the main arguments. Each answer is folded so the prompt can be used as a check before opening it.
 
 <details class="proof">
-<summary>Answer</summary>
+<summary>Why must masking happen before softmax?</summary>
 
-The §5.2 proposition shows that $e^{z+\mathcal{M}}$ vanishes outside $S$. The remaining weights form a restricted softmax and still sum to 1. Zeroing after softmax leaves coefficients whose sum is below 1 unless they are normalized again. This does not imply that the resulting vector norm always shrinks.
+Adding $-\infty$ before softmax makes $e^{z+\mathcal{M}}$ vanish outside the allowed set $S$. The remaining weights form a restricted softmax and still sum to 1. Zeroing entries after softmax leaves coefficients whose sum is below 1 unless they are normalized again. This does not imply that the resulting vector norm always shrinks.
 
 </details>
 
-**Derive the foreground attention share for an object covering fraction $\rho$ of the image with logit margin $\Delta$, and evaluate it at $\rho = 0.02$, $\Delta = 2$.**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>What is the toy foreground share at 2 percent coverage and margin 2?</summary>
 
-Share $= 1/\big(1 + \frac{1-\rho}{\rho}e^{-\Delta}\big) = 1/(1+49e^{-2}) \approx 0.13$. This is the result for the two-logit toy model. It is not a prediction for real attention distributions.
+For foreground fraction $\rho$ and logit margin $\Delta$, the two-logit model gives
+
+$$
+\text{share} = \frac{1}{1 + \dfrac{1-\rho}{\rho}e^{-\Delta}}.
+$$
+
+At $\rho=0.02$ and $\Delta=2$, this is $1/(1+49e^{-2})\approx0.13$. It is a toy-model result, not a prediction for real attention distributions.
 
 </details>
 
-**Show that the minimum matching cost is permutation-invariant.**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>Why can prediction order not change the matching minimum?</summary>
 
-Relabeling by $\pi$ turns the cost of $\sigma$ into the cost of $\pi\circ\sigma$. Composition with a fixed permutation is a bijection of $S_N$, so the minimum is unchanged. When the optimum is unique, relabeling maps it to the corresponding relabeled assignment and the downstream loss is unchanged. With exact ties, index-dependent tie-breaking can select different minimizers and therefore different gradients.
+Relabeling by $\pi$ turns the cost of assignment $\sigma$ into the cost of $\pi\circ\sigma$. Composition with a fixed permutation is a bijection of $S_N$, so the minimum is unchanged. When the optimum is unique, relabeling maps it to the corresponding relabeled assignment and the downstream loss is unchanged. With exact ties, index-dependent tie-breaking can select different minimizers and therefore different gradients.
 
 </details>
 
-**Gradients do not flow through a thresholded attention mask. How do masks learn to be good gates?**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>How do thresholded gates learn without gate gradients?</summary>
 
-They do not learn through the Boolean gate. Per-layer deep supervision trains every intermediate mask directly. The auxiliary losses are load-bearing.
+They do not learn through the Boolean gate. Per-layer deep supervision trains every intermediate mask directly. Section 5.3 states precisely when this supervision gives the correct binary gate and explains the caveat introduced by fractional boundary samples.
 
 </details>
 
-**Why does matching use shared uniform points while training uses per-mask uncertain points?**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>Why do matching and training use different point samplers?</summary>
 
-Sharing one uniform coordinate set makes the cost matrix efficient to build. For additive losses, each entry estimates the spatial average of the interpolated point loss. Training instead favors prediction logits near zero and keeps a random fraction for coverage. The uncertain sampler does not use the target mask.
+Sharing one uniform coordinate set makes the matching cost matrix efficient to build. For additive losses, each entry estimates the continuous bilinear-sampling objective. Training instead favors prediction logits near zero and keeps a random fraction for spatial coverage. The uncertain sampler does not use the target mask.
 
 </details>
 
-**Masked attention improves instance and panoptic metrics more than semantic mIoU in the ablation. What can and cannot be concluded from that?**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>What do the larger AP and PQ gains show?</summary>
 
-The ablation shows a larger gain for instance and panoptic segmentation than for semantic segmentation. Identity separation is a plausible explanation, but the experiment cannot single it out.
+The ablation shows a larger gain for instance and panoptic segmentation than for semantic segmentation. Identity separation is a plausible explanation, but the experiment cannot isolate it as the cause.
 
 </details>
 
-**Mask2Former produces overlapping soft masks, while panoptic output must be a partition. How are they reconciled?**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>How do overlapping masks become a panoptic partition?</summary>
 
-Post-processing (§9) imposes exclusivity. Panoptic inference keeps confident non-no-object queries and finds each pixel's strongest query. It writes the pixel only when the winning mask probability is at least $0.5$, applies the $0.8$ overlap filter, and merges same-class stuff. Rejected pixels remain void. The surviving segments do not overlap.
+Post-processing in §9 imposes exclusivity. Panoptic inference keeps confident non-no-object queries and finds each pixel's strongest query. It writes the pixel only when the winning mask probability is at least $0.5$, applies the $0.8$ overlap filter, and merges same-class stuff. Rejected pixels remain void. The surviving segments do not overlap.
 
 </details>
 
-**Why can PQ evaluation use greedy matching while training cannot?**
-
 <details class="proof">
-<summary>Answer</summary>
+<summary>Why does greedy matching work for PQ but not for training?</summary>
 
-The §1 lemma proves uniqueness for non-overlapping segments above 0.5 IoU. Training predictions can overlap and use soft costs, so they still require an assignment algorithm.
+The §1 lemma proves uniqueness for non-overlapping segments above $0.5$ IoU. Training predictions can overlap and use soft costs, so they still require an assignment algorithm.
 
 </details>
 

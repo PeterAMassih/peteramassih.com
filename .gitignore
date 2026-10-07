@@ -35,3 +35,4 @@ dist/
 !.env.example
 worker-configuration.d.ts
 .claude/
+AGENTS.md

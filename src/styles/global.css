@@ -126,12 +126,24 @@ pre code {
   color: var(--color-bg);
 }
 
-/* Visible focus ring for keyboard users on every link. */
-a:focus-visible {
+/* Visible focus ring for keyboard users on every control, not only links. */
+:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: 2px;
 }
+
+/* Off-screen until focused, so keyboard users can jump past the header. */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(-1 * var(--space-12));
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  z-index: 10;
+}
+.skip-link:focus { top: var(--space-2); }
 
 /* Respect reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {

@@ -32,7 +32,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     </Fragment>
   )}
 
-  <article class="post">
+  <main id="main" class="post">
+  <article>
     <header>
       <div class="meta-row">
         <p class="meta">
@@ -49,6 +50,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
       <Content />
     </div>
   </article>
+  </main>
 </BaseLayout>
 
 <style>
@@ -59,7 +61,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     margin: var(--space-24) auto var(--space-16);
     padding: 0 var(--space-4);
   }
-  .post > header,
+  .post article > header,
   .body :global(p),
   .body :global(h2),
   .body :global(h3),
@@ -79,7 +81,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     content-visibility: auto;
     contain-intrinsic-size: auto 10rem;
   }
-  .post > header { margin-bottom: var(--space-12); }
+  .post article > header { margin-bottom: var(--space-12); }
   .meta-row {
     display: flex;
     align-items: center;

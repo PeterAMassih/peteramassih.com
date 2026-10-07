@@ -44,8 +44,9 @@
   --color-text-muted: #6b6b6b;
   --color-text-subtle: #717171;
   --color-border: #e5e5e5;
-  --color-accent: #0d9488;
-  --color-accent-hover: #0f766e;
+  /* Dark enough for 4.5:1 contrast on --color-bg; a lighter teal fails for body-size links. */
+  --color-accent: #0f766e;
+  --color-accent-hover: #115e59;
   --color-code-bg: #f4f4f5;
 }
 

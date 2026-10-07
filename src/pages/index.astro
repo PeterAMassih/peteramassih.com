@@ -1,106 +1,165 @@
 ---
 // src/pages/index.astro
-// Landing. Two-column intro + two prose sections (projects, recent writing).
+// Home: who I am, then publications, experience, selected projects,
+// education, teaching and writing, in that order.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PublicationList from '../components/PublicationList.astro';
+import ProjectItem from '../components/ProjectItem.astro';
 import { getCollection } from 'astro:content';
 
-const recent = (await getCollection('writing', ({ data }) =>
+const picks = ['3d-blockgen', 'epfl-ta-meister', 'paraphrasing', 'rl-mountain-car'];
+const projects = (await getCollection('projects', ({ id }) => picks.includes(id)))
+  .sort((a, b) => picks.indexOf(a.id) - picks.indexOf(b.id));
+const posts = (await getCollection('writing', ({ data }) =>
   import.meta.env.PROD ? !data.draft : true,
 ))
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
   .slice(0, 3);
-const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const jsonLd = [
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Peter Massih', url: 'https://peteramassih.com/' },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ProfilePage',
+    mainEntity: {
+      '@type': 'Person',
+      '@id': 'https://peteramassih.com/#person',
+      name: 'Peter Massih',
+      alternateName: ['Peter A. Massih', 'Peter Abdel Massih', 'P. A. Massih'],
+      url: 'https://peteramassih.com/',
+      image: 'https://peteramassih.com/peter.jpg',
+      description: 'I do ML research and build the software that ships it.',
+      alumniOf: { '@type': 'CollegeOrUniversity', name: 'EPFL' },
+      sameAs: ['https://github.com/PeterAMassih', 'https://huggingface.co/PeterAM4', 'https://www.linkedin.com/in/peteramassih/'],
+    },
+    // Stamped at build time, so it moves with each deploy.
+    dateModified: new Date().toISOString(),
+  },
+];
 ---
 
 <BaseLayout
   title="Peter Massih — Machine learning research and engineering"
   description="Peter Massih, EPFL MSc in Computer Science. Research on vision-language models at NEC Laboratories America and three AI systems in production at Bank Lombard Odier & Co Ltd."
 >
+  <Fragment slot="head">
+    {jsonLd.map((data) => <script is:inline type="application/ld+json" set:html={JSON.stringify(data)} />)}
+  </Fragment>
+
   <main id="main">
     <header class="intro">
       <div>
         <h1>Peter Massih</h1>
-        <p class="bio">
-          I do ML research and build the software that ships it.
-          Currently at NEC Labs America. Previously a software engineer (AI/ML) at Lombard Odier.
-        </p>
-        <p class="socials">
-          <a href="https://github.com/PeterAMassih" target="_blank" rel="noopener noreferrer">github</a> ·
-          <a href="https://huggingface.co/PeterAM4" target="_blank" rel="noopener noreferrer">huggingface</a> ·
-          <a href="https://www.linkedin.com/in/peteramassih/" target="_blank" rel="noopener noreferrer">linkedin</a> ·
-          <a href="mailto:peteramassih@gmail.com">email</a>
-        </p>
-        <p class="play-invite">
-          <a id="play-invite" href="/play/">There is a tiny world hiding on this site →</a>
+        <p class="identity">I do ML research and build the software that ships it.</p>
+        <p class="contact">
+          <a href="/cv.pdf">CV</a> ·
+          <a href="mailto:peteramassih@gmail.com">Email</a> ·
+          <a href="https://github.com/PeterAMassih">GitHub</a> ·
+          <a href="https://huggingface.co/PeterAM4">Hugging Face</a> ·
+          <a href="https://www.linkedin.com/in/peteramassih/">LinkedIn</a>
         </p>
       </div>
-      <img class="photo" src="/peter.jpg" alt="Peter Massih" width="240" height="240" />
+      <img class="photo" src="/peter.jpg" alt="Peter Massih" width="480" height="640" />
     </header>
 
-    <section>
-      <h2>Background</h2>
-      <div class="bg-row">
-        <span class="bg-label">Currently</span>
-        <ul>
-          <li>ML research @ NEC Labs America · Princeton · Summer 2026</li>
-        </ul>
-      </div>
-      <div class="bg-row">
-        <span class="bg-label">Previously</span>
-        <ul>
-          <li>Software engineer AI/ML @ Lombard Odier · Geneva · 2025–2026</li>
-          <li>ML research @ NEC Labs America · Princeton · 2025</li>
-          <li>Full-stack AI engineer @ Ageospatial (startup) · Lausanne · 2024</li>
-        </ul>
-      </div>
-      <div class="bg-row">
-        <span class="bg-label">Education</span>
-        <ul>
-          <li>MS Computer Science (Data Analytics & ML) @ EPFL · 2023–2026</li>
-          <li>Exchange @ ETH Zurich (Electrical Engineering + Computer Science) · 2022–2023</li>
-          <li>BS Communication Systems (Electrical Engineering + Computer Science) @ EPFL · 2020–2023</li>
-        </ul>
-      </div>
-    </section>
+    <p>
+      EPFL MSc in Computer Science (Data Analytics and Machine Learning), 2026. As a Machine Learning
+      Research Intern at NEC Laboratories America, working with Eric Cosatto and Martin Renqiang Min,
+      I built <a href="https://arxiv.org/abs/2601.13401">SQuID</a>, a benchmark of 2,000 quantitative
+      questions on satellite images, and studied when continuous visual states help vision-language
+      models reason. For my <a href="https://doi.org/10.5281/zenodo.21074981">master's thesis</a> at
+      Bank Lombard Odier & Co Ltd, advised by Prof. Amir Zamir, I deployed three AI systems used daily
+      by bankers, fund screeners and tax specialists.
+    </p>
+    <p>
+      Research interests: spatial and quantitative reasoning in vision-language models, latent visual
+      reasoning, and post-training with reinforcement learning, with applications to remote sensing,
+      embodied AI and assistive technology.
+    </p>
 
     <section>
       <h2>Publications</h2>
+      <p class="muted name-line">Papers list me as P. A. Massih (Peter Abdel Massih).</p>
       <PublicationList />
-      <p class="more"><a href="/publications/">All publications →</a></p>
+    </section>
+
+    <section>
+      <h2>Experience</h2>
+      <article class="role">
+        <h3>NEC Laboratories America, Princeton, NJ</h3>
+        <p class="role-meta">
+          Machine Learning Research Intern.
+          <time datetime="2025-02">Feb 2025</time> – <time datetime="2025-10">Oct 2025</time>,
+          <time datetime="2026-05">May 2026</time> – <time datetime="2026-08">Aug 2026</time>.
+        </p>
+        <ul>
+          <li>Built SQuID, a 2,000-question satellite-image benchmark (first-author <a href="https://arxiv.org/abs/2601.13401">arXiv preprint</a>), and raised GPT-5's accuracy on it from 28.1% to 42.0% by having it write sandboxed Python that measures segmentation masks.</li>
+          <li>Trained the ConvNeXt and DINOv3-Mask2Former models behind these masks, shown at NEC's Open House.</li>
+          <li>Designed a VLM that reasons with one token per object, each decoded into a mask under a Hungarian-matching loss (first-author paper in preparation), and post-trained mixture-of-experts VLMs with SFT and RL (GRPO).</li>
+        </ul>
+      </article>
+      <article class="role">
+        <h3>Bank Lombard Odier & Co Ltd, Geneva, Switzerland</h3>
+        <p class="role-meta">
+          Software Engineer Intern, AI/ML (<a href="https://doi.org/10.5281/zenodo.21074981">EPFL Master's thesis</a>, advised by Prof. Amir Zamir).
+          <time datetime="2025-10">Oct 2025</time> – <time datetime="2026-04">Apr 2026</time>.
+        </p>
+        <ul>
+          <li>Deployed 3 AI systems used daily by bankers, fund screeners and tax specialists, under FINMA banking rules, and managed their releases, CI/CD, unit tests and Kafka integration.</li>
+          <li>Cut indexing of a 52-page prospectus from 17 minutes to 44 seconds in the production RAG system, with 95% of answers citing the right page, by speeding up embedding inference (ONNX Runtime, llama.cpp, Azure).</li>
+          <li>Built an on-premises LLM pipeline (Qwen3-30B-A3B) for buy and sell recommendations, 96% of which matched the bank's equity ratings, CIO views and client holdings, on par with GPT-5.1 with RAG (93%).</li>
+        </ul>
+      </article>
+      <article class="role">
+        <h3>Ageospatial, geospatial AI startup, Lausanne, Switzerland</h3>
+        <p class="role-meta">
+          Full-Stack AI Engineer Intern.
+          <time datetime="2024-07">Jul 2024</time> – <time datetime="2024-10">Oct 2024</time>.
+        </p>
+        <ul>
+          <li>Developed a LangGraph map agent for geospatial questions, adopted by 3 Swiss government agencies.</li>
+        </ul>
+      </article>
     </section>
 
     <section>
       <h2>Selected projects</h2>
-      <p><strong>3D-BlockGen</strong>: diffusion pipeline that generates buildable LEGO models from text prompts. Open-sourced code, model, and a 542k-sample dataset from Objaverse.</p>
-      <p><strong>EPFL-TA-Meister</strong>: Llama-3-8B fine-tuned as an EPFL teaching assistant: SFT, DPO alignment, RAG over coursebooks, then 4-way quantization. Five models shipped to HuggingFace.</p>
-      <p><strong>Wikispeedia Navigation Analysis</strong>: mixed-effects model over 76k+ gameplay paths, identifying semantic similarity as the dominant navigation strategy (p &lt; 0.001).</p>
-      <p><strong>Reinforcement Learning Mountain Car</strong>: DQN with random network distillation and a direction-aware throttle reward, ~33% faster convergence on Gymnasium's MountainCar-v0.</p>
+      {projects.map((project) => <ProjectItem project={project} heading="h3" />)}
       <p class="more"><a href="/projects/">All projects →</a></p>
     </section>
 
     <section>
-      <h2>Peter's Patches</h2>
-      {recent.length === 0 ? (
-        <p class="muted">Posts will appear here once I publish them.</p>
-      ) : (
-        <ul class="recent">
-          {recent.map((post) => (
-            <li>
-              <a href={`/writing/${post.id}/`}>
-                <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
-                <span class="title">{post.data.title}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p class="more"><a href="/writing/">All patches →</a></p>
+      <h2>Education</h2>
+      <ul class="plain">
+        <li>EPFL, MSc in Computer Science (Data Analytics and Machine Learning), GPA 5.5/6.0 (4.0 pass). <time datetime="2023">2023</time> – <time datetime="2026">2026</time>.</li>
+        <li>ETH Zurich, exchange year in Computer Science and Electrical Engineering. <time datetime="2022">2022</time> – <time datetime="2023">2023</time>.</li>
+        <li>EPFL, BSc in Communication Systems (Electrical Engineering and Computer Science). <time datetime="2020">2020</time> – <time datetime="2023">2023</time>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Teaching and activities</h2>
+      <ul class="plain">
+        <li>EPFL Teaching Assistant, Java (about 600 students) and Computer Systems in C (about 300). <time datetime="2023-09">Sep 2023</time> – <time datetime="2025-01">Jan 2025</time>.</li>
+        <li>Optiver Career Kickstarter, built a Python market-making strategy in a 5-day trading program. <time datetime="2025-04">Apr 2025</time>.</li>
+        <li>Lebanese Swimming Federation, national silver in butterfly and bronze in freestyle. <time datetime="2016">2016</time> – <time datetime="2021">2021</time>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Writing</h2>
+      <ul class="plain posts">
+        {posts.map((post) => (
+          <li>
+            <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
+            <a href={`/writing/${post.id}/`}>{post.data.title}</a>
+          </li>
+        ))}
+      </ul>
     </section>
   </main>
 </BaseLayout>
-
-<script>import '../scripts/presence.js';</script>
 
 <style>
   main {
@@ -112,35 +171,31 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
     display: grid;
     grid-template-columns: 1fr auto;
     gap: var(--space-6);
-    align-items: start;
-    margin-bottom: var(--space-16);
+    align-items: center;
+    margin-bottom: var(--space-8);
   }
-  .bio { margin-top: var(--space-2); color: var(--color-text-muted); max-width: 52ch; }
-  .photo { width: 240px; height: 240px; border-radius: 4px; object-fit: cover; }
-  .socials { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
-  .socials a { color: var(--color-text-muted); }
-  .socials a:hover { color: var(--color-text); }
-  .play-invite { margin-top: var(--space-2); font-size: var(--text-sm); }
-  .play-invite a { color: var(--color-text-muted); transition: color var(--transition); }
-  .play-invite a:hover { color: var(--color-accent); }
+  .identity { margin-top: var(--space-2); color: var(--color-text-muted); }
+  .contact { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .contact a { padding-block: var(--space-1); }
+  .photo { width: 160px; height: 160px; border-radius: 4px; object-fit: cover; }
+  main > p + p { margin-top: var(--space-4); }
   section { margin-top: var(--space-12); }
-  section h2 { margin-bottom: var(--space-4); }
-  section p + p { margin-top: var(--space-2); }
-  .bg-row { display: flex; gap: var(--space-4); align-items: baseline; }
-  .bg-row + .bg-row { margin-top: var(--space-3); }
-  .bg-label { width: 6rem; flex-shrink: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .bg-row ul { list-style: none; padding: 0; margin: 0; }
-  .bg-row li + li { margin-top: var(--space-1); }
-  .recent { list-style: none; padding: 0; }
-  .recent li + li { margin-top: var(--space-3); }
-  .recent a { display: grid; grid-template-columns: 4rem 1fr; gap: var(--space-4); color: var(--color-text); align-items: baseline; }
-  .recent a:hover .title { color: var(--color-accent); }
-  .recent time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .recent .title { transition: color var(--transition); }
+  section > h2 { margin-bottom: var(--space-4); }
+  .name-line { margin-bottom: var(--space-6); }
+  .role + .role { margin-top: var(--space-6); }
+  .role h3 { font-size: var(--text-lg); }
+  .role-meta { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .role ul { margin-top: var(--space-2); padding-left: var(--space-6); }
+  .role li + li { margin-top: var(--space-1); }
+  .plain { list-style: none; padding: 0; }
+  .plain li + li { margin-top: var(--space-2); }
+  .posts li { display: grid; grid-template-columns: 7rem 1fr; gap: var(--space-4); align-items: baseline; }
+  .posts time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .more { margin-top: var(--space-6); font-size: var(--text-sm); }
+  /* On phones the bio has to start on the first screen, so the page starts
+     higher and the photo shrinks beside the name instead of stacking. */
   @media (max-width: 600px) {
-    .intro { grid-template-columns: 1fr; }
-    .bg-row { flex-direction: column; gap: var(--space-1); }
-    .bg-label { width: auto; }
+    main { margin-top: var(--space-8); }
+    .photo { width: 88px; height: 88px; }
   }
 </style>

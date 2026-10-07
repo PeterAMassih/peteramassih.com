@@ -72,7 +72,7 @@ The equation shows one input channel. A practical image convolution also sums ov
 <rect x="462" y="52" width="78" height="78" fill="none" stroke="#9a9a9a"/>
 <line x1="488" y1="52" x2="488" y2="130" stroke="#d4d4d4"/><line x1="514" y1="52" x2="514" y2="130" stroke="#d4d4d4"/>
 <line x1="462" y1="78" x2="540" y2="78" stroke="#d4d4d4"/><line x1="462" y1="104" x2="540" y2="104" stroke="#d4d4d4"/>
-<rect x="462" y="52" width="26" height="26" fill="#0d9488"/>
+<rect x="462" y="52" width="26" height="26" fill="#0f766e"/>
 <text x="475" y="69" text-anchor="middle" fill="#ffffff" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="12px">3.0</text>
 <text class="cv-sub" x="501" y="152" text-anchor="middle">one patch &#8594; one pixel</text>
 <text class="cv-sub" x="350" y="224" text-anchor="middle">the same nine weights sweep every position, lighting up wherever the filter's pattern appears</text>
@@ -712,14 +712,14 @@ The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{c
 <rect x="424" y="24" width="190" height="112" rx="8" fill="#0d9488" fill-opacity="0.05" stroke="#0d9488" stroke-width="1.4"/>
 <text class="lbl" x="519" y="46" text-anchor="middle">Transformer decoder</text>
 <rect class="box" x="436" y="58" width="100" height="60" rx="5"/>
-<text class="tag" x="486" y="76" text-anchor="middle" fill="#0d9488">masked attn</text>
+<text class="tag" x="486" y="76" text-anchor="middle" fill="#0f766e">masked attn</text>
 <text class="tag" x="486" y="92" text-anchor="middle" fill="#171717">self-attn</text>
 <text class="tag" x="486" y="108" text-anchor="middle" fill="#171717">FFN</text>
 <text class="lbl" x="576" y="80" text-anchor="middle">&#215; 9</text>
 <text class="sub" x="576" y="96" text-anchor="middle">layers</text>
 <text class="tag" x="576" y="112" text-anchor="middle" fill="#6b6b6b">coarse to fine</text>
 <g fill="#b8860b"><circle cx="392" cy="166" r="4.2"/><circle cx="392" cy="178" r="4.2"/><circle cx="392" cy="190" r="4.2"/></g>
-<text class="tag" x="392" y="210" text-anchor="middle" fill="#b8860b">N learned queries</text>
+<text class="tag" x="392" y="210" text-anchor="middle" fill="#8a6508">N learned queries</text>
 <path class="flow" d="M 404 178 C 436 178, 452 158, 458 140" stroke="#b8860b" marker-end="url(#ag)"/>
 <text class="tag" x="669" y="34" text-anchor="middle" fill="#6b6b6b">what</text>
 <rect class="box" x="622" y="40" width="94" height="42" rx="4"/>
@@ -732,7 +732,7 @@ The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{c
 <path class="flow" d="M 614 60 C 617 60, 619 60, 622 61" stroke="#b8860b" marker-end="url(#ag)"/>
 <path class="flow" d="M 614 120 C 617 122, 619 126, 622 128" stroke="#b8860b" marker-end="url(#ag)"/>
 <path d="M 634 150 C 634 170, 628 178, 608 178 L 546 178 C 528 178, 522 170, 522 146" fill="none" stroke="#0d9488" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#at)"/>
-<text class="tag" x="578" y="196" text-anchor="middle" fill="#0d9488">mask &#8594; next layer's attention mask</text>
+<text class="tag" x="578" y="196" text-anchor="middle" fill="#0f766e">mask &#8594; next layer's attention mask</text>
 <path d="M 279 100 L 279 226 L 690 226 L 690 154" fill="none" stroke="#64748b" stroke-width="1.3" marker-end="url(#as)"/>
 <text class="tag" x="470" y="240" text-anchor="middle" fill="#64748b">&#949; per-pixel embeddings &#183; stride 4</text>
 </svg>
@@ -1297,12 +1297,16 @@ BibTeX
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 for (const v of document.querySelectorAll('video[data-lazy]')) {
   // Click, Enter or Space toggles playback, so motion stays stoppable
-  // without a control bar, by mouse or keyboard.
+  // without a control bar, by mouse or keyboard. Once native controls show
+  // (reduced motion, blocked autoplay) they own clicks and keys; toggling
+  // here as well would undo them.
   const toggle = () => { v.paused ? v.play() : v.pause(); };
   v.tabIndex = 0;
-  v.addEventListener('click', toggle);
+  v.addEventListener('click', () => { if (!v.controls) toggle(); });
   v.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    if (v.controls || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    toggle();
   });
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {

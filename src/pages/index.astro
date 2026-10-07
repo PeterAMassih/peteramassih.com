@@ -176,7 +176,7 @@ const jsonLd = [
   }
   .identity { margin-top: var(--space-2); color: var(--color-text-muted); }
   .contact { margin-top: var(--space-3); font-size: var(--text-sm); }
-  .contact a { padding-block: var(--space-1); }
+  .contact a { display: inline-block; min-width: 24px; padding-block: var(--space-1); text-align: center; }
   .photo { width: 160px; height: 160px; border-radius: 4px; object-fit: cover; }
   main > p + p { margin-top: var(--space-4); }
   /* Links inside sentences get an underline: in muted text and in the dark
@@ -195,6 +195,7 @@ const jsonLd = [
   .posts li { display: grid; grid-template-columns: 7rem 1fr; gap: var(--space-4); align-items: baseline; }
   .posts time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .more { margin-top: var(--space-6); font-size: var(--text-sm); }
+  .more a { padding-block: var(--space-1); }
   /* On phones the bio has to start on the first screen, so the page starts
      higher and the photo shrinks beside the name instead of stacking. */
   @media (max-width: 600px) {

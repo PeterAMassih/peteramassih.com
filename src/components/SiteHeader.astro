@@ -50,8 +50,8 @@
   .brand { color: var(--color-text); font-weight: 600; font-size: var(--text-base); }
   .brand:hover { color: var(--color-text); }
   .primary-nav { display: flex; gap: var(--space-4); font-size: var(--text-sm); margin-right: auto; }
-  /* Vertical padding lifts each link to a 24px+ tap target without moving the row. */
-  .primary-nav a { padding-block: var(--space-1); color: var(--color-text-muted); transition: color var(--transition); }
+  /* Padding and a minimum width lift each link to a 24px+ tap target without moving the row. */
+  .primary-nav a { min-width: 24px; padding-block: var(--space-1); text-align: center; color: var(--color-text-muted); transition: color var(--transition); }
   .primary-nav a:hover { color: var(--color-text); }
   .theme-toggle {
     width: 36px; height: 36px;

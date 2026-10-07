@@ -1,5 +1,5 @@
 # patches/mask2former/viz/tokens.py
-# Design tokens for the Peter's Patches Manim scenes.
+# Design tokens for the Mask2Former post's Manim scenes.
 # Site values come from src/styles/tokens.css (light theme). The scenes must be
 # indistinguishable from the page, so these are the page's own colors, not
 # invented ones. Never inline a hex in a scene file; import from here.
@@ -18,7 +18,6 @@ EMBER = "#c1440e"   # cost, strain, error; ember on screen means something is wr
 HOLLOW = "#a3a3a3"  # the void class, outline-only, never filled
 
 FONT_BODY = "Geist"
-BRAND = "peteramassih.com · Peter's Patches"
 
 # The site's body face, registered with Pango so Text(font=FONT_BODY) resolves.
 # Must be the static instance: Pango mis-tracks the variable TTF (stray gaps

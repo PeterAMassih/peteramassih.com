@@ -1,4 +1,4 @@
-# Peter's Patches #1 — Visual rebuild
+# Mask2Former, Dissected — Visual rebuild
 ## 3b1b-grade storyboards + Claude Code prompts for the Mask2Former figures
 
 ---
@@ -37,7 +37,7 @@ These are hard rules, not vibes. Every prompt below enforces them; every scene i
 
 **9. Motion quality.** 60 fps, ease-in-out on everything, beats of 0.8–1.6 s, scene length 30–50 s, final frame held 2 s, loop-friendly where natural. Nothing moves linearly except a deliberate scan.
 
-**10. It must sit natively on the page.** Background, ink, and accent are the site's own tokens, extracted from its CSS — not invented. Captions are set in the site's body face, ≤ 6 words, at most one on screen. Branding: a single small "peteramassih.com · Peter's Patches" bottom-right at 40 % opacity.
+**10. It must sit natively on the page.** Background, ink, and accent are the site's own tokens, extracted from its CSS — not invented. Captions are set in the site's body face, ≤ 6 words, at most one on screen. Branding: a single small "peteramassih.com" bottom-right at 40 % opacity.
 
 ---
 

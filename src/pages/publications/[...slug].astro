@@ -47,6 +47,8 @@ const { Content } = await render(pub);
   .links { margin-top: var(--space-2); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }
   .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
+  /* In-sentence links need a cue besides color, which is weak in the dark theme. */
+  .body :global(p a) { text-decoration: underline; text-underline-offset: 0.15em; }
   .body :global(h2) { font-size: var(--text-xl); margin-top: var(--space-8); }
   .body :global(details) { margin-top: var(--space-4); font-size: var(--text-sm); }
   .body :global(summary) { cursor: pointer; padding-block: var(--space-1); color: var(--color-text-muted); }

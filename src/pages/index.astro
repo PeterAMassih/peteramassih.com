@@ -179,6 +179,9 @@ const jsonLd = [
   .contact a { padding-block: var(--space-1); }
   .photo { width: 160px; height: 160px; border-radius: 4px; object-fit: cover; }
   main > p + p { margin-top: var(--space-4); }
+  /* Links inside sentences get an underline: in muted text and in the dark
+     theme, color alone does not set them apart from the words around them. */
+  main > p a, .role a { text-decoration: underline; text-underline-offset: 0.15em; }
   section { margin-top: var(--space-12); }
   section > h2 { margin-bottom: var(--space-4); }
   .name-line { margin-bottom: var(--space-6); }

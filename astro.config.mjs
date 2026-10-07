@@ -10,7 +10,8 @@ import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
   site: 'https://peteramassih.com',
-  integrations: [mdx(), sitemap()],
+  // /play/ is noindex, so the sitemap leaves it out.
+  integrations: [mdx(), sitemap({ filter: (page) => !page.endsWith('/play/') })],
 
   // Allow any *.trycloudflare.com hostname so phone testing through a quick tunnel works.
   // The leading dot tells Vite to treat it as a subdomain wildcard; only applies in dev.

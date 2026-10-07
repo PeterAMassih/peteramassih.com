@@ -39,12 +39,14 @@ const symMHatVHat = k('\\hat m,\\ \\hat v', false);
 const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
 ---
 
-<BaseLayout title="Not found — Peter Massih" description="That page doesn't exist.">
+<BaseLayout title="Not found — Peter Massih" description="Peter Massih's site: publications, projects, writing, CV and toys.">
+  {/* An error page should never be indexed or picked as a canonical URL. */}
+  <meta slot="head" name="robots" content="noindex" />
   <main id="main">
     <header class="head">
       <h1>404</h1>
       <p class="muted">That page doesn't exist. Watch a ball find a minimum instead.</p>
-      <p><a href="/">Back to home →</a></p>
+      <p><a class="home" href="/">Back to home →</a></p>
     </header>
 
     <section class="explainer">
@@ -163,6 +165,7 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
   .head { margin-bottom: var(--space-6); }
   .head h1 { font-size: var(--text-3xl); }
   .head p { margin-top: var(--space-2); }
+  .home { padding-block: var(--space-1); }
   .explainer { margin-bottom: var(--space-4); max-width: 65ch; }
   .explainer p { margin-top: var(--space-3); color: var(--color-text-muted); }
   /* overflow-x lets the wider gradient (with its column vector) scroll on

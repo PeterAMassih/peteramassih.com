@@ -340,6 +340,13 @@ function refreshTheme() { readColors(); renderHeatmap(); draw(); }
  * click-to-drop, theme changes). Bails silently on pages without the canvas.
  */
 function init() {
+  // Wide formulas scroll sideways on narrow screens; a tab stop lets keyboard
+  // users scroll them too, once the KaTeX fonts have set their final width.
+  document.fonts.ready.then(() => {
+    for (const el of document.querySelectorAll('.formula')) {
+      if (el.scrollWidth > el.clientWidth) el.tabIndex = 0;
+    }
+  });
   canvas = document.getElementById('grad-canvas');
   if (!canvas) return;
   ctx = canvas.getContext('2d');

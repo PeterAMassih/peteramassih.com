@@ -336,7 +336,7 @@ function connect(enterFrom) {
   });
   socket.addEventListener('close', (e) => {
     if (e.target !== socket) return;
-    statusEl.textContent = 'disconnected — refresh to rejoin';
+    statusEl.textContent = 'disconnected: refresh to rejoin';
   });
   socket.addEventListener('message', (e) => {
     if (e.target !== socket) return;
@@ -871,7 +871,7 @@ function draw() {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
     ctx.font = '14px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
+    ctx.fillText('connection lost: reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
 }
 

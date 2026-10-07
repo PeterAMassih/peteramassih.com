@@ -5,7 +5,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Play — Peter Massih" description="A tiny shared pixel world. Everyone here is a real visitor.">
+<BaseLayout title="Play — Peter Massih" description="Pixel world, one of the toys on Peter Massih's site.">
   <Fragment slot="head">
     {/* Unlisted while v0 is a test page. */}
     <meta name="robots" content="noindex" />
@@ -140,6 +140,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
   .about { margin-top: var(--space-4); }
   .about summary {
+    min-height: 24px;
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);

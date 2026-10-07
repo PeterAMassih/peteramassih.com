@@ -22,8 +22,9 @@ export default defineConfig({
     rehypePlugins: [rehypeSectionLinks, rehypeKatex],
     shikiConfig: {
       themes: {
-        light: 'github-light',
-        dark: 'github-dark',
+        // The high-contrast variants keep every token at 4.5:1 or more.
+        light: 'github-light-high-contrast',
+        dark: 'github-dark-high-contrast',
       },
       // Long lines scroll horizontally instead of wrapping, so code
       // indentation stays intact (wrapping folds lines to the left margin).

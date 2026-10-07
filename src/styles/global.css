@@ -49,6 +49,20 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
+/* Shiki inlines both themes' colors; switch to the dark set with the site theme. */
+:root[data-theme='dark'] .astro-code,
+:root[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .astro-code,
+  :root:not([data-theme='light']) .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
 /* Inline code */
 code {
   font-family: var(--font-mono);

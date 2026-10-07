@@ -1,5 +1,5 @@
 // src/pages/rss.xml.js
-// RSS feed for Peter's Patches. Astro emits this as /rss.xml at build time.
+// RSS feed for the writing section. Astro emits this as /rss.xml at build time.
 // Feed readers (Feedly, NetNewsWire, etc.) poll this URL for new posts.
 import rss from '@astrojs/rss';
 import { getCollection } from 'astro:content';
@@ -7,7 +7,7 @@ import { getCollection } from 'astro:content';
 export async function GET(context) {
   const posts = await getCollection('writing', ({ data }) => !data.draft);
   return rss({
-    title: "Peter's Patches",
+    title: 'Writing — Peter Massih',
     description: 'Essays and notes by Peter Massih.',
     site: context.site,
     customData: '<language>en-us</language>',

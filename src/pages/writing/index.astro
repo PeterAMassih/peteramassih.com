@@ -17,10 +17,10 @@ for (const p of posts) {
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 ---
 
-<BaseLayout title="Peter's Patches — Peter Massih" description="Essays and notes by Peter Massih.">
+<BaseLayout title="Writing — Peter Massih" description="Essays and notes by Peter Massih.">
   <main id="main">
     <header class="head">
-      <h1>Peter's Patches</h1>
+      <h1>Writing</h1>
       <p class="muted">Essays, notes, and the occasional long thought.</p>
     </header>
 
@@ -28,7 +28,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
       <p class="muted">No posts yet.</p>
     ) : Array.from(byYear, ([year, group]) => (
       <section class="year">
-        <h3>{year}</h3>
+        <h2>{year}</h2>
         <ul class="posts">
           {group.map((post) => (
             <li>
@@ -52,18 +52,9 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
     padding: 0 var(--space-4);
   }
   .head { margin-bottom: var(--space-12); }
-  /* The writing index is the only page that is a "publication" rather than UI.
-     One serif heading, system fonts only (no extra download), to mark it as such. */
-  .head h1 {
-    font-family: 'Iowan Old Style', 'Charter', 'Sitka Text', 'Georgia', serif;
-    font-size: 2.75rem;
-    font-weight: 400;
-    letter-spacing: -0.005em;
-    line-height: 1.1;
-  }
   .head p { margin-top: var(--space-2); }
   .year { margin-top: var(--space-12); }
-  .year h3 {
+  .year h2 {
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     font-weight: 400;

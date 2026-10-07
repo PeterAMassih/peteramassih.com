@@ -1,0 +1,38 @@
+---
+// src/components/SiteFooter.astro
+// Contact links, the toys, and the date the content was last checked.
+// Set by hand on each content update: a build date would move on every deploy.
+const LAST_UPDATED = 'October 2026';
+---
+
+<footer class="site-footer">
+  <p>
+    <a href="mailto:peteramassih@gmail.com">Email</a> ·
+    <a href="https://github.com/PeterAMassih">GitHub</a> ·
+    <a href="https://huggingface.co/PeterAM4">Hugging Face</a> ·
+    <a href="https://www.linkedin.com/in/peteramassih/">LinkedIn</a> ·
+    <a href="/rss.xml">RSS</a>
+  </p>
+  <p>
+    Toys: <a href="/life/">Game of Life</a> ·
+    <a href="/stack/">Falling blocks</a> ·
+    <a href="/play/">Pixel world</a>
+  </p>
+  <p>Last updated {LAST_UPDATED}</p>
+  <p>© {new Date().getFullYear()} Peter Massih</p>
+</footer>
+
+<style>
+  .site-footer {
+    max-width: var(--content-width);
+    margin: var(--space-16) auto var(--space-8);
+    padding: 0 var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+  .site-footer p + p { margin-top: var(--space-2); }
+  /* Padding lifts inline links to 24px+ tap targets without changing line spacing. */
+  .site-footer a { padding-block: var(--space-1); color: var(--color-text-muted); transition: color var(--transition); }
+  .site-footer a:hover { color: var(--color-text); }
+</style>

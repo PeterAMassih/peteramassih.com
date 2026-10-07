@@ -1,13 +1,18 @@
 ---
 // src/layouts/BaseLayout.astro
-// Page shell. <head>, fonts, FOUC theme init. Top bar lives in SiteHeader.
+// Page shell. <head>, fonts, FOUC theme init. Top bar and footer live in
+// SiteHeader and SiteFooter. Every page passes its own description, so no
+// two pages share one in search results or link previews.
 import '../styles/global.css';
 import '../styles/fonts.css';
 import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 
-interface Props { title: string; description?: string; }
-const { title, description = "Peter Massih's personal site" } = Astro.props;
+interface Props { title: string; description: string; }
+const { title, description } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const image = new URL('/peter.jpg', Astro.site);
+const imageAlt = 'Portrait of Peter Massih';
 ---
 
 <!doctype html>
@@ -15,26 +20,31 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="alternate" type="application/rss+xml" title="Peter's Patches" href="/rss.xml" />
-    {/* Open Graph + Twitter cards — controls the preview when the URL is shared. */}
+    <link rel="alternate" type="application/rss+xml" title="Writing — Peter Massih" href="/rss.xml" />
+    {/* Open Graph and Twitter cards control the preview when the URL is shared.
+        The headshot is portrait, so Twitter gets the square "summary" card. */}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Peter Massih" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
-    <meta property="og:image" content={new URL('/peter.jpg', Astro.site)} />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content="480" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content={imageAlt} />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={new URL('/peter.jpg', Astro.site)} />
+    <meta name="twitter:image" content={image} />
+    <meta name="twitter:image:alt" content={imageAlt} />
     {/* Fonts are self-hosted (src/styles/fonts.css); preloading the two files
         starts them alongside the CSS instead of after it. */}
     <link rel="preload" href="/fonts/geist-latin-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-400.woff2" as="font" type="font/woff2" crossorigin />
-    <title>{title}</title>
     {/* Inline so the stored theme paints on first frame, before render. */}
     <script is:inline>
       (() => {
@@ -45,24 +55,10 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <slot name="head" />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <SiteHeader />
     <slot />
-    <footer class="site-footer">
-      <p>© {new Date().getFullYear()} Peter Massih · <a href="/life/">life</a> · <a href="/stack/">stack</a> · <a href="/rss.xml">RSS</a></p>
-    </footer>
+    <SiteFooter />
     <script>import '../scripts/copy-code.js';</script>
   </body>
-
-  <style>
-    .site-footer {
-      max-width: var(--content-width);
-      margin: var(--space-16) auto var(--space-8);
-      padding: 0 var(--space-4);
-      font-size: var(--text-sm);
-      color: var(--color-text-muted);
-      text-align: center;
-    }
-    .site-footer a { color: var(--color-text-muted); transition: color var(--transition); }
-    .site-footer a:hover { color: var(--color-text); }
-  </style>
 </html>

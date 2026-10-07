@@ -15,8 +15,11 @@ const publications = (await getCollection('publications'))
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 ---
 
-<BaseLayout title="Peter Massih">
-  <main>
+<BaseLayout
+  title="Peter Massih — Machine learning research and engineering"
+  description="Peter Massih, EPFL MSc in Computer Science. Research on vision-language models at NEC Laboratories America and three AI systems in production at Bank Lombard Odier & Co Ltd."
+>
+  <main id="main">
     <header class="intro">
       <div>
         <h1>Peter Massih</h1>

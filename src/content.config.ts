@@ -22,15 +22,19 @@ const writing = defineCollection({
   }).strict(),
 });
 
+// Top-level files only: entries moved into projects/archive/ stay in the repo
+// but are not built, listed or put in the sitemap.
 const projects = defineCollection({
-  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/projects' }),
+  loader: glob({ pattern: '*.{md,mdx}', base: './src/content/projects' }),
   schema: z.object({
     title: z.string(),
+    // The result line: shown under the title and used as the meta description.
     description: z.string(),
+    // End month. It orders the list; a startDate turns it into a range.
     pubDate: z.coerce.date(),
-    tags: z.array(z.string()),
-    link: z.url().optional(),
-    repo: z.url().optional(),
+    startDate: z.coerce.date().optional(),
+    context: z.string(),
+    links: z.array(z.object({ label: z.string(), href: z.url() })),
   }).strict(),
 });
 

@@ -5,6 +5,8 @@
 // updates as the user switches optimizers (handled in gradient.js).
 import BaseLayout from '../layouts/BaseLayout.astro';
 import katex from 'katex';
+// Same-origin KaTeX styles: a third-party stylesheet would block first render.
+import 'katex/dist/katex.min.css';
 
 const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displayMode });
 
@@ -38,8 +40,6 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
 ---
 
 <BaseLayout title="Not found — Peter Massih" description="That page doesn't exist.">
-  <link slot="head" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" />
-
   <main id="main">
     <header class="head">
       <h1>404</h1>

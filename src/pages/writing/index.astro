@@ -14,14 +14,13 @@ for (const p of posts) {
   if (!byYear.has(y)) byYear.set(y, []);
   byYear.get(y)!.push(p);
 }
-const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
 
-<BaseLayout title="Writing — Peter Massih" description="Essays and notes by Peter Massih.">
+<BaseLayout title="Writing — Peter Massih" description="Writing by Peter Massih, including a post on Mask2Former.">
   <main id="main">
     <header class="head">
       <h1>Writing</h1>
-      <p class="muted">Essays, notes, and the occasional long thought.</p>
     </header>
 
     {posts.length === 0 ? (

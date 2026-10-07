@@ -8,7 +8,7 @@ export async function GET(context) {
   const posts = await getCollection('writing', ({ data }) => !data.draft);
   return rss({
     title: 'Writing — Peter Massih',
-    description: 'Essays and notes by Peter Massih.',
+    description: 'Writing by Peter Massih, including a post on Mask2Former.',
     site: context.site,
     customData: '<language>en-us</language>',
     items: posts

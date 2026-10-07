@@ -1,0 +1,100 @@
+---
+// src/components/PublicationList.astro
+// The four entries in a fixed order, shared by the home page and /publications/.
+// Entries with a page also live in src/content/publications/. Papers under
+// review get no link, page or BibTeX until they are public.
+interface Pub {
+  authors: string[];
+  title: string;
+  status: string;
+  summary?: string;
+  page?: string;
+  links?: { label: string; href: string }[];
+  bibtex?: string;
+}
+
+const ME = 'P. A. Massih';
+
+const pubs: Pub[] = [
+  {
+    authors: ['P. A. Massih', 'E. Cosatto'],
+    title: 'Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics',
+    status: 'Preprint, arXiv:2601.13401, 2026. Dataset on Hugging Face.',
+    summary: 'A benchmark of 2,000 quantitative questions on satellite images with tolerance ranges calibrated from human annotations. A code-generation baseline reaches 42.0% vs 28.1% for the best zero-shot VLM.',
+    page: '/publications/qvlm/',
+    links: [
+      { label: 'arXiv', href: 'https://arxiv.org/abs/2601.13401' },
+      { label: 'Dataset', href: 'https://huggingface.co/datasets/PeterAM4/SQuID' },
+    ],
+    bibtex: `@misc{massih2026squid,
+  title         = {Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics},
+  author        = {Massih, Peter A. and Cosatto, Eric},
+  year          = {2026},
+  eprint        = {2601.13401},
+  archivePrefix = {arXiv}
+}`,
+  },
+  {
+    authors: ['P. A. Massih', 'E. Cosatto'],
+    title: 'What Is a Visual Thought Worth? When Continuous Visual States Help Vision-Language Models Reason',
+    status: 'Under review at ICLR 2027.',
+    summary: 'Tests whether the latent visual states of CoVT and LVR can be decoded, are used and add value beyond image features, by removing the image while keeping the states fixed.',
+  },
+  {
+    authors: ['S. Lu', 'P. A. Massih', 'E. Cosatto', 'M. R. Min'],
+    title: 'Test-Time Reasoning with Computational Evidence for Spatial Question Answering',
+    status: 'Under review at ICLR 2027.',
+    summary: 'A training-free framework that plans question-specific geometric computations and gives the VLM explicit spatial evidence for multi-hop spatial questions.',
+  },
+  {
+    authors: ['P. A. Massih'],
+    title: 'Three Modalities of Production AI in Financial Services: Retrieval, Generation, and Detection',
+    status: "Master's thesis, EPFL, 2026. Open access on Zenodo.",
+    page: '/publications/msc-thesis/',
+    links: [
+      { label: 'DOI', href: 'https://doi.org/10.5281/zenodo.21074981' },
+      { label: 'PDF', href: '/master-thesis.pdf' },
+    ],
+    bibtex: `@mastersthesis{massih2026thesis,
+  title  = {Three Modalities of Production AI in Financial Services: Retrieval, Generation, and Detection},
+  author = {Massih, Peter A.},
+  school = {EPFL},
+  year   = {2026},
+  doi    = {10.5281/zenodo.21074981}
+}`,
+  },
+];
+---
+
+<ol class="pubs">
+  {pubs.map((pub) => (
+    <li>
+      <p>
+        {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)}.{' '}
+        <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>. {pub.status}
+      </p>
+      {pub.summary && <p class="summary">{pub.summary}</p>}
+      {pub.links && (
+        <p class="links">{pub.links.map((l, i) => <>{i > 0 && ' · '}<a href={l.href}>{l.label}</a></>)}</p>
+      )}
+      {pub.bibtex && (
+        <details>
+          <summary>BibTeX</summary>
+          <pre><code>{pub.bibtex}</code></pre>
+        </details>
+      )}
+    </li>
+  ))}
+</ol>
+
+<style>
+  .pubs { list-style: none; padding: 0; }
+  .pubs li + li { margin-top: var(--space-6); }
+  cite { font-style: normal; font-weight: 600; }
+  .summary { margin-top: var(--space-1); color: var(--color-text-muted); }
+  .links { margin-top: var(--space-1); font-size: var(--text-sm); }
+  .links a { padding-block: var(--space-1); }
+  details { margin-top: var(--space-1); font-size: var(--text-sm); }
+  summary { cursor: pointer; padding-block: var(--space-1); color: var(--color-text-muted); }
+  pre { margin: var(--space-2) 0 0; font-size: var(--text-xs); }
+</style>

@@ -43,16 +43,12 @@ const publications = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
-    pubDate: z.coerce.date(),
     authors: z.array(z.string()),
+    // The byline after the authors: status, advisor, host.
     venue: z.string(),
-    arxiv: z.url().optional(),
-    doi: z.url().optional(),
-    // Allowed to be a local asset path (e.g. /master-thesis.pdf), unlike the
-    // external arxiv/code links, so this is a plain string rather than z.url().
-    pdf: z.string().optional(),
-    code: z.url().optional(),
-    tags: z.array(z.string()).optional(),
+    // href can be a local asset path (e.g. /master-thesis.pdf), so it is a
+    // plain string rather than z.url().
+    links: z.array(z.object({ label: z.string(), href: z.string() })),
   }).strict(),
 });
 

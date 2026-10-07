@@ -2,6 +2,7 @@
 // src/pages/index.astro
 // Landing. Two-column intro + two prose sections (projects, recent writing).
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PublicationList from '../components/PublicationList.astro';
 import { getCollection } from 'astro:content';
 
 const recent = (await getCollection('writing', ({ data }) =>
@@ -9,9 +10,6 @@ const recent = (await getCollection('writing', ({ data }) =>
 ))
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
   .slice(0, 3);
-const publications = (await getCollection('publications'))
-  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
-  .slice(0, 2);
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 ---
 
@@ -68,20 +66,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 
     <section>
       <h2>Publications</h2>
-      {publications.length === 0 ? (
-        <p class="muted">Coming soon.</p>
-      ) : publications.map((pub) => (
-        <>
-          <p><strong><a href={`/publications/${pub.id}/`}>{pub.data.title}</a></strong></p>
-          <p class="muted">
-            {pub.data.authors.map((a, i) => (
-              <>{i > 0 && ', '}{a.startsWith('Peter') ? <strong>{a}</strong> : a}</>
-            ))}
-            {' · '}{pub.data.venue}.
-            {pub.data.arxiv && <> <a href={pub.data.arxiv} target="_blank" rel="noopener noreferrer">arXiv →</a></>}
-          </p>
-        </>
-      ))}
+      <PublicationList />
       <p class="more"><a href="/publications/">All publications →</a></p>
     </section>
 

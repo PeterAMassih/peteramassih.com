@@ -21,7 +21,7 @@ export async function getStaticPaths() {
 type Props = { post: CollectionEntry<'writing'> };
 const { post } = Astro.props;
 const { Content } = await render(post);
-const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 ---
 
 <BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
@@ -97,6 +97,10 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   .post h1 { line-height: 1.2; }
   /* Body is MDX output — :global since it's not scoped to this component. */
   .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
+  /* In-sentence links get an underline: in the dark theme the link color is
+     too close to the text color to mark them alone. Section refs keep their
+     quieter global style. */
+  .body :global(:is(p, li, td, blockquote) a:not(.section-ref)) { text-decoration: underline; text-underline-offset: 0.15em; }
   .body :global(h2) { margin-top: var(--space-8); margin-bottom: var(--space-3); }
   .body :global(h3) { margin-top: var(--space-6); margin-bottom: var(--space-2); }
   .body :global(ul), .body :global(ol) { margin-top: var(--space-4); }

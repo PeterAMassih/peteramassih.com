@@ -1042,7 +1042,7 @@ Point-sampled training cuts reported memory from 18 GB to 6 GB in the paper's R5
 
 The table compares Mask2Former's training recipe with MaskFormer's. In the decoder row, SA, CA, and MA abbreviate self-attention, cross-attention, and masked attention.
 
-| | MaskFormer | Mask2Former |
+| setting | MaskFormer | Mask2Former |
 |---|---|---|
 | optimizer | AdamW [[Loshchilov & Hutter 2019](#ref-loshchilov2019)], lr $10^{-4}$ | AdamW, lr $10^{-4}$ |
 | weight decay | $10^{-4}$ | **0.05** |
@@ -1266,7 +1266,7 @@ The §1 lemma proves uniqueness for non-overlapping segments above $0.5$ IoU. Tr
 39. <a name="ref-cheng2021vis"></a>Cheng et al. "Mask2Former for Video Instance Segmentation." 2021. [arXiv:2112.10764](https://arxiv.org/abs/2112.10764)
 40. <a name="ref-jain2023"></a>Jain et al. "OneFormer: One Transformer to Rule Universal Image Segmentation." 2023. [arXiv:2211.06220](https://arxiv.org/abs/2211.06220)
 41. <a name="ref-li2023"></a>Li et al. "Mask DINO: Towards a Unified Transformer-based Framework for Object Detection and Segmentation." 2023. [arXiv:2206.02777](https://arxiv.org/abs/2206.02777)
-42. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
+42. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [Code](https://github.com/facebookresearch/detectron2)
 43. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
 
 ## Citation
@@ -1296,8 +1296,14 @@ BibTeX
 // starts the fetch early enough that the loop is already running on arrival.
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 for (const v of document.querySelectorAll('video[data-lazy]')) {
-  // Clicking toggles playback, so motion stays stoppable without a control bar.
-  v.addEventListener('click', () => { v.paused ? v.play() : v.pause(); });
+  // Click, Enter or Space toggles playback, so motion stays stoppable
+  // without a control bar, by mouse or keyboard.
+  const toggle = () => { v.paused ? v.play() : v.pause(); };
+  v.tabIndex = 0;
+  v.addEventListener('click', toggle);
+  v.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+  });
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -1316,4 +1322,16 @@ for (const v of document.querySelectorAll('video[data-lazy]')) {
   }, { rootMargin: '1600px 0px' });
   io.observe(v);
 }
+// Wide math, tables and figures scroll sideways on narrow screens; a tab stop lets
+// keyboard users scroll them too. Off-screen blocks are not laid out yet
+// (content-visibility above), so each box is measured when it gets a size:
+// first render, rotation, and once more after the KaTeX fonts load.
+const markScroller = (el) => {
+  if (el.scrollWidth > el.clientWidth) el.tabIndex = 0;
+  else el.removeAttribute('tabindex');
+};
+const scrollers = document.querySelectorAll('.katex-display, figure.viz, .body table');
+const sized = new ResizeObserver((entries) => entries.forEach((e) => markScroller(e.target)));
+scrollers.forEach((el) => sized.observe(el));
+document.fonts.ready.then(() => scrollers.forEach(markScroller));
 </script>

@@ -10,7 +10,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     {/* Unlisted while v0 is a test page. */}
     <meta name="robots" content="noindex" />
   </Fragment>
-  <main>
+  <main id="main">
     <header class="head">
       <h1>Play</h1>
     </header>
@@ -42,61 +42,35 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
     </div>
 
-    <div class="row">
-      <input
-        id="play-name"
-        type="text"
-        maxlength="16"
-        placeholder="your name"
-        autocomplete="off"
-        aria-label="Your name"
-        pattern="[\w\-]{2,16}"
-        title="2–16 letters, digits, - or _"
-      />
-      <form id="play-chat-form">
-        <input
-          id="play-chat"
-          type="text"
-          maxlength="120"
-          placeholder="say something…"
-          autocomplete="off"
-          aria-label="Chat message"
-        />
-      </form>
-    </div>
-
     <p class="hint hint-keys muted">
-      Arrows to walk, Space to jump, Z punches, Enter to chat. E waves, Q sends
-      a heart, M mutes. Doors at the edges lead to other rooms.
+      Arrows to walk, Space to jump, Z punches. E waves, Q sends a heart,
+      M mutes. Doors at the edges lead to other rooms.
     </p>
     <p class="hint hint-touch muted">
-      Walk, jump, and punch with the buttons. Tap the field below to chat.
-      Doors at the edges lead to other rooms.
+      Walk, jump, and punch with the buttons. Doors at the edges lead to
+      other rooms.
     </p>
 
     <details class="about">
       <summary>what is this?</summary>
       <p>
         A tiny multiplayer world. Every character here is a real visitor,
-        on this page right now. Walk over and say hi, or throw a punch.
+        on this page right now. Walk over and wave, or throw a punch.
         Nobody gets hurt. They bounce back and blink for a moment while
         they cannot be hit again.
       </p>
       <p>
-        Four rooms, four games, doors at the edges. The plaza is for
-        hanging out. The arena has a crown. Steal it, hold it, and the
-        longest reigns go on the wall forever. The library is quiet, no
-        punching, and typing /mark in chat writes a note on its wall that
-        stays. The library also keeps a hangman word going, chat a single
-        letter to guess it. The moon has low gravity and a timed run,
-        green flag to gold flag, best times on the board.
+        Four rooms, doors at the edges. The plaza is for hanging out. The
+        arena has a crown. Steal it, hold it, and the longest reigns go on
+        the wall forever. The library is quiet, no punching. The moon has
+        low gravity and a timed run, green flag to gold flag, best times
+        on the board.
       </p>
       <p>
         Under the hood, your browser keeps one WebSocket open to a
         Cloudflare Durable Object that referees the room and checks every
-        move, punch, and message. Physics runs in your browser. Chat is
-        never stored. When the room is empty, the server sleeps and costs
-        nothing.
+        move and punch. Physics runs in your browser. When the room is
+        empty, the server sleeps and costs nothing.
       </p>
     </details>
   </main>
@@ -152,27 +126,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       user-select: none;
     }
     .touch button:active { background: var(--color-code-bg); }
-  }
-  .row { margin-top: var(--space-4); display: flex; gap: var(--space-2); }
-  .row form { flex: 1; }
-  .row input {
-    width: 100%;
-    padding: 0.45rem 0.75rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    transition: border-color var(--transition);
-  }
-  .row input:focus { outline: none; border-color: var(--color-text-muted); }
-  .row input:invalid { border-color: #c0564a; }
-  #play-name { width: 9rem; flex: none; }
-  @media (pointer: coarse) {
-    /* 16px minimum: anything smaller makes iOS Safari zoom the page on focus
-       and it never zooms back out after the keyboard closes. */
-    .row input { font-size: 1rem; }
   }
   @media (max-width: 700px) {
     /* Downscaling below 1:1 with nearest-neighbor decimates text strokes;

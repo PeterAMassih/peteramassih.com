@@ -73,7 +73,7 @@ const KEYS = {
 };
 const JUMP_KEYS = ['arrowup', 'w', ' '];
 
-const BUBBLE_MS = 4000; // how long a chat bubble hangs over a sprite
+const BUBBLE_MS = 4000; // how long a bubble hangs over a sprite
 const EMOTE_MS = 1200; // wave wiggle / heart float duration
 
 // The brawl, client side. The server decides who got hit; the target's own
@@ -96,16 +96,12 @@ const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('play-status');
 const roomEl = document.getElementById('play-room');
 const countEl = document.getElementById('play-count');
-const chatForm = document.getElementById('play-chat-form');
-const chatInput = document.getElementById('play-chat');
-const nameInput = document.getElementById('play-name');
 const touchPad = document.getElementById('play-touch');
 
 let room = ROOMS[location.hash.slice(1)] ? location.hash.slice(1) : 'plaza';
 let gravityScale = 1; // from the server's init: the moon is a different place
 let roomBrawl = true; // whether punches mean anything here
 let roomKb = 1; // how hard hits launch people (the arena says 1.6)
-let roomMarks = false; // whether this room has the guestbook wall
 let switching = false; // mid-door: old socket closing, new one connecting
 
 // The anonymous id rooms remember positions under. Not an account: a random
@@ -121,7 +117,6 @@ let me = null; // my id, assigned by the server in init
 const players = new Map(); // id -> { x, y, rx, ry, color, name }
 const bubbles = new Map(); // id -> { text, until }
 const effects = []; // running emotes: { id, kind, start }
-let marks = []; // the guestbook wall: { name, text, x, ts }, newest first
 const held = new Set(); // movement keys currently down
 let vy = 0; // my vertical speed
 let jumpQueued = false; // jump pressed, consumed by the next frame
@@ -131,7 +126,6 @@ let crown = null; // { wearer, x, y } — only rooms that have one send it
 let crownWornAt = null; // local clock for the reign readout, from the server's held ms
 let raceTop = []; // best runs ever, from the server: { name, ms }
 let reignTop = []; // longest crown reigns ever: { name, ms }
-let hang = null; // the library's word: { masked, wrongL, misses, lives, last }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
@@ -372,18 +366,14 @@ function onMessage(msg, enterFrom) {
     gravityScale = msg.gravity ?? 1;
     roomBrawl = msg.brawl ?? true;
     roomKb = msg.kb ?? 1;
-    marks = msg.marks ?? [];
-    roomMarks = msg.marksOn ?? false;
     crown = msg.crown ?? null;
     crownWornAt = msg.crownHeld != null ? performance.now() - msg.crownHeld : null;
     raceTop = msg.raceTop ?? [];
     reignTop = msg.reignTop ?? [];
-    hang = msg.hang ?? null;
     myRunStart = null;
-    roomEl.textContent = ROOMS[msg.room]?.label ?? msg.room;
-    chatInput.placeholder = roomMarks
-      ? 'say something… (/mark writes on the wall)'
-      : 'say something…';
+    // Only the client's own labels: a room key can arrive from a crafted
+    // join URL, and nothing a visitor types is drawn.
+    roomEl.textContent = ROOMS[msg.room]?.label ?? '';
     players.clear();
     for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
     // Coming through a door: appear beside it, not at a random spawn.
@@ -398,7 +388,6 @@ function onMessage(msg, enterFrom) {
     if (self) {
       localStorage.setItem('play-color', self.color);
       if (!localStorage.getItem('play-name')) localStorage.setItem('play-name', self.name);
-      if (!nameInput.value) nameInput.value = self.name;
     }
   } else if (msg.type === 'joined') {
     const p = msg.player;
@@ -408,9 +397,6 @@ function onMessage(msg, enterFrom) {
     if (p) { p.x = msg.x; p.y = msg.y; } // targets only; rx/ry ease there in frame()
   } else if (msg.type === 'emote') {
     effects.push({ id: msg.id, kind: msg.kind, start: performance.now() });
-  } else if (msg.type === 'named') {
-    const p = players.get(msg.id);
-    if (p) p.name = msg.name;
   } else if (msg.type === 'race') {
     if (msg.phase === 'start' && msg.id === me) {
       myRunStart = performance.now();
@@ -426,22 +412,12 @@ function onMessage(msg, enterFrom) {
     crownWornAt = msg.held != null ? performance.now() - msg.held : null;
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
-  } else if (msg.type === 'hang') {
-    hang = msg.state;
-    // The guess floats over the guesser's head; the panel shows the result.
-    bubbles.set(msg.by, { text: msg.guess, until: performance.now() + 1800 });
-    if (msg.event === 'solve') sfx('crown');
-    else if (msg.event === 'fail') sfx('uncrown');
   } else if (msg.type === 'reign') {
     reignTop = msg.top ?? reignTop;
     bubbles.set(msg.id, {
       text: `reigned ${(msg.ms / 1000).toFixed(1)}s`,
       until: performance.now() + BUBBLE_MS,
     });
-  } else if (msg.type === 'marked') {
-    // The server upserts by visitor; mirror that by name so re-marking
-    // moves your line instead of duplicating it.
-    marks = [msg.mark, ...marks.filter((m) => m.name !== msg.mark.name)].slice(0, 60);
   } else if (msg.type === 'swung') {
     const p = players.get(msg.id);
     if (p) { p.punchUntil = performance.now() + PUNCH_SHOW_MS; p.facing = msg.dir; }
@@ -464,8 +440,6 @@ function onMessage(msg, enterFrom) {
       kbVx = msg.dir * KB_VX * roomKb;
       vy = KB_POP * roomKb;
     }
-  } else if (msg.type === 'chat') {
-    bubbles.set(msg.id, { text: msg.text, until: performance.now() + BUBBLE_MS });
   } else if (msg.type === 'left') {
     players.delete(msg.id);
     bubbles.delete(msg.id);
@@ -526,10 +500,6 @@ window.addEventListener('keydown', (e) => {
   unlockAudio();
   const key = e.key.toLowerCase();
   const el = document.activeElement;
-  if (el && el.tagName === 'INPUT') {
-    if (key === 'escape') el.blur();
-    return; // typing, not steering
-  }
   // A focused link, button, or the details summary must keep its native
   // Enter/Space activation — the game only owns keys when nothing else does.
   if (el && (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'SUMMARY')) {
@@ -538,11 +508,6 @@ window.addEventListener('keydown', (e) => {
   if (key === 'm' && !e.repeat) {
     muted = !muted;
     localStorage.setItem('play-muted', muted ? '1' : '0');
-    return;
-  }
-  if (key === 'enter') {
-    e.preventDefault();
-    chatInput.focus();
     return;
   }
   if ((key === 'e' || key === 'q') && !e.repeat) {
@@ -634,44 +599,6 @@ const releaseTouch = (e) => {
 };
 touchPad.addEventListener('pointerup', releaseTouch);
 touchPad.addEventListener('pointercancel', releaseTouch);
-
-chatForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (text && socket.readyState === WebSocket.OPEN) {
-    if (text.startsWith('/mark ')) {
-      const note = text.slice(6).trim();
-      if (note && roomMarks) {
-        socket.send(JSON.stringify({ type: 'mark', text: note }));
-      } else if (note) {
-        // Wrong room: say so instead of silently eating the note.
-        bubbles.set(me, { text: 'the wall is in the library…', until: performance.now() + 2000 });
-      }
-    } else {
-      socket.send(JSON.stringify({ type: 'chat', text }));
-    }
-    chatInput.value = '';
-  } else if (!text) {
-    chatInput.value = '';
-  }
-  // An unsent message (dead socket) stays in the box rather than vanishing.
-  chatInput.blur(); // back to walking
-});
-
-// Name field: remembered locally, applied on change (Enter or blur). The
-// server validates and broadcasts; the label updates from its echo.
-nameInput.value = localStorage.getItem('play-name') ?? '';
-nameInput.addEventListener('change', () => {
-  const name = nameInput.value.trim();
-  if (!/^[\w-]{2,16}$/.test(name)) {
-    nameInput.reportValidity(); // surface the pattern rule instead of failing silently
-    return;
-  }
-  localStorage.setItem('play-name', name);
-  if (socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'name', name }));
-  }
-});
 
 // --- simulation + render ---
 
@@ -788,23 +715,6 @@ function draw() {
     for (const [sx, sy] of STARS) ctx.fillRect(sx, sy, 2, 2);
   }
 
-  // The library's hangman, top right, clear of the guestbook wall.
-  if (hang) drawHangman(hang);
-
-  // The guestbook wall: everyone who ever left a mark, faded into the room.
-  if (marks.length) {
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.textAlign = 'center';
-    marks.forEach((m, i) => {
-      const y = 58 + (i % 9) * 26;
-      const x = clamp(m.x, 90, hang ? 420 : WORLD.w - 90);
-      ctx.fillStyle = 'rgba(232, 216, 178, 0.42)';
-      ctx.fillText(m.text, x, y);
-      ctx.fillStyle = 'rgba(232, 216, 178, 0.22)';
-      ctx.fillText(`· ${m.name}`, x, y + 11);
-    });
-  }
-
   // Faint grid so motion is legible against the flat backdrop.
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
   ctx.beginPath();
@@ -840,7 +750,8 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // The arena's hall of fame: who held the crown longest, ever.
+  // The arena's hall of fame: the longest reigns, ever. Times only, since
+  // names can be typed by visitors and nothing a visitor types is drawn.
   if (crown && reignTop.length) {
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'left';
@@ -848,7 +759,7 @@ function draw() {
     ctx.fillText('longest reigns', 64, 66);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
     reignTop.forEach((r, i) => {
-      ctx.fillText(`${i + 1}. ${r.name} ${(r.ms / 1000).toFixed(1)}s`, 64, 82 + i * 15);
+      ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(1)}s`, 64, 82 + i * 15);
     });
   }
 
@@ -863,7 +774,7 @@ function draw() {
       ctx.fillText('the moon run', 508, 200);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
       raceTop.forEach((r, i) => {
-        ctx.fillText(`${i + 1}. ${r.name} ${(r.ms / 1000).toFixed(2)}s`, 508, 216 + i * 15);
+        ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(2)}s`, 508, 216 + i * 15);
       });
     }
     if (myRunStart !== null) {
@@ -922,8 +833,8 @@ function draw() {
     if (crown?.wearer === id) {
       drawCrown(p.rx, feetY - SPR_H - 1);
       if (crownWornAt !== null) {
-        // The current reign, counting up for everyone to covet. Above the
-        // name, not through it, and on our own clock so skew cannot lie.
+        // The current reign, counting up for everyone to covet, on our own
+        // clock so skew cannot lie.
         ctx.font = '10px ui-monospace, monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffd23f';
@@ -931,13 +842,6 @@ function draw() {
         ctx.fillText(`${held.toFixed(0)}s`, p.rx, feetY - SPR_H - 18);
       }
     }
-
-    // Your own name reads brighter; that is how you find yourself.
-    // 12px, not 10: the canvas downscales to ~0.54x on phones.
-    ctx.font = '12px ui-monospace, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = id === me ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.55)';
-    ctx.fillText(p.name, p.rx, feetY - SPR_H - 6);
 
     const bubble = bubbles.get(id);
     if (bubble) {
@@ -969,46 +873,6 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost — reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
-}
-
-function drawHangman(h) {
-  ctx.font = '11px ui-monospace, monospace';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-  ctx.fillText('chat a letter to guess', 470, 62);
-
-  // The word, one slot at a time.
-  ctx.font = '14px ui-monospace, monospace';
-  ctx.fillStyle = 'rgba(232, 216, 178, 0.85)';
-  [...h.masked].forEach((c, i) => ctx.fillText(c, 470 + i * 13, 92));
-
-  if (h.wrongL) {
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.fillStyle = 'rgba(212, 83, 126, 0.7)';
-    ctx.fillText([...h.wrongL].join(' '), 470, 112);
-  }
-  if (h.last) {
-    ctx.font = '10px ui-monospace, monospace';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    const verdict = h.last.won ? 'solved by' : 'fumbled by';
-    ctx.fillText(`last word ${verdict} ${h.last.name}`, 470, 130);
-  }
-
-  // The gallows assembles one miss at a time; the little pixel person last.
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  const m = h.misses;
-  if (m > 0) { ctx.moveTo(596, 118); ctx.lineTo(632, 118); } // base
-  if (m > 1) { ctx.moveTo(604, 118); ctx.lineTo(604, 58); } // pole
-  if (m > 2) { ctx.moveTo(604, 58); ctx.lineTo(624, 58); } // beam
-  if (m > 3) { ctx.moveTo(624, 58); ctx.lineTo(624, 66); } // rope
-  if (m > 5) { ctx.moveTo(624, 78); ctx.lineTo(624, 94); } // body
-  if (m > 6) { ctx.moveTo(616, 84); ctx.lineTo(632, 84); } // arms
-  if (m > 7) { ctx.moveTo(624, 94); ctx.lineTo(618, 104); ctx.moveTo(624, 94); ctx.lineTo(630, 104); } // legs
-  ctx.stroke();
-  if (m > 4) { ctx.beginPath(); ctx.arc(624, 72, 6, 0, Math.PI * 2); ctx.stroke(); } // head
-  ctx.lineWidth = 1;
 }
 
 function drawFlag(x, baseY, color) {

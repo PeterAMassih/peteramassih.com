@@ -36,7 +36,7 @@ const PATTERNS = {
 
 const CELL = 12;
 let canvas, ctx, cols, rows, grid;
-let running = true, generation = 0, fps = 10, placingPattern = null, last = 0;
+let running = !matchMedia('(prefers-reduced-motion: reduce)').matches, generation = 0, fps = 10, placingPattern = null, last = 0;
 let genEl, popEl, toggleBtn;
 
 /** @return {Uint8Array[]} A rows-by-cols grid of dead cells. */
@@ -144,6 +144,8 @@ function init() {
   genEl = document.getElementById('gen');
   popEl = document.getElementById('pop');
   toggleBtn = document.getElementById('toggle');
+  // Under reduced motion the board starts still, so the button offers Play.
+  toggleBtn.textContent = running ? 'Pause' : 'Play';
 
   fit(); randomize(); draw();
   requestAnimationFrame(loop);

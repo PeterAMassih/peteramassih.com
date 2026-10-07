@@ -1010,6 +1010,8 @@ function init() {
   loadHighScore();
   reset();
   updateMeta();
+  // Under reduced motion the pieces wait for an explicit resume.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) togglePause();
 
   bindButton(toggleBtn, togglePause);
   bindButton(restartBtn, resetAndStart);

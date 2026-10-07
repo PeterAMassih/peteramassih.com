@@ -4,8 +4,6 @@ description: "A ground-up walk through Mask2Former, from set prediction and mask
 pubDate: 2026-07-11
 tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
-series: "Peter's Patches"
-part: 1
 ---
 
 **In short.** By late 2021, universal segmentation architectures were strong on semantic and panoptic segmentation but still trailed specialized instance systems. MaskFormer handled all three tasks with one design, yet lagged the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed that gap without abandoning the paradigm by rebuilding the decoder and the training recipe.
@@ -1031,12 +1029,12 @@ This training sampler is intentionally nonuniform and applies no importance corr
 
 ### 8.3 Point-sampling ablation
 
-| matching on | training loss on | AP (COCO) | PQ (COCO) | mIoU (ADE20K) | memory |
-|---|---|---|---|---|---|
-| masks | masks | 41.0 | 50.3 | 45.9 | 18 GB |
-| masks | points | 41.0 | 50.8 | 45.9 | **6 GB** |
-| points | masks | 43.1 | 51.4 | **47.3** | 18 GB |
-| **points** | **points** | **43.7** | **51.9** | 47.2 | **6 GB** |
+| matching on | training loss on | AP (COCO) | mIoU (ADE20K) | memory |
+|---|---|---|---|---|
+| masks | masks | 41.0 | 45.9 | 18 GB |
+| masks | points | 41.0 | 45.9 | **6 GB** |
+| points | masks | 43.1 | **47.3** | 18 GB |
+| **points** | **points** | **43.7** | 47.2 | **6 GB** |
 
 Point-sampled training cuts reported memory from 18 GB to 6 GB in the paper's R50 COCO ablation without lowering AP or mIoU in the dense-matching comparison. Point-based matching provides the larger accuracy gain, including 2.1 AP with dense training. Why it improves the assignment is left open.
 
@@ -1227,55 +1225,55 @@ The §1 lemma proves uniqueness for non-overlapping segments above $0.5$ IoU. Tr
 
 ## References
 
-1. <a name="ref-cheng2022"></a>Cheng, Misra, Schwing, Kirillov, Girdhar. "Masked-attention Mask Transformer for Universal Image Segmentation." CVPR 2022. [Paper](https://openaccess.thecvf.com/content/CVPR2022/html/Cheng_Masked-Attention_Mask_Transformer_for_Universal_Image_Segmentation_CVPR_2022_paper.html) · [Supplement](https://openaccess.thecvf.com/content/CVPR2022/supplemental/Cheng_Masked-Attention_Mask_Transformer_CVPR_2022_supplemental.pdf) · [Code](https://github.com/facebookresearch/Mask2Former)
-2. <a name="ref-cheng2021"></a>Cheng, Schwing, Kirillov. "Per-Pixel Classification is Not All You Need for Semantic Segmentation." NeurIPS 2021. [arXiv:2107.06278](https://arxiv.org/abs/2107.06278)
-3. <a name="ref-carion2020"></a>Carion, Massa, Synnaeve, Usunier, Kirillov, Zagoruyko. "End-to-End Object Detection with Transformers." ECCV 2020. [arXiv:2005.12872](https://arxiv.org/abs/2005.12872)
-4. <a name="ref-kirillov2019pan"></a>Kirillov, He, Girshick, Rother, Dollár. "Panoptic Segmentation." CVPR 2019. [arXiv:1801.00868](https://arxiv.org/abs/1801.00868)
-5. <a name="ref-kirillov2020"></a>Kirillov, Wu, He, Girshick. "PointRend: Image Segmentation as Rendering." CVPR 2020. [arXiv:1912.08193](https://arxiv.org/abs/1912.08193)
-6. <a name="ref-zhu2021"></a>Zhu, Su, Lu, Li, Wang, Dai. "Deformable DETR." ICLR 2021. [arXiv:2010.04159](https://arxiv.org/abs/2010.04159)
-7. <a name="ref-zhang2021"></a>Zhang, Pang, Chen, Loy. "K-Net: Towards Unified Image Segmentation." NeurIPS 2021. [arXiv:2106.14855](https://arxiv.org/abs/2106.14855)
-8. <a name="ref-wang2021"></a>Wang, Zhu, Adam, Yuille, Chen. "MaX-DeepLab: End-to-End Panoptic Segmentation with Mask Transformers." CVPR 2021. [arXiv:2012.00759](https://arxiv.org/abs/2012.00759)
-9. <a name="ref-he2017"></a>He, Gkioxari, Dollár, Girshick. "Mask R-CNN." ICCV 2017. [arXiv:1703.06870](https://arxiv.org/abs/1703.06870)
-10. <a name="ref-long2015"></a>Long, Shelhamer, Darrell. "Fully Convolutional Networks for Semantic Segmentation." CVPR 2015. [arXiv:1411.4038](https://arxiv.org/abs/1411.4038)
-11. <a name="ref-vaswani2017"></a>Vaswani et al. "Attention Is All You Need." NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
-12. <a name="ref-kuhn1955"></a>Kuhn. "The Hungarian Method for the Assignment Problem." Naval Research Logistics Quarterly, 1955.
-13. <a name="ref-munkres1957"></a>Munkres. "Algorithms for the Assignment and Transportation Problems." Journal of the SIAM, 1957.
-14. <a name="ref-milletari2016"></a>Milletari, Navab, Ahmadi. "V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation." 3DV 2016. [arXiv:1606.04797](https://arxiv.org/abs/1606.04797)
-15. <a name="ref-lin2017"></a>Lin, Goyal, Girshick, He, Dollár. "Focal Loss for Dense Object Detection." ICCV 2017. [arXiv:1708.02002](https://arxiv.org/abs/1708.02002)
-16. <a name="ref-lin2017fpn"></a>Lin, Dollár, Girshick, He, Hariharan, Belongie. "Feature Pyramid Networks for Object Detection." CVPR 2017. [arXiv:1612.03144](https://arxiv.org/abs/1612.03144)
-17. <a name="ref-gao2021"></a>Gao, Zheng, Wang, Dai, Li. "Fast Convergence of DETR with Spatially Modulated Co-Attention." ICCV 2021. [arXiv:2101.07448](https://arxiv.org/abs/2101.07448)
-18. <a name="ref-sun2021"></a>Sun, Cao, Yang, Kitani. "Rethinking Transformer-based Set Prediction for Object Detection." ICCV 2021. [arXiv:2011.10881](https://arxiv.org/abs/2011.10881)
-19. <a name="ref-liu2021"></a>Liu et al. "Swin Transformer: Hierarchical Vision Transformer using Shifted Windows." ICCV 2021. [arXiv:2103.14030](https://arxiv.org/abs/2103.14030)
-20. <a name="ref-he2016"></a>He, Zhang, Ren, Sun. "Deep Residual Learning for Image Recognition." CVPR 2016. [arXiv:1512.03385](https://arxiv.org/abs/1512.03385)
-21. <a name="ref-chen2019"></a>Chen et al. "Hybrid Task Cascade for Instance Segmentation." CVPR 2019. [arXiv:1901.07518](https://arxiv.org/abs/1901.07518)
-22. <a name="ref-ren2015"></a>Ren, He, Girshick, Sun. "Faster R-CNN." NeurIPS 2015. [arXiv:1506.01497](https://arxiv.org/abs/1506.01497)
-23. <a name="ref-tan2020"></a>Tan, Pang, Le. "EfficientDet: Scalable and Efficient Object Detection." CVPR 2020. [arXiv:1911.09070](https://arxiv.org/abs/1911.09070)
-24. <a name="ref-huang2021"></a>Huang, Lu, Cheng, He. "FaPN: Feature-Aligned Pyramid Network for Dense Image Prediction." ICCV 2021. [arXiv:2108.07058](https://arxiv.org/abs/2108.07058)
-25. <a name="ref-loshchilov2019"></a>Loshchilov, Hutter. "Decoupled Weight Decay Regularization." ICLR 2019. [arXiv:1711.05101](https://arxiv.org/abs/1711.05101)
-26. <a name="ref-ghiasi2021"></a>Ghiasi et al. "Simple Copy-Paste is a Strong Data Augmentation Method for Instance Segmentation." CVPR 2021. [arXiv:2012.07177](https://arxiv.org/abs/2012.07177)
-27. <a name="ref-chen2018"></a>Chen, Papandreou, Kokkinos, Murphy, Yuille. "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs." TPAMI 2018. [arXiv:1606.00915](https://arxiv.org/abs/1606.00915)
-28. <a name="ref-zhao2017"></a>Zhao, Shi, Qi, Wang, Jia. "Pyramid Scene Parsing Network." CVPR 2017. [arXiv:1612.01105](https://arxiv.org/abs/1612.01105)
-29. <a name="ref-wang2018"></a>Wang, Girshick, Gupta, He. "Non-local Neural Networks." CVPR 2018. [arXiv:1711.07971](https://arxiv.org/abs/1711.07971)
-30. <a name="ref-fu2019"></a>Fu et al. "Dual Attention Network for Scene Segmentation." CVPR 2019. [arXiv:1809.02983](https://arxiv.org/abs/1809.02983)
-31. <a name="ref-strudel2021"></a>Strudel, Garcia, Laptev, Schmid. "Segmenter: Transformer for Semantic Segmentation." ICCV 2021. [arXiv:2105.05633](https://arxiv.org/abs/2105.05633)
-32. <a name="ref-xie2021"></a>Xie et al. "SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers." NeurIPS 2021. [arXiv:2105.15203](https://arxiv.org/abs/2105.15203)
-33. <a name="ref-bao2022"></a>Bao, Dong, Wei. "BEiT: BERT Pre-Training of Image Transformers." ICLR 2022. [arXiv:2106.08254](https://arxiv.org/abs/2106.08254)
-34. <a name="ref-everingham2015"></a>Everingham et al. "The PASCAL Visual Object Classes Challenge: A Retrospective." IJCV 2015.
-35. <a name="ref-lin2014"></a>Lin et al. "Microsoft COCO: Common Objects in Context." ECCV 2014. [arXiv:1405.0312](https://arxiv.org/abs/1405.0312)
-36. <a name="ref-cordts2016"></a>Cordts et al. "The Cityscapes Dataset for Semantic Urban Scene Understanding." CVPR 2016.
-37. <a name="ref-zhou2017"></a>Zhou et al. "Scene Parsing through ADE20K." CVPR 2017.
-38. <a name="ref-neuhold2017"></a>Neuhold, Ollmann, Rota Bulò, Kontschieder. "The Mapillary Vistas Dataset for Semantic Understanding of Street Scenes." ICCV 2017.
+1. <a name="ref-cheng2022"></a>Cheng, Misra, Schwing, Kirillov, Girdhar. "Masked-attention Mask Transformer for Universal Image Segmentation." 2022. [arXiv:2112.01527](https://arxiv.org/abs/2112.01527) · [Code](https://github.com/facebookresearch/Mask2Former)
+2. <a name="ref-cheng2021"></a>Cheng, Schwing, Kirillov. "Per-Pixel Classification is Not All You Need for Semantic Segmentation." 2021. [arXiv:2107.06278](https://arxiv.org/abs/2107.06278)
+3. <a name="ref-carion2020"></a>Carion, Massa, Synnaeve, Usunier, Kirillov, Zagoruyko. "End-to-End Object Detection with Transformers." 2020. [arXiv:2005.12872](https://arxiv.org/abs/2005.12872)
+4. <a name="ref-kirillov2019pan"></a>Kirillov, He, Girshick, Rother, Dollár. "Panoptic Segmentation." 2019. [arXiv:1801.00868](https://arxiv.org/abs/1801.00868)
+5. <a name="ref-kirillov2020"></a>Kirillov, Wu, He, Girshick. "PointRend: Image Segmentation as Rendering." 2020. [arXiv:1912.08193](https://arxiv.org/abs/1912.08193)
+6. <a name="ref-zhu2021"></a>Zhu, Su, Lu, Li, Wang, Dai. "Deformable DETR." 2021. [arXiv:2010.04159](https://arxiv.org/abs/2010.04159)
+7. <a name="ref-zhang2021"></a>Zhang, Pang, Chen, Loy. "K-Net: Towards Unified Image Segmentation." 2021. [arXiv:2106.14855](https://arxiv.org/abs/2106.14855)
+8. <a name="ref-wang2021"></a>Wang, Zhu, Adam, Yuille, Chen. "MaX-DeepLab: End-to-End Panoptic Segmentation with Mask Transformers." 2021. [arXiv:2012.00759](https://arxiv.org/abs/2012.00759)
+9. <a name="ref-he2017"></a>He, Gkioxari, Dollár, Girshick. "Mask R-CNN." 2017. [arXiv:1703.06870](https://arxiv.org/abs/1703.06870)
+10. <a name="ref-long2015"></a>Long, Shelhamer, Darrell. "Fully Convolutional Networks for Semantic Segmentation." 2015. [arXiv:1411.4038](https://arxiv.org/abs/1411.4038)
+11. <a name="ref-vaswani2017"></a>Vaswani et al. "Attention Is All You Need." 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+12. <a name="ref-kuhn1955"></a>Kuhn. "The Hungarian Method for the Assignment Problem." 1955. [doi:10.1002/nav.3800020109](https://doi.org/10.1002/nav.3800020109)
+13. <a name="ref-munkres1957"></a>Munkres. "Algorithms for the Assignment and Transportation Problems." 1957. [doi:10.1137/0105003](https://doi.org/10.1137/0105003)
+14. <a name="ref-milletari2016"></a>Milletari, Navab, Ahmadi. "V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation." 2016. [arXiv:1606.04797](https://arxiv.org/abs/1606.04797)
+15. <a name="ref-lin2017"></a>Lin, Goyal, Girshick, He, Dollár. "Focal Loss for Dense Object Detection." 2017. [arXiv:1708.02002](https://arxiv.org/abs/1708.02002)
+16. <a name="ref-lin2017fpn"></a>Lin, Dollár, Girshick, He, Hariharan, Belongie. "Feature Pyramid Networks for Object Detection." 2017. [arXiv:1612.03144](https://arxiv.org/abs/1612.03144)
+17. <a name="ref-gao2021"></a>Gao, Zheng, Wang, Dai, Li. "Fast Convergence of DETR with Spatially Modulated Co-Attention." 2021. [arXiv:2101.07448](https://arxiv.org/abs/2101.07448)
+18. <a name="ref-sun2021"></a>Sun, Cao, Yang, Kitani. "Rethinking Transformer-based Set Prediction for Object Detection." 2021. [arXiv:2011.10881](https://arxiv.org/abs/2011.10881)
+19. <a name="ref-liu2021"></a>Liu et al. "Swin Transformer: Hierarchical Vision Transformer using Shifted Windows." 2021. [arXiv:2103.14030](https://arxiv.org/abs/2103.14030)
+20. <a name="ref-he2016"></a>He, Zhang, Ren, Sun. "Deep Residual Learning for Image Recognition." 2016. [arXiv:1512.03385](https://arxiv.org/abs/1512.03385)
+21. <a name="ref-chen2019"></a>Chen et al. "Hybrid Task Cascade for Instance Segmentation." 2019. [arXiv:1901.07518](https://arxiv.org/abs/1901.07518)
+22. <a name="ref-ren2015"></a>Ren, He, Girshick, Sun. "Faster R-CNN." 2015. [arXiv:1506.01497](https://arxiv.org/abs/1506.01497)
+23. <a name="ref-tan2020"></a>Tan, Pang, Le. "EfficientDet: Scalable and Efficient Object Detection." 2020. [arXiv:1911.09070](https://arxiv.org/abs/1911.09070)
+24. <a name="ref-huang2021"></a>Huang, Lu, Cheng, He. "FaPN: Feature-Aligned Pyramid Network for Dense Image Prediction." 2021. [arXiv:2108.07058](https://arxiv.org/abs/2108.07058)
+25. <a name="ref-loshchilov2019"></a>Loshchilov, Hutter. "Decoupled Weight Decay Regularization." 2019. [arXiv:1711.05101](https://arxiv.org/abs/1711.05101)
+26. <a name="ref-ghiasi2021"></a>Ghiasi et al. "Simple Copy-Paste is a Strong Data Augmentation Method for Instance Segmentation." 2021. [arXiv:2012.07177](https://arxiv.org/abs/2012.07177)
+27. <a name="ref-chen2018"></a>Chen, Papandreou, Kokkinos, Murphy, Yuille. "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs." 2018. [arXiv:1606.00915](https://arxiv.org/abs/1606.00915)
+28. <a name="ref-zhao2017"></a>Zhao, Shi, Qi, Wang, Jia. "Pyramid Scene Parsing Network." 2017. [arXiv:1612.01105](https://arxiv.org/abs/1612.01105)
+29. <a name="ref-wang2018"></a>Wang, Girshick, Gupta, He. "Non-local Neural Networks." 2018. [arXiv:1711.07971](https://arxiv.org/abs/1711.07971)
+30. <a name="ref-fu2019"></a>Fu et al. "Dual Attention Network for Scene Segmentation." 2019. [arXiv:1809.02983](https://arxiv.org/abs/1809.02983)
+31. <a name="ref-strudel2021"></a>Strudel, Garcia, Laptev, Schmid. "Segmenter: Transformer for Semantic Segmentation." 2021. [arXiv:2105.05633](https://arxiv.org/abs/2105.05633)
+32. <a name="ref-xie2021"></a>Xie et al. "SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers." 2021. [arXiv:2105.15203](https://arxiv.org/abs/2105.15203)
+33. <a name="ref-bao2022"></a>Bao, Dong, Wei. "BEiT: BERT Pre-Training of Image Transformers." 2022. [arXiv:2106.08254](https://arxiv.org/abs/2106.08254)
+34. <a name="ref-everingham2015"></a>Everingham et al. "The PASCAL Visual Object Classes Challenge: A Retrospective." 2015. [doi:10.1007/s11263-014-0733-5](https://doi.org/10.1007/s11263-014-0733-5)
+35. <a name="ref-lin2014"></a>Lin et al. "Microsoft COCO: Common Objects in Context." 2014. [arXiv:1405.0312](https://arxiv.org/abs/1405.0312)
+36. <a name="ref-cordts2016"></a>Cordts et al. "The Cityscapes Dataset for Semantic Urban Scene Understanding." 2016. [arXiv:1604.01685](https://arxiv.org/abs/1604.01685)
+37. <a name="ref-zhou2017"></a>Zhou et al. "Scene Parsing through ADE20K." 2017. [Project page](https://ade20k.csail.mit.edu/)
+38. <a name="ref-neuhold2017"></a>Neuhold, Ollmann, Rota Bulò, Kontschieder. "The Mapillary Vistas Dataset for Semantic Understanding of Street Scenes." 2017. [Paper](https://openaccess.thecvf.com/content_iccv_2017/html/Neuhold_The_Mapillary_Vistas_ICCV_2017_paper.html)
 39. <a name="ref-cheng2021vis"></a>Cheng et al. "Mask2Former for Video Instance Segmentation." 2021. [arXiv:2112.10764](https://arxiv.org/abs/2112.10764)
-40. <a name="ref-jain2023"></a>Jain et al. "OneFormer: One Transformer to Rule Universal Image Segmentation." CVPR 2023. [arXiv:2211.06220](https://arxiv.org/abs/2211.06220)
-41. <a name="ref-li2023"></a>Li et al. "Mask DINO: Towards a Unified Transformer-based Framework for Object Detection and Segmentation." CVPR 2023. [arXiv:2206.02777](https://arxiv.org/abs/2206.02777)
+40. <a name="ref-jain2023"></a>Jain et al. "OneFormer: One Transformer to Rule Universal Image Segmentation." 2023. [arXiv:2211.06220](https://arxiv.org/abs/2211.06220)
+41. <a name="ref-li2023"></a>Li et al. "Mask DINO: Towards a Unified Transformer-based Framework for Object Detection and Segmentation." 2023. [arXiv:2206.02777](https://arxiv.org/abs/2206.02777)
 42. <a name="ref-wu2019"></a>Wu, Kirillov, Massa, Lo, Girshick. "Detectron2." 2019. [github.com/facebookresearch/detectron2](https://github.com/facebookresearch/detectron2)
-43. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." CVPR 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
+43. <a name="ref-cheng2021biou"></a>Cheng, Girshick, Dollár, Berg, Kirillov. "Boundary IoU: Improving Object-Centric Image Segmentation Evaluation." 2021. [arXiv:2103.16562](https://arxiv.org/abs/2103.16562)
 
 ## Citation
 
 Suggested citation
 
-> Massih, Peter. "Mask2Former, Dissected." *Peter's Patches*, no. 1, Jul 2026. https://peteramassih.com/writing/mask2former.
+> Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://peteramassih.com/writing/mask2former.
 
 BibTeX
 
@@ -1284,8 +1282,6 @@ BibTeX
   title   = {Mask2Former, Dissected},
   author  = {Massih, Peter},
   journal = {peteramassih.com},
-  series  = {Peter's Patches},
-  number  = {1},
   year    = {2026},
   month   = {July},
   url     = {https://peteramassih.com/writing/mask2former}

@@ -1,8 +1,12 @@
 ---
 // src/components/PublicationList.astro
-// The four entries in a fixed order, shared by the home page and /publications/.
-// Entries with a page also live in src/content/publications/. Papers under
-// review get no link, page or BibTeX until they are public.
+// The four entries in a fixed order. The home page shows them compact (citation
+// only); /publications/ adds summaries, links and BibTeX. Entries with a page
+// also live in src/content/publications/. Papers under review get no link,
+// page or BibTeX until they are public.
+interface Props { compact?: boolean }
+const { compact = false } = Astro.props;
+
 interface Pub {
   authors: string[];
   title: string;
@@ -70,15 +74,15 @@ const pubs: Pub[] = [
 <ol class="pubs">
   {pubs.map((pub) => (
     <li>
-      <p>
-        {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)}.{' '}
-        <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>. {pub.status}
+      <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>
+      <p class="byline">
+        {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)} · {pub.status}
       </p>
-      {pub.summary && <p class="summary">{pub.summary}</p>}
-      {pub.links && (
+      {!compact && pub.summary && <p class="summary">{pub.summary}</p>}
+      {!compact && pub.links && (
         <p class="links">{pub.links.map((l, i) => <>{i > 0 && ' · '}<a href={l.href}>{l.label}</a></>)}</p>
       )}
-      {pub.bibtex && (
+      {!compact && pub.bibtex && (
         <details>
           <summary>BibTeX</summary>
           <pre><code>{pub.bibtex}</code></pre>
@@ -90,9 +94,12 @@ const pubs: Pub[] = [
 
 <style>
   .pubs { list-style: none; padding: 0; }
-  .pubs li + li { margin-top: var(--space-6); }
+  .pubs li + li { margin-top: var(--space-4); }
   cite { font-style: normal; font-weight: 600; }
-  .summary { margin-top: var(--space-1); color: var(--color-text-muted); }
+  cite a { color: var(--color-text); }
+  cite a:hover { color: var(--color-accent); }
+  .byline { color: var(--color-text-muted); }
+  .summary { margin-top: var(--space-1); }
   .links { margin-top: var(--space-1); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }
   details { margin-top: var(--space-1); font-size: var(--text-sm); }

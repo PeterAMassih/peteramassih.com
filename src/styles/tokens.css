@@ -28,7 +28,7 @@
   --space-24: 6rem;
 
   /* Layout */
-  --content-width: 680px;      /* prose, tables, and math: the readable measure */
+  --content-width: 640px;      /* prose, tables, and math: about 75 characters a line */
   --wide-width: 800px;         /* code blocks and figures break out a little wider */
   --page-width: 768px;
 

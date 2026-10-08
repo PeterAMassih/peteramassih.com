@@ -843,6 +843,18 @@ function draw() {
       }
     }
 
+    // Your own sprite gets a small caret overhead: the name tag that used to
+    // mark it is gone, and sprites otherwise differ only by tint.
+    if (id === me) {
+      const tip = feetY - SPR_H - (crown?.wearer === id ? 29 : 3);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.moveTo(p.rx - 4, tip - 5);
+      ctx.lineTo(p.rx + 4, tip - 5);
+      ctx.lineTo(p.rx, tip);
+      ctx.fill();
+    }
+
     const bubble = bubbles.get(id);
     if (bubble) {
       if (now > bubble.until) bubbles.delete(id);

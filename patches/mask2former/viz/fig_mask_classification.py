@@ -19,7 +19,7 @@ which is why the caption can point at the thing/stuff split of section 1.
 Run (from this directory, after the extra deps below are installed):
     .venv/bin/python fig_mask_classification.py
 
-Outputs public/assets/m2f/mask_classification.{webp,png}. Deterministic: the
+Outputs public/assets/m2f/mask_classification.webp. Deterministic: the
 model is in eval mode with no sampling, so re-running reproduces the committed
 figure bit-for-bit given the same checkpoint.
 """
@@ -33,7 +33,6 @@ from PIL import Image
 from scipy.ndimage import binary_erosion
 from transformers import AutoImageProcessor, Mask2FormerForUniversalSegmentation
 
-from tokens import BACKGROUND, GOLD  # site palette: #fafafa, #b8860b
 
 HERE = Path(__file__).resolve().parent
 SRC_URL = "https://upload.wikimedia.org/wikipedia/commons/4/48/Dog-2617516_1920.jpg"
@@ -118,7 +117,6 @@ def main():
     canvas.paste(left, (margin, margin))
     canvas.paste(right, (margin + 720 + gap, margin))
     OUT.mkdir(parents=True, exist_ok=True)
-    canvas.save(OUT / "mask_classification.png")
     canvas.save(OUT / "mask_classification.webp", quality=82, method=6)
     print(f"wrote {OUT/'mask_classification.webp'} ({canvas.size}, dog covers {mask.mean():.1%})")
 

@@ -903,7 +903,7 @@ Without the guard, the row's softmax denominator is zero, which can introduce a 
 
 ### 5.4 Did it work?
 
-In the supplementary analysis, average attention mass inside the matched foreground rises from about 0.20 to 0.59. One masked-attention layer also outperforms nine standard cross-attention layers on PQ in the reported layer-wise comparison. Removing masked attention costs 5.9 AP, 4.8 PQ, and 1.7 mIoU. This is the largest drop in the paper's ablations.
+In the supplementary analysis, average attention mass inside the matched foreground rises from about 0.20 to 0.59. One masked-attention layer also outperforms nine standard cross-attention layers on PQ in the reported layer-wise comparison. Removing masked attention costs 5.9 AP, 4.8 PQ, and 1.7 mIoU. This is the largest AP and PQ drop among the paper's component ablations.
 
 ## 6. Feeding the decoder
 
@@ -1102,7 +1102,7 @@ The table reports controlled R50 ablations across all three tasks.
 
 | change (removed or varied) | ΔAP | ΔPQ | ΔmIoU | takeaway |
 |---|---|---|---|---|
-| remove masked attention | **−5.9** | **−4.8** | −1.7 | largest measured drop |
+| remove masked attention | **−5.9** | **−4.8** | −1.7 | largest AP and PQ drop |
 | remove multi-scale high-res features | −2.2 | −1.7 | −1.1 | finer features matter |
 | replace point matching with dense masks | −2.7 | −1.1 | −1.3* | point matching improves all three tasks |
 | replace supervised learnable features with zero-init | −0.8 | −0.7 | −1.8 | direct supervision of initial queries matters |
@@ -1269,7 +1269,7 @@ The §1 lemma proves uniqueness for non-overlapping segments above $0.5$ IoU. Tr
 
 ## Citation
 
-Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://peteramassih.com/writing/mask2former.
+Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://peteramassih.com/writing/mask2former/.
 
 ```bibtex
 @article{massih2026mask2former,
@@ -1278,7 +1278,7 @@ Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://p
   journal = {peteramassih.com},
   year    = {2026},
   month   = {July},
-  url     = {https://peteramassih.com/writing/mask2former}
+  url     = {https://peteramassih.com/writing/mask2former/}
 }
 ```
 

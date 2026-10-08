@@ -13,29 +13,34 @@ export const prerender = false;
 // Post ids are kebab-case file paths; anything else never touches KV.
 const SLUG = /^[a-z0-9][a-z0-9/-]{0,63}$/;
 
-function json(data, init = {}) {
-  const headers = new Headers(init.headers);
-  headers.set('Content-Type', 'application/json');
-  return new Response(JSON.stringify(data), { ...init, headers });
-}
-
 function slugOf(url) {
   const slug = new URL(url).searchParams.get('slug') || '';
   return SLUG.test(slug) ? slug : null;
 }
 
+// Only a published post can be liked: each new key costs KV writes from a
+// small daily free-tier budget shared with the high score, so invented slugs
+// must not create keys. The built post page in static assets is the source
+// of truth, which keeps this list from ever going stale.
+async function isPost(slug, url) {
+  const page = await env.ASSETS.fetch(new URL(`/writing/${slug}/`, url), { method: 'HEAD' });
+  return page.ok;
+}
+
 export async function GET({ request }) {
   const slug = slugOf(request.url);
-  if (!slug) return json({ error: 'invalid slug' }, { status: 400 });
+  if (!slug) return Response.json({ error: 'invalid slug' }, { status: 400 });
   const likes = parseInt((await env.LIKES.get(slug)) || '0', 10);
-  return json({ likes }, {
+  return Response.json({ likes }, {
     headers: { 'Cache-Control': 'no-store' },
   });
 }
 
 export async function POST({ request }) {
   const slug = slugOf(request.url);
-  if (!slug) return json({ error: 'invalid slug' }, { status: 400 });
+  if (!slug || !(await isPost(slug, request.url))) {
+    return Response.json({ error: 'invalid slug' }, { status: 400 });
+  }
 
   // One counted like per IP per post per day. The guard key stores a hash,
   // never the address itself, and expires on its own. This is friction, not
@@ -48,7 +53,7 @@ export async function POST({ request }) {
     const guard = `ip:${slug}:${hash}`;
     if (await env.LIKES.get(guard)) {
       const likes = parseInt((await env.LIKES.get(slug)) || '0', 10);
-      return json({ likes });
+      return Response.json({ likes });
     }
     await env.LIKES.put(guard, '1', { expirationTtl: 86400 });
   }
@@ -57,5 +62,5 @@ export async function POST({ request }) {
   // counter that is an acceptable trade for zero extra infrastructure.
   const likes = parseInt((await env.LIKES.get(slug)) || '0', 10) + 1;
   await env.LIKES.put(slug, String(likes));
-  return json({ likes });
+  return Response.json({ likes });
 }

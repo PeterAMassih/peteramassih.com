@@ -2,7 +2,7 @@
 // Astro server endpoint for the global high score, deployed inside the
 // Cloudflare Worker bundle by @astrojs/cloudflare. The SESSION KV binding
 // (declared in wrangler.jsonc) is reached through the cloudflare:workers
-// virtual module — Astro 6's replacement for the removed locals.runtime.env.
+// virtual module.
 //
 // GET  /api/high-score                 → { score }
 // POST /api/high-score { score: int }  → { score, updated }
@@ -19,16 +19,10 @@ const KEY = 'stack:high';
 // headroom — the real-world NES Tetris record is ~13.6M.
 const MAX_SCORE = 20_000_000;
 
-function json(data, init = {}) {
-  const headers = new Headers(init.headers);
-  headers.set('Content-Type', 'application/json');
-  return new Response(JSON.stringify(data), { ...init, headers });
-}
-
 export async function GET() {
   const stored = await env.SESSION.get(KEY);
   const score = parseInt(stored || '0', 10);
-  return json({ score }, {
+  return Response.json({ score }, {
     // Always serve the live value; the CDN must not cache this endpoint.
     headers: { 'Cache-Control': 'no-store' },
   });
@@ -39,12 +33,12 @@ export async function POST({ request }) {
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'invalid json' }, { status: 400 });
+    return Response.json({ error: 'invalid json' }, { status: 400 });
   }
 
   const score = Number.isFinite(body?.score) ? Math.floor(body.score) : -1;
   if (score < 0 || score > MAX_SCORE) {
-    return json({ error: 'invalid score' }, { status: 400 });
+    return Response.json({ error: 'invalid score' }, { status: 400 });
   }
 
   // Read-then-write. KV is eventually consistent and concurrent writes can
@@ -53,7 +47,7 @@ export async function POST({ request }) {
   const current = parseInt((await env.SESSION.get(KEY)) || '0', 10);
   if (score > current) {
     await env.SESSION.put(KEY, String(score));
-    return json({ score, updated: true });
+    return Response.json({ score, updated: true });
   }
-  return json({ score: current, updated: false });
+  return Response.json({ score: current, updated: false });
 }

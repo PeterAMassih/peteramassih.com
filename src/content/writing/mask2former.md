@@ -552,7 +552,6 @@ An independent nearest-target choice could assign two queries to one object and 
 
 <figure class="viz">
 <video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/hungarian_matching_poster.webp" width="1920" height="1080" aria-label="Animation of Hungarian matching using cords between predictions and targets">
-<source data-src="/assets/m2f/hungarian_matching.webm" type="video/webm">
 <source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
 </video>
 <figcaption>Fig. 3. A geometric analogy for bipartite matching. Gold shapes are predictions and green shapes are targets. Each cord stands for the combined class, BCE, and Dice cost. The positions, cord lengths, and swaps are schematic. They are not learned coordinates, measured costs, or a trace of the solver. The assignment chooses one prediction for each target and leaves the others unmatched. Reordering the prediction list leaves the minimum cost unchanged.</figcaption>
@@ -920,7 +919,6 @@ Each feature also receives DETR's two-dimensional sinusoidal position encoding a
 
 <figure class="viz">
 <video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/scales_breathe_poster.webp" width="1920" height="1080" aria-label="Animation of a query reading three feature scales from coarse to fine">
-<source data-src="/assets/m2f/scales_breathe.webm" type="video/webm">
 <source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
 </video>
 <figcaption>Fig. 6. Feature maps at strides 32, 16, and 8. Finer maps retain more small-object detail but contain more tokens. The fading duckling is an analogy for weaker localization at coarse resolution, not a claim that the feature contains no object information. The decoder reads one scale per layer and repeats the cycle three times. The sagging slab is a cost analogy for feeding every scale to every layer, not a proportional timing measurement.</figcaption>

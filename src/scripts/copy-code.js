@@ -1,14 +1,11 @@
 // src/scripts/copy-code.js
 // Wraps every <pre> in a .code-block and adds a "Copy" button pinned to that
 // wrapper, so the button stays in the corner while the code scrolls
-// horizontally inside the <pre>. Hidden until the block is hovered or the
+// horizontally inside the <pre> (an absolute child of the scrolling <pre>
+// would slide away with the code). Hidden until the block is hovered or the
 // button is focused. Module scripts run after parsing, so every <pre> exists.
 
 for (const pre of document.querySelectorAll('pre')) {
-  const source = pre.querySelector('code') ?? pre;
-
-  // The button is pinned to the wrapper, not the <pre>: an absolute child of
-  // the scrolling <pre> would slide away with the code.
   const wrap = document.createElement('div');
   wrap.className = 'code-block';
   pre.replaceWith(wrap);
@@ -23,7 +20,7 @@ for (const pre of document.querySelectorAll('pre')) {
   // instead of breaking the button.
   btn.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(source.textContent ?? '');
+      await navigator.clipboard.writeText(pre.textContent);
       btn.textContent = 'Copied';
     } catch {
       btn.textContent = 'Failed';

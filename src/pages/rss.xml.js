@@ -1,6 +1,5 @@
 // src/pages/rss.xml.js
 // RSS feed for the writing section. Astro emits this as /rss.xml at build time.
-// Feed readers (Feedly, NetNewsWire, etc.) poll this URL for new posts.
 import rss from '@astrojs/rss';
 import { getCollection } from 'astro:content';
 

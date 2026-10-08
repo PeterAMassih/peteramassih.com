@@ -1,0 +1,40 @@
+/* src/styles/canvas-toy.css
+   Canvas and control buttons shared by the 404 gradient demo and the Game of
+   Life. Stack and Play style their own, so they do not import this. */
+
+.canvas {
+  width: 100%;
+  height: 60vh;
+  background: var(--color-code-bg);
+  border-radius: 4px;
+  cursor: crosshair;
+}
+
+.controls {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.controls .label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+.controls button {
+  padding: 0.35rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+.controls button:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+.controls button.active {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+  background: var(--color-code-bg);
+}

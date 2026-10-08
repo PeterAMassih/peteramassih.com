@@ -20,21 +20,16 @@
 </header>
 
 <script is:inline>
-  // Effective theme = explicit override else system pref, so the toggle
-  // works correctly even before the user has made an explicit choice.
-  (() => {
+  // Before the first click there is no stored choice, so the current theme is
+  // the system one; the toggle flips whichever is showing.
+  document.querySelector('.theme-toggle').addEventListener('click', () => {
     const root = document.documentElement;
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const effective = () => {
-      const s = root.getAttribute('data-theme');
-      return s === 'light' || s === 'dark' ? s : (mql.matches ? 'dark' : 'light');
-    };
-    document.querySelector('.theme-toggle')?.addEventListener('click', () => {
-      const next = effective() === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-    });
-  })();
+    const dark = root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    localStorage.setItem('theme', root.dataset.theme);
+  });
 </script>
 
 <style>
@@ -51,7 +46,7 @@
   .brand:hover { color: var(--color-text); }
   .primary-nav { display: flex; gap: var(--space-4); font-size: var(--text-sm); margin-right: auto; }
   /* Padding and a minimum width lift each link to a 24px+ tap target without moving the row. */
-  .primary-nav a { min-width: 24px; padding-block: var(--space-1); text-align: center; color: var(--color-text-muted); transition: color var(--transition); }
+  .primary-nav a { min-width: 24px; padding-block: var(--space-1); text-align: center; color: var(--color-text-muted); }
   .primary-nav a:hover { color: var(--color-text); }
   .theme-toggle {
     width: 36px; height: 36px;
@@ -60,8 +55,6 @@
     transition: color var(--transition), background var(--transition);
   }
   .theme-toggle:hover { color: var(--color-text); background: var(--color-code-bg); }
-  .theme-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  .icon-sun { display: block; }
   .icon-moon { display: none; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) .icon-sun { display: none; }

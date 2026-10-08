@@ -15,9 +15,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', t
 
 <BaseLayout title="Writing — Peter Massih" description="Writing by Peter Massih, including a post on Mask2Former.">
   <main id="main">
-    <header class="head">
-      <h1>Writing</h1>
-    </header>
+    <h1>Writing</h1>
 
     {Array.from(byYear, ([year, group]) => (
       <section class="year">
@@ -39,13 +37,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', t
 </BaseLayout>
 
 <style>
-  main {
-    max-width: var(--content-width);
-    margin: var(--space-24) auto var(--space-16);
-    padding: 0 var(--space-4);
-  }
-  .head { margin-bottom: var(--space-12); }
-  .head p { margin-top: var(--space-2); }
+  h1 { margin-bottom: var(--space-12); }
   .year { margin-top: var(--space-12); }
   .year h2 {
     font-family: var(--font-mono);

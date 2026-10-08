@@ -17,7 +17,7 @@ const { Content } = await render(pub);
 ---
 
 <BaseLayout title={`${title} — Peter Massih`} description={description}>
-  <main id="main" class="pub">
+  <main id="main">
     <article>
       <header>
         <h1>{title}</h1>
@@ -36,17 +36,11 @@ const { Content } = await render(pub);
 </BaseLayout>
 
 <style>
-  .pub {
-    max-width: var(--content-width);
-    margin: var(--space-24) auto var(--space-16);
-    padding: 0 var(--space-4);
-  }
   header { margin-bottom: var(--space-12); }
   h1 { line-height: 1.2; }
   .byline { margin-top: var(--space-4); color: var(--color-text-muted); }
   .links { margin-top: var(--space-2); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }
-  .body :global(p) { margin-top: var(--space-4); line-height: 1.7; }
   /* In-sentence links need a cue besides color, which is weak in the dark theme. */
   .body :global(p a) { text-decoration: underline; text-underline-offset: 0.15em; }
   .body :global(h2) { font-size: var(--text-xl); margin-top: var(--space-8); }

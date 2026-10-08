@@ -7,36 +7,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import katex from 'katex';
 // Same-origin KaTeX styles: a third-party stylesheet would block first render.
 import 'katex/dist/katex.min.css';
+import '../styles/canvas-toy.css';
 
-const k = (tex: string, displayMode = true) => katex.renderToString(tex, { displayMode });
+const k = (tex: string, displayMode = false) => katex.renderToString(tex, { displayMode });
 
 // Squared distance from (x, y) to a well center (x_i, y_i). Shared between the
 // loss and its gradient so the two rendered formulas can never drift apart.
 const sqDist = '(x - x_i)^2 + (y - y_i)^2';
-const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} \\underbrace{A_i}_{\\text{depth}}\\, \\exp\\!\\left(-\\frac{\\overbrace{${sqDist}}^{\\text{squared distance to well } i}}{2\\,{\\underbrace{\\sigma_i}_{\\text{width}}}^{2}}\\right)`);
-const gradFormula = k(`\\nabla L(x, y) = \\sum_{i=1}^{4} \\frac{A_i}{\\sigma_i^2} \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right) \\begin{pmatrix} x - x_i \\\\ y - y_i \\end{pmatrix}`);
-const gdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)');
-const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}');
-const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}');
-const lossInline = k('L', false);
-const metaStep = k('t = ', false);
-const metaLoss = k(',\\quad L = ', false);
-const metaGnorm = k(',\\quad \\lVert \\nabla L \\rVert = ', false);
-// loss-landscape symbols (used in the formula labels, glossary, and values table)
-const symPos = k('\\theta = (x, y)', false);
-const symAi = k('A_i', false);
-const symCenter = k('(x_i,\\ y_i)', false);
-const symSigmaI = k('\\sigma_i', false);
-const symI = k('i', false);
-const symTheta = k('\\theta', false);
-const symEta = k('\\eta', false);
-const symGradL = k('\\nabla L', false);
-const symBeta = k('\\beta', false);
-const symEps = k('\\epsilon', false);
-const symV = k('v', false);
-const symMV = k('m,\\ v', false);
-const symMHatVHat = k('\\hat m,\\ \\hat v', false);
-const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
+const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} \\underbrace{A_i}_{\\text{depth}}\\, \\exp\\!\\left(-\\frac{\\overbrace{${sqDist}}^{\\text{squared distance to well } i}}{2\\,{\\underbrace{\\sigma_i}_{\\text{width}}}^{2}}\\right)`, true);
+const gradFormula = k(`\\nabla L(x, y) = \\sum_{i=1}^{4} \\frac{A_i}{\\sigma_i^2} \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right) \\begin{pmatrix} x - x_i \\\\ y - y_i \\end{pmatrix}`, true);
+const gdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)', true);
+const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}', true);
+const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}', true);
+const lossInline = k('L');
+const symCenter = k('(x_i,\\ y_i)');
+const symGradL = k('\\nabla L');
 ---
 
 <BaseLayout title="Not found — Peter Massih" description="Peter Massih's site: publications, projects, writing, CV and toys.">
@@ -53,14 +38,14 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
       <p>The colored map is a loss function <span set:html={lossInline}></span> built from four Gaussian wells. Each term in the sum is a bump centered on a well, and the leading minus sign turns every bump into a basin. Three are shallow local minima where simple methods get stuck. The fourth is deeper and wider, the global minimum.</p>
       <div class="formula" set:html={lossFormula} />
       <dl class="glossary">
-        <dt set:html={symPos}></dt><dd>the ball's position, the value the optimizers below update</dd>
+        <dt set:html={k('\\theta = (x, y)')}></dt><dd>the ball's position, the value the optimizers below update</dd>
         <dt set:html={symCenter}></dt><dd>where a well is centered, at its bump's peak</dd>
       </dl>
       {/* Values mirror WELLS in src/scripts/gradient.js. Keep the two in sync. */}
       <p>Each well in the sum uses these exact values:</p>
       <table class="wells">
         <thead>
-          <tr><th set:html={symI}></th><th set:html={symCenter}></th><th set:html={symAi}></th><th set:html={symSigmaI}></th></tr>
+          <tr><th set:html={k('i')}></th><th set:html={symCenter}></th><th set:html={k('A_i')}></th><th set:html={k('\\sigma_i')}></th></tr>
         </thead>
         <tbody>
           <tr><td>1</td><td>(&minus;2.5, &minus;2.5)</td><td>2.0</td><td>1.3</td></tr>
@@ -82,7 +67,7 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
       <span>higher</span>
     </div>
 
-    <dl class="guide">
+    <dl class="glossary">
       <dt>contour lines</dt><dd>points of equal loss (closer together means steeper gradient)</dd>
       <dt>ball</dt><dd>current position of the optimizer</dd>
       <dt>path</dt><dd>recent trajectory (last 120 steps)</dd>
@@ -92,7 +77,7 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     </dl>
 
     <p class="meta">
-      <span set:html={metaStep}></span><span id="step">0</span><span set:html={metaLoss}></span><span id="loss">—</span><span set:html={metaGnorm}></span><span id="gnorm">—</span>
+      <span set:html={k('t = ')}></span><span id="step">0</span><span set:html={k(',\\quad L = ')}></span><span id="loss">—</span><span set:html={k(',\\quad \\lVert \\nabla L \\rVert = ')}></span><span id="gnorm">—</span>
     </p>
 
     <div class="controls">
@@ -122,31 +107,31 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
 
     <dl class="glossary">
       <div data-opt-gloss="gd momentum adam">
-        <dt set:html={symTheta}></dt><dd>parameter (ball position), updated each step</dd>
+        <dt set:html={k('\\theta')}></dt><dd>parameter (ball position), updated each step</dd>
       </div>
       <div data-opt-gloss="gd momentum adam">
-        <dt set:html={symEta}></dt><dd>learning rate (constant, selected above)</dd>
+        <dt set:html={k('\\eta')}></dt><dd>learning rate (constant, selected above)</dd>
       </div>
       <div data-opt-gloss="gd momentum adam">
         <dt set:html={symGradL}></dt><dd>gradient of L, computed each step</dd>
       </div>
       <div data-opt-gloss="momentum" hidden>
-        <dt set:html={symBeta}></dt><dd>exponential decay for past gradients (constant, β = 0.9)</dd>
+        <dt set:html={k('\\beta')}></dt><dd>exponential decay for past gradients (constant, β = 0.9)</dd>
       </div>
       <div data-opt-gloss="momentum" hidden>
-        <dt set:html={symV}></dt><dd>velocity, accumulated from past gradients, updated each step</dd>
+        <dt set:html={k('v')}></dt><dd>velocity, accumulated from past gradients, updated each step</dd>
       </div>
       <div data-opt-gloss="adam" hidden>
-        <dt set:html={symBetaPair}></dt><dd>decay factors (constants, β₁ = 0.9, β₂ = 0.999)</dd>
+        <dt set:html={k('\\beta_1,\\ \\beta_2')}></dt><dd>decay factors (constants, β₁ = 0.9, β₂ = 0.999)</dd>
       </div>
       <div data-opt-gloss="adam" hidden>
-        <dt set:html={symMV}></dt><dd>running first and second moments of ∇L, updated each step</dd>
+        <dt set:html={k('m,\\ v')}></dt><dd>running first and second moments of ∇L, updated each step</dd>
       </div>
       <div data-opt-gloss="adam" hidden>
-        <dt set:html={symMHatVHat}></dt><dd>bias-corrected versions of m and v, computed each step</dd>
+        <dt set:html={k('\\hat m,\\ \\hat v')}></dt><dd>bias-corrected versions of m and v, computed each step</dd>
       </div>
       <div data-opt-gloss="adam" hidden>
-        <dt set:html={symEps}></dt><dd>numerical stability constant (ε = 10⁻⁸)</dd>
+        <dt set:html={k('\\epsilon')}></dt><dd>numerical stability constant (ε = 10⁻⁸)</dd>
       </div>
     </dl>
 
@@ -157,13 +142,8 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
 <script>import '../scripts/gradient.js';</script>
 
 <style>
-  main {
-    max-width: var(--page-width);
-    margin: var(--space-16) auto var(--space-16);
-    padding: 0 var(--space-4);
-  }
+  main { max-width: var(--page-width); margin-top: var(--space-16); }
   .head { margin-bottom: var(--space-6); }
-  .head h1 { font-size: var(--text-3xl); }
   .head p { margin-top: var(--space-2); }
   .home { padding-block: var(--space-1); }
   .explainer { margin-bottom: var(--space-4); max-width: 65ch; }
@@ -187,18 +167,6 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     border: 1px solid var(--color-border);
     background: linear-gradient(to right, var(--color-text), var(--color-code-bg));
   }
-  .guide {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--space-1) var(--space-3);
-    margin-top: var(--space-3);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text-subtle);
-    max-width: 65ch;
-  }
-  .guide dt { color: var(--color-text-muted); }
-  .guide dd { margin: 0; }
   .wells {
     margin-top: var(--space-3);
     border-collapse: collapse;
@@ -219,14 +187,6 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
     border-bottom: 1px solid var(--color-border);
   }
   .wells th:last-child, .wells td:last-child { padding-right: 0; }
-  .canvas {
-    width: 100%;
-    height: 60vh;
-    display: block;
-    background: var(--color-code-bg);
-    border-radius: 4px;
-    cursor: crosshair;
-  }
   .meta {
     margin-top: var(--space-6);
     font-family: 'KaTeX_Main', 'Cambria', 'Times New Roman', serif;
@@ -249,34 +209,6 @@ const symBetaPair = k('\\beta_1,\\ \\beta_2', false);
   .glossary > div[hidden] { display: none; }
   .glossary dt { color: var(--color-text-muted); }
   .glossary dd { margin: 0; }
-  .controls {
-    margin-top: var(--space-4);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    align-items: center;
-  }
-  .controls .label {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text-subtle);
-  }
-  .controls button {
-    padding: 0.35rem 0.75rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    transition: color var(--transition), border-color var(--transition), background var(--transition);
-  }
-  .controls button:hover { color: var(--color-text); border-color: var(--color-text-muted); }
-  .controls button.active {
-    color: var(--color-text);
-    border-color: var(--color-accent);
-    background: var(--color-code-bg);
-  }
   .opt-formula {
     margin-top: var(--space-3);
     font-size: var(--text-sm);

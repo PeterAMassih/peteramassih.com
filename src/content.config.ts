@@ -1,5 +1,5 @@
-// src/content/config.ts
-// Strict schemas for writing posts and projects. .strict() makes typos in
+// src/content.config.ts
+// Strict schemas for writing posts, projects and publications. .strict() makes typos in
 // frontmatter (e.g. `puDate`) fail the build instead of silently ignoring.
 
 import { defineCollection } from 'astro:content';

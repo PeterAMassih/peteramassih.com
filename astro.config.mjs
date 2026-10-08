@@ -34,9 +34,6 @@ export default defineConfig({
         light: 'github-light-high-contrast',
         dark: 'github-dark-high-contrast',
       },
-      // Long lines scroll horizontally instead of wrapping, so code
-      // indentation stays intact (wrapping folds lines to the left margin).
-      wrap: false,
     },
   },
 

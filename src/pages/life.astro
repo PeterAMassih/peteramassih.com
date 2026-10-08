@@ -3,6 +3,7 @@
 // Conway's Game of Life — interactive with patterns, controls, counters.
 // Game logic in src/scripts/life.js; this file is markup + scoped styling.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/canvas-toy.css';
 ---
 
 <BaseLayout title="Life — Peter Massih" description="Game of Life, one of the toys on Peter Massih's site.">
@@ -54,11 +55,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <script>import '../scripts/life.js';</script>
 
 <style>
-  main {
-    max-width: var(--page-width);
-    margin: var(--space-16) auto var(--space-16);
-    padding: 0 var(--space-4);
-  }
+  main { max-width: var(--page-width); margin-top: var(--space-16); }
   .head { margin-bottom: var(--space-6); }
   .head p { margin-top: var(--space-2); max-width: 65ch; }
   .rules {
@@ -69,47 +66,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     max-width: 65ch;
   }
   .rules li { margin-top: var(--space-1); }
-  .canvas {
-    width: 100%;
-    height: 60vh;
-    display: block;
-    background: var(--color-code-bg);
-    border-radius: 4px;
-    cursor: crosshair;
-  }
   .meta {
     margin-top: var(--space-3);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
-  }
-  .controls {
-    margin-top: var(--space-4);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    align-items: center;
-  }
-  .controls .label {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text-subtle);
-  }
-  .controls button {
-    padding: 0.35rem 0.75rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    transition: color var(--transition), border-color var(--transition), background var(--transition);
-  }
-  .controls button:hover { color: var(--color-text); border-color: var(--color-text-muted); }
-  .controls button.active {
-    color: var(--color-text);
-    border-color: var(--color-accent);
-    background: var(--color-code-bg);
   }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
 </style>

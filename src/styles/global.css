@@ -63,6 +63,16 @@ a:hover {
   }
 }
 
+/* Page shell: one centered column. Pages override only what differs. */
+main {
+  max-width: var(--content-width);
+  margin: var(--space-24) auto var(--space-16);
+  padding: 0 var(--space-4);
+}
+
+/* Body text on the project, publication and post pages. */
+.body p { margin-top: var(--space-4); line-height: 1.7; }
+
 /* Inline code */
 code {
   font-family: var(--font-mono);
@@ -72,9 +82,7 @@ code {
   border-radius: 3px;
 }
 
-/* Block code (Shiki output wraps in <pre><code>). copy-code.js wraps each <pre>
-   in a .code-block so the copy button pins to the block while the code scrolls
-   horizontally inside the <pre>. */
+/* .code-block and its .copy-btn come from src/scripts/copy-code.js. */
 .code-block {
   position: relative;
   margin: var(--space-6) 0;
@@ -86,9 +94,6 @@ pre {
   padding: var(--space-4);
   border-radius: 6px;
   overflow-x: auto;
-  overflow-wrap: normal;
-  white-space: pre;
-  word-break: normal;
   margin: var(--space-6) 0;
 }
 
@@ -98,10 +103,8 @@ pre code {
   background: none;
   padding: 0;
   font-size: inherit;
-  white-space: inherit;
 }
 
-/* Copy button injected by src/scripts/copy-code.js */
 .copy-btn {
   position: absolute;
   top: var(--space-2);

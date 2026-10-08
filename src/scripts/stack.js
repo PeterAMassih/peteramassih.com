@@ -381,12 +381,12 @@ function overlay(title, sub) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.globalAlpha = 1;
   ctx.fillStyle = color('--color-text');
-  ctx.font = '16px "JetBrains Mono", ui-monospace, monospace';
+  ctx.font = '16px ui-monospace, "SF Mono", Menlo, monospace';
   ctx.textAlign = 'center';
   ctx.fillText(title, canvas.width / 2, canvas.height / 2 - (sub ? 8 : 0));
   if (sub) {
     ctx.fillStyle = color('--color-text-subtle');
-    ctx.font = '12px "JetBrains Mono", ui-monospace, monospace';
+    ctx.font = '12px ui-monospace, "SF Mono", Menlo, monospace';
     ctx.fillText(sub, canvas.width / 2, canvas.height / 2 + 14);
   }
 }

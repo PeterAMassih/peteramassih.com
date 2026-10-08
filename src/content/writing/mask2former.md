@@ -36,9 +36,9 @@ The equation shows one input channel. A practical image convolution also sums ov
 <svg class="m2f-conv" style="min-width: 560px" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One convolution step. A 3 by 3 filter lines up with an input patch and produces one value in the output feature map.">
 <defs>
 <style>
-.cv-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
-.cv-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.cv-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.cv-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
+.cv-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.cv-num { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
 </style>
 <marker id="cv-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
 </defs>
@@ -73,7 +73,7 @@ The equation shows one input channel. A practical image convolution also sums ov
 <line x1="488" y1="52" x2="488" y2="130" style="stroke: var(--viz-grid)"/><line x1="514" y1="52" x2="514" y2="130" style="stroke: var(--viz-grid)"/>
 <line x1="462" y1="78" x2="540" y2="78" style="stroke: var(--viz-grid)"/><line x1="462" y1="104" x2="540" y2="104" style="stroke: var(--viz-grid)"/>
 <rect x="462" y="52" width="26" height="26" style="fill: var(--viz-slate)"/>
-<text x="475" y="69" text-anchor="middle" style="fill: var(--color-bg)" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="12px">3.0</text>
+<text x="475" y="69" text-anchor="middle" style="fill: var(--color-bg); font-family: var(--font-sans); font-size: 12px">3.0</text>
 <text class="cv-sub" x="501" y="152" text-anchor="middle">one patch &#8594; one pixel</text>
 <text class="cv-sub" x="350" y="224" text-anchor="middle">the same nine weights sweep every position, lighting up wherever the filter's pattern appears</text>
 </svg>
@@ -108,9 +108,9 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
 <defs>
 <style>
-.av-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
-.av-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.av-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.av-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
+.av-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.av-num { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
 </style>
 <marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
 </defs>
@@ -308,9 +308,9 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 <figure class="viz">
 <svg class="m2f-tasks" style="min-width: 560px" viewBox="0 0 720 236" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One street scene segmented three ways. Semantic segmentation merges two adjacent cars into one car region and labels sky and road. Instance segmentation keeps car 1 and car 2 apart and leaves sky and road unlabeled. Panoptic segmentation labels sky and road and keeps both cars apart.">
 <defs><style>
-.tk-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
-.tk-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.tk-in { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 11px; }
+.tk-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
+.tk-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.tk-in { font-family: var(--font-sans); fill: var(--color-text); font-size: 11px; }
 </style></defs>
 <rect width="720" height="236" rx="6" style="fill: var(--color-bg)"/>
 <text class="tk-lbl" x="128.0" y="32" text-anchor="middle">semantic</text>
@@ -384,7 +384,7 @@ The same prediction format supports all three tasks. Semantic targets contain on
 
 <figure class="viz">
 <img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="A photograph of a French bulldog with its predicted mask in gold, and beside it the soft mask, gold where the probability is high, with its 0.5 level outlined.">
-<figcaption>Fig. 2. The dog query on a public-domain photograph, from the Swin-L checkpoint trained on COCO panoptic segmentation. Left, its thresholded mask. Right, the soft mask m<sub>i</sub>, off-white at 0 and gold at 1, at a quarter of the input resolution, with the 0.5 level drawn in black. The class head gives p&#770;<sub>i</sub>(dog) = 0.999. Away from the edge the probabilities sit near 0 or 1, so the uncertainty lives in a thin band along the boundary.</figcaption>
+<figcaption>Fig. 2. The dog query on a public-domain photograph, from the Swin-L checkpoint trained on COCO panoptic segmentation. Left, its thresholded mask. Right, the soft mask m<sub>i</sub>, white at 0 and gold at 1, at a quarter of the input resolution, with the 0.5 level drawn in black. The class head gives p&#770;<sub>i</sub>(dog) = 0.999. Away from the edge the probabilities sit near 0 or 1, so the uncertainty lives in a thin band along the boundary.</figcaption>
 </figure>
 
 Universal architectures still trailed specialized instance systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
@@ -577,9 +577,9 @@ An independent nearest-target choice could assign two queries to one object and 
 <figure class="viz">
 <svg class="m2f-match" style="min-width: 560px" viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two copies of the 3 by 3 cost matrix with rows 4 1 3, 2 0 5 and 3 2 2. Taking the cheapest pair first picks costs 0, 2 and 4 for a total of 6. The optimal assignment picks costs 1, 2 and 2 for a total of 5.">
 <defs><style>
-.hm-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
-.hm-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.hm-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 15px; }
+.hm-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
+.hm-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.hm-num { font-family: var(--font-sans); fill: var(--color-text); font-size: 15px; }
 </style></defs>
 <rect width="700" height="260" rx="6" style="fill: var(--color-bg)"/>
 <text class="hm-lbl" x="214.0" y="38" text-anchor="middle">cheapest pair first</text>
@@ -771,9 +771,9 @@ The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{c
 <svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former architecture from image and backbone features to pixel decoder, Transformer decoder, class predictions, and mask predictions.">
 <defs>
 <style>
-.ar-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13.5px; }
-.ar-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.ar-tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
+.ar-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13.5px; }
+.ar-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.ar-tag { font-family: var(--font-sans); font-size: 10.5px; }
 .ar-box { fill: var(--viz-box); stroke: var(--viz-grid); stroke-width: 1; }
 .ar-flow { stroke: var(--viz-line); stroke-width: 1.3; fill: none; }
 </style>
@@ -945,9 +945,9 @@ Additive attention masking already existed in Transformer decoders [[Vaswani et 
 <figure class="viz">
 <svg class="m2f-mask" style="min-width: 560px" viewBox="0 0 700 296" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The four attention scores of Fig. 0b with a mask that allows locations 1 and 4. Standard softmax gives weights 0.67, 0.05, 0.01 and 0.27. With the mask, locations 2 and 3 get weight 0 and the allowed weights become 0.71 and 0.29, keeping their ratio of 2.46.">
 <defs><style>
-.ma-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
-.ma-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
-.ma-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.ma-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
+.ma-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.ma-num { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
 </style></defs>
 <rect width="700" height="296" rx="6" style="fill: var(--color-bg)"/>
 <text class="ma-lbl" x="70" y="44" text-anchor="middle">gate B</text>

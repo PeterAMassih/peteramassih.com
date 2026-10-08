@@ -44,7 +44,7 @@ PANEL = (720, 480)
 
 GOLD_RGB = np.array([184, 134, 11], np.float32)   # b8860b
 INK_RGB = np.array([23, 23, 23], np.float32)      # 171717
-BG_RGB = np.array([250, 250, 250], np.float32)    # fafafa
+BG_RGB = np.array([255, 255, 255], np.float32)    # ffffff, the page background
 
 
 def load_image():

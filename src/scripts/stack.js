@@ -165,21 +165,16 @@ function spawn() {
   }
 }
 
-// Global high score lives in a Cloudflare KV namespace, fronted by a Pages
-// Function at /api/high-score. Both calls are tolerant of network failure —
-// if the endpoint is unreachable the game still plays, the high just shows 0.
+// Global high score lives in a Cloudflare KV namespace behind the Worker's
+// /api/high-score endpoint. Both calls tolerate network failure: if the
+// endpoint is unreachable the game still plays and the high just shows 0.
 // Failures log a console.warn; success is silent.
 
 function loadHighScore() {
   fetch(HIGH_SCORE_URL)
-    .then(async (r) => {
-      if (!r.ok) throw new Error(`GET ${r.status} ${r.statusText}`);
-      const ct = r.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        throw new Error(`GET non-JSON response (${ct || 'no content-type'})`);
-      }
-      const data = await r.json();
-      if (typeof data.score === 'number' && data.score > highScore) {
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.score > highScore) {
         highScore = data.score;
         updateMeta();
       }
@@ -780,12 +775,9 @@ let silentModeUnlocked = false;
 function unlockSilentMode() {
   if (silentModeUnlocked) return;
   silentModeUnlocked = true;
-  try {
-    const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
-    a.volume = 0;
-    const p = a.play();
-    if (p && p.catch) p.catch(() => {});
-  } catch (_) {}
+  const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+  a.volume = 0;
+  a.play().catch(() => {});
 }
 
 function toggleSound() {
@@ -903,8 +895,5 @@ function init() {
   requestAnimationFrame(tick);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+// Module scripts run after the document is parsed, so the DOM is ready.
+init();

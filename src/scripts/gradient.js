@@ -31,7 +31,6 @@ const WELLS = [
 ];
 const WORLD = 5;
 const F_MIN = -4.5;
-const STEP = 1;
 const PATH_MAX = 120;
 const NUM_CONTOURS = 8;
 const FPS = 30;
@@ -186,34 +185,24 @@ function renderHeatmap() {
   heatmapCanvas.height = h;
   const hctx = heatmapCanvas.getContext('2d');
 
-  const gridW = Math.ceil(w / STEP) + 1;
-  const gridH = Math.ceil(h / STEP) + 1;
-  const fGrid = new Float32Array(gridW * gridH);
-  for (let i = 0; i < gridH; i++)
-    for (let j = 0; j < gridW; j++) {
-      const [wx, wy] = pixToWorld(j * STEP, i * STEP);
-      fGrid[i * gridW + j] = f(wx, wy);
-    }
+  // One loss sample per pixel, plus one extra row and column so every pixel
+  // has a right and lower neighbor to compare contour levels with.
+  const gridW = w + 1;
+  const fGrid = new Float32Array(gridW * (h + 1));
+  for (let py = 0; py <= h; py++)
+    for (let px = 0; px <= w; px++) fGrid[py * gridW + px] = f(...pixToWorld(px, py));
   const lvl = (v) => Math.floor(Math.min(1, Math.max(0, v / F_MIN)) * NUM_CONTOURS);
 
   const data = hctx.createImageData(w, h);
-  for (let py = 0; py < h; py += STEP) {
-    for (let px = 0; px < w; px += STEP) {
-      const gi = (py / STEP) | 0, gj = (px / STEP) | 0;
-      const fv = fGrid[gi * gridW + gj];
-      const t = Math.pow(Math.min(1, Math.max(0, fv / F_MIN)), COLOR_GAMMA);
-      let r = (bg[0] * (1 - t) + fg[0] * t) | 0;
-      let g = (bg[1] * (1 - t) + fg[1] * t) | 0;
-      let b = (bg[2] * (1 - t) + fg[2] * t) | 0;
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const fv = fGrid[py * gridW + px];
       const my = lvl(fv);
-      const right = gj + 1 < gridW ? lvl(fGrid[gi * gridW + gj + 1]) : my;
-      const down = gi + 1 < gridH ? lvl(fGrid[(gi + 1) * gridW + gj]) : my;
-      if (my !== right || my !== down) { r = contour[0]; g = contour[1]; b = contour[2]; }
-      for (let dy = 0; dy < STEP && py + dy < h; dy++)
-        for (let dx = 0; dx < STEP && px + dx < w; dx++) {
-          const idx = ((py + dy) * w + (px + dx)) * 4;
-          data.data[idx] = r; data.data[idx + 1] = g; data.data[idx + 2] = b; data.data[idx + 3] = 255;
-        }
+      const edge = my !== lvl(fGrid[py * gridW + px + 1]) || my !== lvl(fGrid[(py + 1) * gridW + px]);
+      const t = Math.pow(Math.min(1, Math.max(0, fv / F_MIN)), COLOR_GAMMA);
+      const idx = (py * w + px) * 4;
+      for (let c = 0; c < 3; c++) data.data[idx + c] = edge ? contour[c] : (bg[c] * (1 - t) + fg[c] * t) | 0;
+      data.data[idx + 3] = 255;
     }
   }
   hctx.putImageData(data, 0, 0);
@@ -280,15 +269,7 @@ function loop(now) {
 function refreshTheme() { readColors(); renderHeatmap(); draw(); }
 
 function init() {
-  // Wide formulas scroll sideways on narrow screens; a tab stop lets keyboard
-  // users scroll them too, once the KaTeX fonts have set their final width.
-  document.fonts.ready.then(() => {
-    for (const el of document.querySelectorAll('.formula')) {
-      if (el.scrollWidth > el.clientWidth) el.tabIndex = 0;
-    }
-  });
   canvas = document.getElementById('grad-canvas');
-  if (!canvas) return;
   ctx = canvas.getContext('2d');
   els = {
     step: document.getElementById('step'),

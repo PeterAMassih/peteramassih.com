@@ -94,8 +94,8 @@ function draw() {
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++)
       if (grid[r][c]) { ctx.fillRect(c * CELL, r * CELL, CELL - 1, CELL - 1); pop++; }
-  if (genEl) genEl.textContent = generation;
-  if (popEl) popEl.textContent = pop;
+  genEl.textContent = generation;
+  popEl.textContent = pop;
 }
 
 function loop(now) {
@@ -110,7 +110,6 @@ function clearPatternSelection() {
 
 function init() {
   canvas = document.getElementById('life-canvas');
-  if (!canvas) return;
   ctx = canvas.getContext('2d');
   genEl = document.getElementById('gen');
   popEl = document.getElementById('pop');

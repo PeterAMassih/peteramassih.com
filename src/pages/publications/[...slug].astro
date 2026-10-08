@@ -37,10 +37,11 @@ const { Content } = await render(pub);
 
 <style>
   header { margin-bottom: var(--space-6); }
+  /* Paper titles run long; one size down keeps them to two or three lines. */
+  h1 { font-size: var(--text-2xl); }
   .byline { margin-top: var(--space-2); color: var(--color-text-muted); }
   .links { margin-top: var(--space-1); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }
-  .body :global(h2) { font-size: var(--text-xl); }
   .body :global(details) { margin-top: var(--space-4); font-size: var(--text-sm); }
   .body :global(summary) { cursor: pointer; padding-block: var(--space-1); color: var(--color-text-muted); }
 </style>

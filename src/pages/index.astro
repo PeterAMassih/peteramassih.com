@@ -1,14 +1,20 @@
 ---
 // src/pages/index.astro
-// Home: name, bio and links beside the photo, then background, publications,
-// selected projects and recent writing. Details live on the CV and subpages.
+// Home: name, a two-sentence introduction and links beside the photo, then
+// the evidence: two publications, four projects and recent writing, one line
+// each where it fits. Roles and dates live on the CV, linked from the menu.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PublicationList from '../components/PublicationList.astro';
 import { getCollection } from 'astro:content';
 
-const picks = ['3d-blockgen', 'epfl-ta-meister', 'paraphrasing', 'rl-mountain-car'];
-const projects = (await getCollection('projects', ({ id }) => picks.includes(id)))
-  .sort((a, b) => picks.indexOf(a.id) - picks.indexOf(b.id));
+// One line per pick, cut from the project's result line on /projects/, which
+// carries the full numbers and methods.
+const picks = [
+  { id: '3d-blockgen', name: '3D-BlockGen', line: 'turned text into buildable LEGO models with two-stage diffusion.' },
+  { id: 'epfl-ta-meister', name: 'LLM Teaching Assistant', line: 'raised Llama-3-8B preference alignment from 55% to 63%.' },
+  { id: 'paraphrasing', name: 'Reasoning-Model Paraphraser', line: 'more than doubled diversity over BART.' },
+  { id: 'rl-mountain-car', name: 'RL on Mountain Car', line: 'cut training from 300 to 200 episodes.' },
+];
 const posts = (await getCollection('writing', ({ data }) =>
   import.meta.env.PROD ? !data.draft : true,
 ))
@@ -29,7 +35,7 @@ const jsonLd = [
       alternateName: ['Peter A. Massih', 'P. A. Massih'],
       url: 'https://peteramassih.com/',
       image: 'https://peteramassih.com/peter.jpg',
-      description: 'I do ML research and build the software that ships it.',
+      description: 'I do ML research and release it as software.',
       alumniOf: { '@type': 'CollegeOrUniversity', name: 'EPFL' },
       sameAs: ['https://github.com/PeterAMassih', 'https://huggingface.co/PeterAM4', 'https://www.linkedin.com/in/peteramassih/'],
     },
@@ -52,37 +58,19 @@ const jsonLd = [
       <div>
         <h1>Peter Massih</h1>
         <p class="bio">
-          I do ML research and build the software that ships it. As a Machine Learning Research
-          Intern at NEC Laboratories America, I built SQuID, a benchmark of 2,000 quantitative
-          questions on satellite images. For my master's thesis at Bank Lombard Odier & Co Ltd, I
-          deployed three AI systems used daily by bankers, fund screeners and tax specialists.
+          I do ML research and release it as software: vision-language models at NEC Laboratories
+          America with Eric Cosatto, and three AI systems used daily in financial services. MSc in
+          Computer Science from EPFL.
         </p>
         <p class="links">
-          <a href="/cv.pdf">CV</a> ·
-          <a href="mailto:peteramassih@gmail.com">Email</a> ·
           <a href="https://github.com/PeterAMassih">GitHub</a> ·
           <a href="https://huggingface.co/PeterAM4">Hugging Face</a> ·
-          <a href="https://www.linkedin.com/in/peteramassih/">LinkedIn</a>
+          <a href="https://www.linkedin.com/in/peteramassih/">LinkedIn</a> ·
+          <a href="mailto:peteramassih@gmail.com">Email</a>
         </p>
       </div>
       <img class="photo" src="/peter.jpg" alt="Peter Massih" width="480" height="480" />
     </header>
-
-    <section>
-      <h2>Background</h2>
-      <h3 class="label">Experience</h3>
-      <ul class="dated">
-        <li><span class="when">2025–2026</span>Machine Learning Research Intern @ NEC Laboratories America</li>
-        <li><span class="when">2025–2026</span>Software Engineer Intern, AI/ML @ Bank Lombard Odier & Co Ltd</li>
-        <li><span class="when">2024</span>Full-Stack AI Engineer Intern @ Ageospatial</li>
-      </ul>
-      <h3 class="label">Education</h3>
-      <ul class="dated">
-        <li><span class="when">2023–2026</span><span>MSc Computer Science (Data Analytics and Machine Learning) @ EPFL<span class="note">GPA 5.5/6.0</span></span></li>
-        <li><span class="when">2022–2023</span>Exchange year @ ETH Zurich</li>
-        <li><span class="when">2020–2023</span>BSc Communication Systems @ EPFL</li>
-      </ul>
-    </section>
 
     <section>
       <h2>Publications</h2>
@@ -92,12 +80,9 @@ const jsonLd = [
 
     <section>
       <h2>Selected projects</h2>
-      <ul class="entries">
-        {projects.map((project) => (
-          <li>
-            <a class="name" href={`/projects/${project.id}/`}>{project.data.title}</a>
-            <p class="muted">{project.data.description}</p>
-          </li>
+      <ul>
+        {picks.map(({ id, name, line }) => (
+          <li><a class="name" href={`/projects/${id}/`}>{name}</a><span class="muted">: {line}</span></li>
         ))}
       </ul>
       <p class="more"><a href="/projects/">All projects →</a></p>
@@ -105,13 +90,11 @@ const jsonLd = [
 
     <section>
       <h2>Writing</h2>
-      <ul class="recent">
+      <ul>
         {posts.map((post) => (
-          <li>
-            <a href={`/writing/${post.id}/`}>
-              <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
-              <span class="title">{post.data.title}</span>
-            </a>
+          <li class="row">
+            <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
+            <a class="name" href={`/writing/${post.id}/`}>{post.data.title}</a>
           </li>
         ))}
       </ul>
@@ -124,40 +107,31 @@ const jsonLd = [
   .intro {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: var(--space-6);
+    gap: var(--space-8);
     align-items: start;
-    margin-bottom: var(--space-16);
   }
-  .intro h1 { font-size: var(--text-3xl); }
-  .bio { margin-top: var(--space-2); color: var(--color-text-muted); max-width: 52ch; }
-  .photo { width: 240px; height: 240px; border-radius: 4px; object-fit: cover; }
-  .links { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
+  .intro h1 { font-size: var(--text-4xl); }
+  .bio { margin-top: var(--space-4); font-size: var(--text-lg); line-height: 1.55; color: var(--color-text-muted); }
+  .links { margin-top: var(--space-4); font-size: var(--text-sm); color: var(--color-text-muted); }
   .links a { padding-block: var(--space-1); color: var(--color-text); }
   .links a:hover { color: var(--color-accent); }
-  section { margin-top: var(--space-12); }
-  section > h2 { margin-bottom: var(--space-4); }
+  .photo { width: 240px; height: 240px; border-radius: 6px; object-fit: cover; }
+  section { margin-top: var(--space-16); }
+  section > h2 { margin-bottom: var(--space-6); }
   ul { list-style: none; padding: 0; }
-  /* Background and Writing share one grid: a date column, then the entry. */
-  .dated li, .recent a { display: grid; grid-template-columns: 7rem 1fr; gap: var(--space-4); align-items: baseline; }
-  .dated li + li { margin-top: var(--space-2); }
-  .when, .recent time, .label { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
-  .label { font-weight: 400; letter-spacing: 0; margin-bottom: var(--space-3); }
-  .note { display: block; color: var(--color-text-muted); font-size: var(--text-sm); }
-  ul + .label { margin-top: var(--space-8); }
-  .entries li + li { margin-top: var(--space-4); }
+  li + li { margin-top: var(--space-2); }
   .name { font-weight: 600; color: var(--color-text); }
   .name:hover { color: var(--color-accent); }
-  .recent li + li { margin-top: var(--space-3); }
-  .recent a { color: var(--color-text); }
-  .recent a:hover .title { color: var(--color-accent); }
-  .recent .title { transition: color var(--transition); }
+  .row { display: grid; grid-template-columns: 6rem 1fr; column-gap: var(--space-4); align-items: baseline; }
+  time { font-size: var(--text-sm); color: var(--color-text-muted); }
   .more { margin-top: var(--space-6); font-size: var(--text-sm); }
   .more a { padding-block: var(--space-1); }
-  /* On phones the photo moves under the text and shrinks, so the roles still
-     reach the first screen. */
+  /* On phones the face comes first, where the eye lands, then the name and
+     the introduction; dates sit above their titles. */
   @media (max-width: 600px) {
-    .intro { grid-template-columns: 1fr; margin-bottom: var(--space-12); }
-    .photo { width: 144px; height: 144px; }
-    .dated li { grid-template-columns: 1fr; gap: 0; }
+    .intro { grid-template-columns: 1fr; gap: var(--space-6); }
+    .photo { order: -1; }
+    .row { grid-template-columns: 1fr; row-gap: var(--space-1); }
+    section { margin-top: var(--space-12); }
   }
 </style>

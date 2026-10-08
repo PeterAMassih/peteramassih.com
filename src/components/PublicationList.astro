@@ -1,9 +1,9 @@
 ---
 // src/components/PublicationList.astro
-// The four entries in a fixed order. The home page shows them compact (citation
-// only); /publications/ adds summaries, links and BibTeX. Entries with a page
-// also live in src/content/publications/. Papers under review get no link,
-// page or BibTeX until they are public.
+// The four entries in a fixed order. The home page shows the first two compact
+// (title and byline only); /publications/ shows all four with summaries,
+// links and BibTeX. Entries with a page also live in src/content/publications/.
+// Papers under review get no link, page or BibTeX until they are public.
 interface Props { compact?: boolean }
 const { compact = false } = Astro.props;
 
@@ -72,7 +72,7 @@ const pubs: Pub[] = [
 ---
 
 <ol class:list={['pubs', { compact }]}>
-  {pubs.map((pub) => (
+  {(compact ? pubs.slice(0, 2) : pubs).map((pub) => (
     <li>
       <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>
       <p class="byline">

@@ -1269,11 +1269,7 @@ The §1 lemma proves uniqueness for non-overlapping segments above $0.5$ IoU. Tr
 
 ## Citation
 
-Suggested citation
-
-> Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://peteramassih.com/writing/mask2former.
-
-BibTeX
+Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://peteramassih.com/writing/mask2former.
 
 ```bibtex
 @article{massih2026mask2former,

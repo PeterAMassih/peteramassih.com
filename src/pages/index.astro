@@ -176,7 +176,9 @@ const jsonLd = [
   }
   .identity { margin-top: var(--space-2); color: var(--color-text-muted); }
   .contact { margin-top: var(--space-3); font-size: var(--text-sm); }
-  .contact a { display: inline-block; min-width: 24px; padding-block: var(--space-1); }
+  /* 24px-wide targets; centering spreads the spare width of the short "CV"
+     evenly instead of leaving a double gap before its separator. */
+  .contact a { display: inline-block; min-width: 24px; padding-block: var(--space-1); text-align: center; }
   .photo { width: 160px; height: 160px; border-radius: 4px; object-fit: cover; }
   main > p + p { margin-top: var(--space-4); }
   /* Links inside sentences get an underline: in muted text and in the dark

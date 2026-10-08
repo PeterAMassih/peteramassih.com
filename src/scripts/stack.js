@@ -616,10 +616,7 @@ const FREQ = {
   A5: 880.00, B5: 987.77, C6: 1046.50, D6: 1174.66, E6: 1318.51,
 };
 
-// Durations in sixteenths: quarter = 4, eighth = 2, dotted-quarter = 6.
-// null = rest. Plays the canonical AABA folk form twice — once in the high
-// register, once an octave down — giving the song the proper verse / verse /
-// bridge / verse arc instead of a short loop. ~52 seconds at 144 BPM.
+// Durations in sixteenths: quarter = 4, eighth = 2, dotted-quarter = 6. null = rest.
 const A_HIGH = [
   ['E5',4],['B4',2],['C5',2], ['D5',4],['C5',2],['B4',2],
   ['A4',4],['A4',2],['C5',2], ['E5',4],['D5',2],['C5',2],
@@ -654,8 +651,8 @@ const A_VHIGH = [
 ];
 // Verse / verse / bridge / verse in the home register, mirrored an octave
 // below, then a climactic octave-up statement, a full recapitulation, and a
-// single A-statement coda. ~94 seconds at 144 BPM — the length the long
-// concert arrangements settle into.
+// single A-statement coda: 884 sixteenths, about 92 seconds at 144 BPM, the
+// length the long concert arrangements settle into.
 const KOROBEINIKI = [
   ...A_HIGH,  ...A_HIGH, ...B_HIGH, ...A_HIGH,   // first pass, home register
   ...A_LOW,   ...A_LOW,  ...B_LOW,  ...A_LOW,    // second pass, octave down

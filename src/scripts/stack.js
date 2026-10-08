@@ -78,21 +78,12 @@ const HIGH_SCORE_URL = '/api/high-score';
 
 /* ── Board ───────────────────────────────────────────────────────────────── */
 
-/** @return {number[][]} A ROWS-by-COLS board of empty cells. */
 function emptyBoard() {
   return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
 }
 
-/**
- * Tests whether a shape at (row, col) overlaps walls, floor, or the stack.
- * Cells above the top of the board (r < 0) are allowed so pieces can spawn
- * partially off-screen.
- * @param {number[][]} board The locked stack.
- * @param {number[][]} shape Rotation state: 4 [row, col] offsets.
- * @param {number} row Board row of the shape's bounding box.
- * @param {number} col Board column of the shape's bounding box.
- * @return {boolean} True if the placement collides.
- */
+// Cells above the top of the board (r < 0) are allowed so pieces can spawn
+// partially off-screen.
 function collides(board, shape, row, col) {
   for (const [dr, dc] of shape) {
     const r = row + dr;
@@ -103,13 +94,6 @@ function collides(board, shape, row, col) {
   return false;
 }
 
-/**
- * Writes a shape into the board in place. Cells above the top are dropped.
- * @param {number[][]} board The locked stack, mutated.
- * @param {number[][]} shape Rotation state: 4 [row, col] offsets.
- * @param {number} row Board row of the shape's bounding box.
- * @param {number} col Board column of the shape's bounding box.
- */
 function merge(board, shape, row, col) {
   for (const [dr, dc] of shape) {
     const r = row + dr;
@@ -135,7 +119,6 @@ let lastDasShift = 0;
 let softDropHeld = false;
 let lastSoftDrop = 0;
 
-/** Resets all game state to a fresh board and spawns the first piece. */
 function reset() {
   board = emptyBoard();
   bag = [];
@@ -153,11 +136,8 @@ function reset() {
   spawn();
 }
 
-/**
- * 7-bag randomizer: deal each piece once before reshuffling. Prevents long
- * droughts of any piece.
- * @return {string} The next piece name.
- */
+// 7-bag randomizer: deal each piece once before reshuffling. Prevents long
+// droughts of any piece.
 function nextName() {
   if (bag.length === 0) {
     bag = PIECE_NAMES.slice();
@@ -169,18 +149,10 @@ function nextName() {
   return bag.shift();
 }
 
-/**
- * @param {{name: string, rotation: number}} piece The falling piece.
- * @return {number[][]} Its current rotation state.
- */
 function shapeOf(piece) {
   return PIECES[piece.name][piece.rotation];
 }
 
-/**
- * Spawns the next piece at the top. If it collides immediately the board
- * is full: ends the game and persists a new high score.
- */
 function spawn() {
   current = { name: nextName(), rotation: 0, row: 0, col: 3 };
   lockTimer = 0;
@@ -198,7 +170,6 @@ function spawn() {
 // if the endpoint is unreachable the game still plays, the high just shows 0.
 // Failures log a console.warn; success is silent.
 
-/** Fetches the global high score and adopts it if it beats the local one. */
 function loadHighScore() {
   fetch(HIGH_SCORE_URL)
     .then(async (r) => {
@@ -216,7 +187,6 @@ function loadHighScore() {
     .catch((err) => console.warn('[stack] high-score GET failed:', err.message));
 }
 
-/** Persists the current high score to the global endpoint. */
 function saveHighScore() {
   fetch(HIGH_SCORE_URL, {
     method: 'POST',
@@ -232,20 +202,14 @@ function saveHighScore() {
 
 /* ── Moves ───────────────────────────────────────────────────────────────── */
 
-/**
- * Resets the lock timer if the piece is on the floor — gives players room to
- * slide and rotate against the floor without insta-locking.
- */
+// Gives players room to slide and rotate against the floor without
+// insta-locking.
 function maybeResetLock() {
   if (current && collides(board, shapeOf(current), current.row + 1, current.col)) {
     lockTimer = 0;
   }
 }
 
-/**
- * Shifts the piece horizontally if the target cell is free.
- * @param {number} dx -1 for left, 1 for right.
- */
 function move(dx) {
   if (!current || clearing) return;
   if (!collides(board, shapeOf(current), current.row, current.col + dx)) {
@@ -254,10 +218,7 @@ function move(dx) {
   }
 }
 
-/**
- * Rotates the piece clockwise with simple wall kicks: try the same column,
- * then nudge ±1, then ±2. Gives up if every kick collides.
- */
+// Rotates clockwise with simple wall kicks.
 function rotate() {
   if (!current || clearing) return;
   const rots = PIECES[current.name];
@@ -272,7 +233,6 @@ function rotate() {
   }
 }
 
-/** Drops the piece one row (+1 point), or locks it if it's on the floor. */
 function softDrop() {
   if (!current || clearing) return;
   if (!collides(board, shapeOf(current), current.row + 1, current.col)) {
@@ -285,7 +245,6 @@ function softDrop() {
   }
 }
 
-/** Drops the piece straight to the floor (+2 points per row) and locks it. */
 function hardDrop() {
   if (!current || clearing) return;
   let d = 0;
@@ -295,10 +254,7 @@ function hardDrop() {
   lock();
 }
 
-/**
- * Merges the piece into the stack. Full rows start the line-clear flash
- * (scoring happens when it finishes); otherwise the next piece spawns.
- */
+// Full rows start the line-clear flash (scoring happens when it finishes).
 function lock() {
   if (!current) return;
   merge(board, shapeOf(current), current.row, current.col);
@@ -318,10 +274,6 @@ function lock() {
   }
 }
 
-/**
- * Removes the flashed rows, applies scoring and leveling, and spawns the
- * next piece. Runs when the line-clear animation finishes.
- */
 function completeLineClear() {
   if (!clearing) return;
   const cleared = clearing.rows.length;
@@ -351,33 +303,22 @@ function completeLineClear() {
 
 let canvas, ctx;
 
-/**
- * Reads a CSS custom property live each frame so dark-mode toggles and
- * system theme changes are picked up without any extra listener.
- * @param {string} name Custom property name, e.g. '--color-accent'.
- * @return {string} The computed value.
- */
+// Reads a CSS custom property live each frame so dark-mode toggles and
+// system theme changes are picked up without any extra listener.
 function color(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-/**
- * Fills one board cell with a 1px gutter on each side.
- * @param {number} c Board column.
- * @param {number} r Board row.
- */
 function drawCell(c, r) {
   ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
 }
 
-/** @return {number} How many rows the current piece can fall before resting. */
 function ghostDrop() {
   let d = 0;
   while (!collides(board, shapeOf(current), current.row + d + 1, current.col)) d++;
   return d;
 }
 
-/** Draws one frame: background, grid lines, stack, flash, ghost, piece, overlays. */
 function render() {
   ctx.fillStyle = color('--color-code-bg');
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -439,11 +380,6 @@ function render() {
   else if (paused) overlay('paused', '');
 }
 
-/**
- * Dims the board and centers a title (and optional subtitle) over it.
- * @param {string} title Main overlay text.
- * @param {string} sub Secondary line; empty string for none.
- */
 function overlay(title, sub) {
   ctx.globalAlpha = 0.88;
   ctx.fillStyle = color('--color-bg');
@@ -463,11 +399,6 @@ function overlay(title, sub) {
 
 /* ── Gravity loop ────────────────────────────────────────────────────────── */
 
-/**
- * requestAnimationFrame game loop: line-clear animation, DAS auto-shift,
- * soft-drop auto-repeat, then gravity with lock delay.
- * @param {number} now Timestamp supplied by requestAnimationFrame.
- */
 function tick(now) {
   const dt = now - lastTime;
   lastTime = now;
@@ -526,11 +457,6 @@ const GAME_KEYS = new Set([
   'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyP', 'KeyR',
 ]);
 
-/**
- * Keydown handler: arrows move/rotate/soft-drop, Space hard-drops, P pauses,
- * R restarts after game over. Arms the DAS / soft-drop held-key state.
- * @param {KeyboardEvent} e The keydown event.
- */
 function handleKey(e) {
   if (!GAME_KEYS.has(e.code)) return;
   // Buttons handle their own Space/Enter; don't hijack when one is focused.
@@ -567,10 +493,6 @@ function handleKey(e) {
   }
 }
 
-/**
- * Keyup handler: disarms the matching held-key state.
- * @param {KeyboardEvent} e The keyup event.
- */
 function handleKeyUp(e) {
   if (e.code === 'ArrowLeft' && dasDir === -1) dasDir = 0;
   else if (e.code === 'ArrowRight' && dasDir === 1) dasDir = 0;
@@ -593,10 +515,6 @@ let touchLastX = 0;
 let touchLastY = 0;
 let touchMoved = false;
 
-/**
- * Touchstart: records the finger origin, or restarts if the game is over.
- * @param {TouchEvent} e The touchstart event.
- */
 function handleTouchStart(e) {
   if (e.touches.length !== 1) return;
   e.preventDefault();
@@ -607,11 +525,6 @@ function handleTouchStart(e) {
   touchMoved = false;
 }
 
-/**
- * Touchmove: converts horizontal travel into column shifts and downward
- * travel into soft drops, one discrete step per SWIPE_CELL of movement.
- * @param {TouchEvent} e The touchmove event.
- */
 function handleTouchMove(e) {
   if (e.touches.length !== 1) return;
   e.preventDefault();
@@ -639,10 +552,6 @@ function handleTouchMove(e) {
   }
 }
 
-/**
- * Touchend: a stationary tap rotates; an upward flick hard-drops.
- * @param {TouchEvent} e The touchend or touchcancel event.
- */
 function handleTouchEnd(e) {
   e.preventDefault();
   if (paused || gameOver || clearing) return;
@@ -668,7 +577,6 @@ function handleTouchEnd(e) {
 
 let scoreEl, highEl, linesEl, levelEl, toggleBtn, restartBtn, soundBtn;
 
-/** Pushes score, high score, lines, and level into their readout elements. */
 function updateMeta() {
   scoreEl.textContent = String(score);
   highEl.textContent = String(highScore);
@@ -676,7 +584,7 @@ function updateMeta() {
   levelEl.textContent = String(level);
 }
 
-/** Toggles pause: silences music and clears held-key state so resume doesn't apply queued shifts. */
+// Clears held-key state so resume doesn't apply queued shifts.
 function togglePause() {
   if (gameOver) return;
   paused = !paused;
@@ -691,7 +599,6 @@ function togglePause() {
   }
 }
 
-/** Starts a fresh game, restarting the music from the top if sound is on. */
 function resetAndStart() {
   reset();
   toggleBtn.textContent = 'pause';
@@ -787,10 +694,8 @@ let melodyIndex = 0;
 let bassIndex = 0;
 let schedulerInterval = null;
 
-/** @return {number} Seconds per sixteenth note at the current BPM. */
 function sixteenthSeconds() { return 60 / BPM / 4; }
 
-/** Lazily creates the shared AudioContext on first use. */
 function initAudio() {
   if (audioCtx) return;
   // Bracket access on the legacy Safari prefix to keep TS strict-mode quiet
@@ -799,14 +704,8 @@ function initAudio() {
   audioCtx = new Ctor();
 }
 
-/**
- * Shapes a note's gain: short attack, brief sustain, fast decay. Keeps it
- * crisp and prevents click artifacts from raw gate signals.
- * @param {GainNode} gain The gain node to shape.
- * @param {number} startTime AudioContext time the note starts.
- * @param {number} durSeconds Note duration in seconds.
- * @param {number} peak Peak gain level.
- */
+// Short attack, brief sustain, fast decay. Keeps notes crisp and prevents
+// click artifacts from raw gate signals.
 function envelope(gain, startTime, durSeconds, peak) {
   gain.gain.setValueAtTime(0.0001, startTime);
   gain.gain.exponentialRampToValueAtTime(peak, startTime + 0.005);
@@ -814,12 +713,6 @@ function envelope(gain, startTime, durSeconds, peak) {
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durSeconds);
 }
 
-/**
- * Schedules one square-wave melody note.
- * @param {number|null} freq Frequency in Hz; null is a rest.
- * @param {number} startTime AudioContext time the note starts.
- * @param {number} durSeconds Note duration in seconds.
- */
 function playMelodyNote(freq, startTime, durSeconds) {
   if (freq == null) return;
   const osc = audioCtx.createOscillator();
@@ -832,13 +725,8 @@ function playMelodyNote(freq, startTime, durSeconds) {
   osc.stop(startTime + durSeconds + 0.02);
 }
 
-/**
- * Schedules one bass note. Triangle wave is warmer at low frequencies than
- * square — keeps the bass from competing with the melody for harmonic space.
- * @param {number|null} freq Frequency in Hz; null is a rest.
- * @param {number} startTime AudioContext time the note starts.
- * @param {number} durSeconds Note duration in seconds.
- */
+// Triangle wave is warmer at low frequencies than square. Keeps the bass
+// from competing with the melody for harmonic space.
 function playBassNote(freq, startTime, durSeconds) {
   if (freq == null) return;
   const osc = audioCtx.createOscillator();
@@ -851,11 +739,8 @@ function playBassNote(freq, startTime, durSeconds) {
   osc.stop(startTime + durSeconds + 0.02);
 }
 
-/**
- * Schedules a sliding 250ms window of upcoming notes (melody + bass
- * independently). More reliable than queueing the whole loop, and survives
- * pause/resume cleanly.
- */
+// Schedules a sliding 250ms window of upcoming notes. More reliable than
+// queueing the whole loop, and survives pause/resume cleanly.
 function scheduler() {
   while (nextNoteTime < audioCtx.currentTime + 0.25) {
     const [note, dur] = KOROBEINIKI[melodyIndex];
@@ -873,7 +758,6 @@ function scheduler() {
   }
 }
 
-/** Starts (or resumes) the music scheduler from the current song position. */
 function startMusic() {
   initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -885,7 +769,6 @@ function startMusic() {
   schedulerInterval = setInterval(scheduler, 50);
 }
 
-/** Stops the scheduler and suspends the AudioContext. */
 function stopMusic() {
   if (schedulerInterval) { clearInterval(schedulerInterval); schedulerInterval = null; }
   if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
@@ -897,7 +780,6 @@ function stopMusic() {
 // first sound-on so visitors don't have to know about the iOS quirk.
 let silentModeUnlocked = false;
 
-/** Plays a silent HTMLAudioElement once so iOS ignores the hardware mute switch. */
 function unlockSilentMode() {
   if (silentModeUnlocked) return;
   silentModeUnlocked = true;
@@ -909,7 +791,6 @@ function unlockSilentMode() {
   } catch (_) {}
 }
 
-/** Toggles sound on/off and starts or stops the music accordingly. */
 function toggleSound() {
   soundOn = !soundOn;
   soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
@@ -927,7 +808,6 @@ function toggleSound() {
 
 // All SFX no-op silently if the user hasn't enabled sound yet.
 
-/** Low square-wave thud when a piece locks. */
 function sfxLock() {
   if (!audioCtx || !soundOn) return;
   const t = audioCtx.currentTime;
@@ -941,11 +821,6 @@ function sfxLock() {
   osc.stop(t + 0.08);
 }
 
-/**
- * Rising arpeggio scaled to the clear size: single → 2-note rise,
- * tetris (4) → 4-note rise, louder.
- * @param {number} count How many lines cleared.
- */
 function sfxLineClear(count) {
   if (!audioCtx || !soundOn) return;
   const steps = [659.25, 880.00, 1318.51, 1760.00].slice(0, Math.min(4, count + 1));
@@ -963,7 +838,6 @@ function sfxLineClear(count) {
   });
 }
 
-/** Descending four-note figure on game over. */
 function sfxGameOver() {
   if (!audioCtx || !soundOn) return;
   const t = audioCtx.currentTime;
@@ -982,20 +856,12 @@ function sfxGameOver() {
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 
-/**
- * Wires a click handler that also blurs the button, so Space/Enter go back
- * to the game instead of re-triggering the button.
- * @param {HTMLElement} el The button element.
- * @param {Function} fn The click handler.
- */
+// Blurs the button after each click so Space/Enter go back to the game
+// instead of re-triggering the button.
 function bindButton(el, fn) {
   el.addEventListener('click', () => { fn(); el.blur(); });
 }
 
-/**
- * Finds the DOM, loads the global high score, starts a fresh game, and
- * wires buttons, keyboard, touch, and tab-visibility handling.
- */
 function init() {
   canvas = document.getElementById('stack-canvas');
   ctx = canvas.getContext('2d');

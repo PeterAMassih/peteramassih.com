@@ -18,7 +18,3 @@ const projects = (await getCollection('projects'))
     {projects.map((project) => <ProjectItem project={project} />)}
   </main>
 </BaseLayout>
-
-<style>
-  h1 { margin-bottom: var(--space-12); }
-</style>

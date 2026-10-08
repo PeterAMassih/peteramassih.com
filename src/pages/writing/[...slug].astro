@@ -21,7 +21,7 @@ export async function getStaticPaths() {
 type Props = { post: CollectionEntry<'writing'> };
 const { post } = Astro.props;
 const { Content } = await render(post);
-const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
 
 <BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
@@ -36,12 +36,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   <article>
     <header>
       <div class="meta-row">
-        <p class="meta">
-          <time datetime={post.data.pubDate.toISOString()}>{fmt.format(post.data.pubDate)}</time>
-          {post.data.tags && post.data.tags.length > 0 && (
-            <span class="tags"> · {post.data.tags.join(' · ')}</span>
-          )}
-        </p>
+        <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
         <LikeButton slug={post.id} />
       </div>
       <h1>{post.data.title}</h1>
@@ -54,8 +49,9 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
 </BaseLayout>
 
 <style>
-  /* Prose, the notation table, and math stay at the readable measure and stay
-     aligned; only code blocks and figures break out to --wide-width. */
+  /* Prose, the notation table, and math keep the column of every other page
+     (the content width minus main's padding), so they line up with the
+     header; only code blocks and figures break out to --wide-width. */
   .post { max-width: var(--wide-width); }
   .post article > header,
   .body :global(p),
@@ -66,7 +62,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   .body :global(blockquote),
   .body :global(table),
   .body :global(.katex-display) {
-    max-width: var(--content-width);
+    max-width: calc(var(--content-width) - 2 * var(--space-4));
     margin-inline: auto;
   }
   /* Long math posts leave tens of thousands of elements in the DOM. Blocks
@@ -85,29 +81,14 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
     gap: var(--space-4);
     margin-bottom: var(--space-4);
   }
-  .meta {
+  time {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
   }
-  .post h1 { line-height: 1.2; }
-  /* Body is MDX output — :global since it's not scoped to this component. */
-  /* In-sentence links get an underline: in the dark theme the link color is
-     too close to the text color to mark them alone. Section refs keep their
-     quieter global style. */
-  .body :global(:is(p, li, td, blockquote) a:not(.section-ref)) { text-decoration: underline; text-underline-offset: 0.15em; }
-  .body :global(h2) { margin-top: var(--space-8); margin-bottom: var(--space-3); }
-  .body :global(h3) { margin-top: var(--space-6); margin-bottom: var(--space-2); }
-  .body :global(ul), .body :global(ol) { margin-top: var(--space-4); }
-  .body :global(ul) { padding-left: var(--space-6); }
-  .body :global(ol) { padding-left: var(--space-8); }
-  .body :global(li) { margin-top: var(--space-1); }
-  .body :global(blockquote) {
-    margin-block: var(--space-6);
-    padding-left: var(--space-4);
-    border-left: 2px solid var(--color-border);
-    color: var(--color-text-muted);
-  }
+  .post h1 { font-size: var(--text-3xl); }
+  /* In-page links (the contents line) never break inside a label. */
+  .body :global(p a[href^='#']) { white-space: nowrap; }
   /* Proof folds stay closed by default so the argument reads without the
      machinery. Native details/summary preserves keyboard behavior. */
   .body :global(details.proof) {
@@ -124,10 +105,6 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', d
   }
   .body :global(details.proof summary:hover) { color: var(--color-text); }
   .body :global(details.proof[open] > summary) { color: var(--color-text); }
-  .body :global(details.proof summary:focus-visible) {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 3px;
-  }
   /* Wide math and tables scroll inside their own box; the page never
      scrolls horizontally on narrow screens. */
   .body :global(.katex-display) {

@@ -18,8 +18,7 @@ const LAST_UPDATED = 'October 2026';
     <a href="/stack/">Falling blocks</a> ·
     <a href="/play/">Pixel world</a>
   </p>
-  <p>Last updated {LAST_UPDATED}</p>
-  <p>© {new Date().getFullYear()} Peter Massih</p>
+  <p>Last updated {LAST_UPDATED} · © {new Date().getFullYear()} Peter Massih</p>
 </footer>
 
 <style>
@@ -28,10 +27,9 @@ const LAST_UPDATED = 'October 2026';
     margin: var(--space-16) auto var(--space-8);
     padding: 0 var(--space-4);
     font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    text-align: center;
+    color: var(--color-text-subtle);
   }
-  .site-footer p + p { margin-top: var(--space-2); }
+  .site-footer p + p { margin-top: var(--space-1); }
   /* Padding lifts inline links to 24px+ tap targets without changing line spacing. */
   .site-footer a { padding-block: var(--space-1); color: var(--color-text-muted); }
   .site-footer a:hover { color: var(--color-text); }

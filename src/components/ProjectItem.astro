@@ -1,13 +1,13 @@
 ---
 // src/components/ProjectItem.astro
-// One project: name, dates and context, result line, links. The home page
-// shows four, /projects/ shows all six, and a project's own page renders it
-// with heading="h1" (no self-link) and its MDX body in the slot.
+// One project: name, dates and context, result line, links. /projects/ lists
+// all six with heading="h2"; a project's own page renders it with
+// heading="h1" (no self-link) and its Markdown body in the slot.
 import type { CollectionEntry } from 'astro:content';
 
 interface Props {
   project: CollectionEntry<'projects'>;
-  heading?: 'h1' | 'h2' | 'h3';
+  heading?: 'h1' | 'h2';
 }
 const { project, heading: Heading = 'h2' } = Astro.props;
 const { title, description, pubDate, startDate, context, links } = project.data;
@@ -18,15 +18,12 @@ const month = (d: Date) => d.toISOString().slice(0, 7);
 ---
 
 <article class="project">
-  <Heading class:list={['name', { page: Heading === 'h1' }]}>
+  <Heading>
     {Heading === 'h1' ? title : <a href={`/projects/${project.id}/`}>{title}</a>}
   </Heading>
   <p class="meta">
-    <span class="dates">
-      {startDate && <><time datetime={month(startDate)}>{fmt.format(startDate)}</time> – </>}
-      <time datetime={month(pubDate)}>{fmt.format(pubDate)}</time>
-    </span>
-    · {context}
+    {startDate && <><time datetime={month(startDate)}>{fmt.format(startDate)}</time> – </>}
+    <time datetime={month(pubDate)}>{fmt.format(pubDate)}</time> · {context}
   </p>
   <p class="result">{description}</p>
   <p class="links">
@@ -36,18 +33,12 @@ const month = (d: Date) => d.toISOString().slice(0, 7);
 </article>
 
 <style>
-  .project + .project {
-    margin-top: var(--space-6);
-    padding-top: var(--space-6);
-    border-top: 1px solid var(--color-border);
-  }
-  .name:not(.page) { font-size: var(--text-lg); }
-  .name.page { line-height: 1.2; }
-  .name a { padding-block: var(--space-1); color: var(--color-text); }
-  .name a:hover { color: var(--color-accent); }
-  .meta { margin-top: var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); }
-  .dates { font-family: var(--font-mono); font-size: var(--text-xs); }
-  .result { margin-top: var(--space-2); }
-  .links { margin-top: var(--space-2); font-size: var(--text-sm); }
+  .project + .project { margin-top: var(--space-8); }
+  h2 { font-size: var(--text-base); }
+  h2 a { padding-block: var(--space-1); color: var(--color-text); }
+  h2 a:hover { color: var(--color-accent); }
+  .meta { margin-top: var(--space-1); font-size: var(--text-sm); color: var(--color-text-subtle); }
+  .result { margin-top: var(--space-1); color: var(--color-text-muted); }
+  .links { margin-top: var(--space-1); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }
 </style>

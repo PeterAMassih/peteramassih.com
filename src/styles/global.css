@@ -20,7 +20,9 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.01em;
 }
 
-h1 { font-size: var(--text-3xl); }
+/* Page titles match the home page's section headings; only the name on the
+   home page and a post's title are set larger. */
+h1 { font-size: var(--text-2xl); line-height: 1.2; }
 h2 { font-size: var(--text-2xl); }
 h3 { font-size: var(--text-xl); }
 
@@ -63,15 +65,42 @@ a:hover {
   }
 }
 
-/* Page shell: one centered column. Pages override only what differs. */
+/* Page shell: one centered column on the header's edges. Pages override only
+   what differs. */
 main {
   max-width: var(--content-width);
   margin: var(--space-24) auto var(--space-16);
   padding: 0 var(--space-4);
 }
+main > h1 { margin-bottom: var(--space-6); }
+/* On phones the first content has to start on the first screen. */
+@media (max-width: 600px) {
+  main { margin-top: var(--space-8); }
+}
 
 /* Body text on the project, publication and post pages. */
 .body p { margin-top: var(--space-4); line-height: 1.7; }
+/* In-sentence links get an underline, since color alone is weak in the dark
+   theme; a faint one, so a paragraph full of links stays calm. Section refs
+   keep their own quieter style. */
+.body :is(p, li, td, blockquote) a:not(.section-ref) {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 0.15em;
+}
+.body :is(p, li, td, blockquote) a:not(.section-ref):hover { text-decoration-color: currentColor; }
+.body h2 { margin-top: var(--space-8); margin-bottom: var(--space-3); }
+.body h3 { margin-top: var(--space-6); margin-bottom: var(--space-2); }
+.body :is(ul, ol) { margin-top: var(--space-4); }
+.body ul { padding-left: var(--space-6); }
+.body ol { padding-left: var(--space-8); }
+.body li { margin-top: var(--space-1); }
+.body blockquote {
+  margin-block: var(--space-6);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+}
 
 /* Inline code */
 code {
@@ -131,9 +160,10 @@ pre code {
   color: var(--color-text-muted);
 }
 
-/* A post's opening paragraph reads as a summary: muted, but the same size and
-   flow as the body (no quote block). */
-.body > p:first-child {
+/* On post and publication pages the opening paragraph reads as a summary:
+   muted, but the same size and flow as the body. Project pages already lead
+   with their result line, so their body starts in full color. */
+header + .body > p:first-child {
   color: var(--color-text-muted);
 }
 

@@ -71,7 +71,7 @@ const pubs: Pub[] = [
 ];
 ---
 
-<ol class="pubs">
+<ol class:list={['pubs', { compact }]}>
   {pubs.map((pub) => (
     <li>
       <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>
@@ -94,11 +94,12 @@ const pubs: Pub[] = [
 
 <style>
   .pubs { list-style: none; padding: 0; }
-  .pubs li + li { margin-top: var(--space-4); }
+  .pubs li + li { margin-top: var(--space-8); }
+  .compact li + li { margin-top: var(--space-4); }
   cite { font-style: normal; font-weight: 600; }
   cite a { color: var(--color-text); }
   cite a:hover { color: var(--color-accent); }
-  .byline { color: var(--color-text-muted); }
+  .byline, .summary { color: var(--color-text-muted); }
   .summary { margin-top: var(--space-1); }
   .links { margin-top: var(--space-1); font-size: var(--text-sm); }
   .links a { padding-block: var(--space-1); }

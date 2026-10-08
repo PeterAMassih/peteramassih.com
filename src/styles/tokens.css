@@ -3,6 +3,9 @@
    Theme switching happens by overriding these on the [data-theme] selectors below. */
 
 :root {
+  /* Native scrollbars, form controls and <details> markers follow the theme. */
+  color-scheme: light dark;
+
   /* Typography */
   --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -28,9 +31,8 @@
   --space-24: 6rem;
 
   /* Layout */
-  --content-width: 680px;      /* prose, tables, and math: the readable measure */
+  --content-width: 680px;      /* the page column, padding included */
   --wide-width: 800px;         /* code blocks and figures break out a little wider */
-  --page-width: 768px;
 
   /* Motion */
   --transition: 150ms ease;
@@ -49,16 +51,19 @@
   --color-accent-hover: #115e59;
   --color-code-bg: #f4f4f5;
 }
+[data-theme='light'] { color-scheme: light; }
 
-/* Dark theme */
+/* Dark theme. The accent is a muted teal (8.4:1 on the background), not a
+   saturated mint, so links stay quiet in long text. */
 [data-theme='dark'] {
+  color-scheme: dark;
   --color-bg: #0a0a0a;
   --color-text: #fafafa;
   --color-text-muted: #a3a3a3;
   --color-text-subtle: #8c8c8c;
   --color-border: #262626;
-  --color-accent: #5eead4;
-  --color-accent-hover: #99f6e4;
+  --color-accent: #76b5ab;
+  --color-accent-hover: #a3d4cc;
   --color-code-bg: #171717;
 }
 
@@ -70,8 +75,8 @@
     --color-text-muted: #a3a3a3;
     --color-text-subtle: #8c8c8c;
     --color-border: #262626;
-    --color-accent: #5eead4;
-    --color-accent-hover: #99f6e4;
+    --color-accent: #76b5ab;
+    --color-accent-hover: #a3d4cc;
     --color-code-bg: #171717;
   }
 }

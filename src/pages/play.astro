@@ -1,21 +1,17 @@
 ---
 // src/pages/play.astro
-// A tiny shared world — every square is a live visitor. v0: walk, see others.
-// Game logic in src/scripts/play.js; the server lives in game/ (Durable Object).
+// A tiny shared world where every character is a live visitor: rooms,
+// punches, a crown and a timed race. Game logic in src/scripts/play.js; the
+// server lives in game/ (one Durable Object per room). Unlisted: noindex and
+// out of the sitemap.
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Play — Peter Massih" description="Pixel world, one of the toys on Peter Massih's site.">
-  <Fragment slot="head">
-    {/* Unlisted while v0 is a test page. */}
-    <meta name="robots" content="noindex" />
-  </Fragment>
+<BaseLayout title="Pixel world — Peter Massih" description="Pixel world, one of the toys on Peter Massih's site." noindex>
   <main id="main">
-    <header class="head">
-      <h1>Play</h1>
-    </header>
+    <h1>Pixel world</h1>
 
-    <canvas id="play-canvas" class="canvas" width="640" height="360" aria-label="Shared pixel world"></canvas>
+    <canvas id="play-canvas" class="canvas" width="640" height="360" role="img" aria-label="Shared pixel world"></canvas>
 
     <p class="meta" aria-live="polite">
       <span id="play-room">…</span> ·
@@ -79,12 +75,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <script>import '../scripts/play.js';</script>
 
 <style>
-  main {
-    max-width: var(--page-width);
-    margin: var(--space-16) auto var(--space-16);
-    padding: 0 var(--space-4);
-  }
-  .head { margin-bottom: var(--space-4); }
   .canvas {
     width: 100%;
     display: block;
@@ -98,8 +88,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
   }
-  .touch { display: none; }
+  .touch, .hint-touch { display: none; }
+  /* Touch devices get on-screen pads and the touch hint instead of the keys. */
   @media (pointer: coarse) {
+    .hint-keys { display: none; }
+    .hint-touch { display: block; }
     .touch {
       display: flex;
       flex-direction: column;
@@ -133,11 +126,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     .canvas { image-rendering: auto; }
   }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
-  .hint-touch { display: none; }
-  @media (pointer: coarse) {
-    .hint-keys { display: none; }
-    .hint-touch { display: block; }
-  }
   .about { margin-top: var(--space-4); }
   .about summary {
     min-height: 24px;

@@ -5,11 +5,11 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Stack — Peter Massih" description="Falling blocks, one of the toys on Peter Massih's site.">
+<BaseLayout title="Falling blocks — Peter Massih" description="Falling blocks, one of the toys on Peter Massih's site.">
   <main id="main">
-    <h1>Stack</h1>
+    <h1>Falling blocks</h1>
 
-    <canvas id="stack-canvas" class="canvas" aria-label="Falling tetromino playfield" width="300" height="600"></canvas>
+    <canvas id="stack-canvas" class="canvas" role="img" aria-label="Falling tetromino playfield" width="300" height="600"></canvas>
 
     <p class="meta">
       score <span id="score">0</span> · global high <span id="high">0</span> · lines <span id="lines">0</span> · level <span id="level">1</span>
@@ -29,19 +29,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <script>import '../scripts/stack.js';</script>
 
 <style>
-  main {
-    max-width: var(--content-width);
-    margin: var(--space-16) auto var(--space-16);
-    padding: 0 var(--space-4);
-    text-align: center;
-  }
-  h1 { margin-bottom: var(--space-8); }
   .canvas {
-    display: block;
     width: 100%;
     max-width: 300px;
     aspect-ratio: 1 / 2;
-    margin: 0 auto var(--space-4);
+    margin-bottom: var(--space-4);
     background: var(--color-code-bg);
     border-radius: 4px;
     image-rendering: pixelated;
@@ -56,27 +48,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     letter-spacing: 0.02em;
   }
   .controls {
-    margin-top: var(--space-6);
+    margin-top: var(--space-3);
     display: flex;
     gap: var(--space-6);
-    justify-content: center;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
   .controls button {
     min-height: 24px;
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
     color: var(--color-text-muted);
-    cursor: pointer;
     transition: color var(--transition);
   }
   .controls button:hover { color: var(--color-text); }
   .controls button[aria-pressed='true'] { color: var(--color-accent); }
   .hint {
-    margin-top: var(--space-6);
+    margin-top: var(--space-3);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);

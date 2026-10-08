@@ -2,14 +2,15 @@
 // src/layouts/BaseLayout.astro
 // Page shell. <head>, fonts, FOUC theme init. Top bar and footer live in
 // SiteHeader and SiteFooter. Every page passes its own description, so no
-// two pages share one in search results or link previews.
+// two pages share one in search results or link previews. A noindex page
+// (404, the unlisted toy) gets no canonical URL, since it must never be one.
 import '../styles/global.css';
 import '../styles/fonts.css';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 
-interface Props { title: string; description: string; }
-const { title, description } = Astro.props;
+interface Props { title: string; description: string; noindex?: boolean; }
+const { title, description, noindex = false } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const image = new URL('/peter.jpg', Astro.site);
 const imageAlt = 'Portrait of Peter Massih';
@@ -22,7 +23,7 @@ const imageAlt = 'Portrait of Peter Massih';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonicalURL} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonicalURL} />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate" type="application/rss+xml" title="Writing — Peter Massih" href="/rss.xml" />
     {/* Open Graph and Twitter cards control the preview when the URL is shared.

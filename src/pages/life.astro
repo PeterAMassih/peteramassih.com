@@ -6,10 +6,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import '../styles/canvas-toy.css';
 ---
 
-<BaseLayout title="Life — Peter Massih" description="Game of Life, one of the toys on Peter Massih's site.">
+<BaseLayout title="Game of Life — Peter Massih" description="Game of Life, one of the toys on Peter Massih's site.">
   <main id="main">
     <header class="head">
-      <h1>Life</h1>
+      <h1>Game of Life</h1>
       <p>
         Conway's Game of Life is a cellular automaton invented by John Conway in 1970. Each cell on a grid is alive or dead. Every tick, the grid evolves by four simple rules applied to each cell based on its eight neighbors:
       </p>
@@ -21,7 +21,7 @@ import '../styles/canvas-toy.css';
       </ol>
     </header>
 
-    <canvas id="life-canvas" class="canvas" aria-label="Game of Life cellular automaton"></canvas>
+    <canvas id="life-canvas" class="canvas" role="img" aria-label="Game of Life cellular automaton"></canvas>
 
     <p class="meta">Generation: <span id="gen">0</span> · Population: <span id="pop">0</span></p>
 
@@ -39,7 +39,7 @@ import '../styles/canvas-toy.css';
       <button data-fps="30" type="button">fast</button>
     </div>
 
-    <div class="controls patterns">
+    <div class="controls">
       <span class="label">Patterns:</span>
       <button data-pattern="glider" type="button">Glider</button>
       <button data-pattern="blinker" type="button">Blinker</button>
@@ -55,7 +55,6 @@ import '../styles/canvas-toy.css';
 <script>import '../scripts/life.js';</script>
 
 <style>
-  main { max-width: var(--page-width); margin-top: var(--space-16); }
   .head { margin-bottom: var(--space-6); }
   .head p { margin-top: var(--space-2); max-width: 65ch; }
   .rules {

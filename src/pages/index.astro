@@ -25,7 +25,8 @@ const jsonLd = [
       '@type': 'Person',
       '@id': 'https://peteramassih.com/#person',
       name: 'Peter Massih',
-      alternateName: ['Peter A. Massih', 'Peter Abdel Massih', 'P. A. Massih'],
+      // The bylines on his papers, so search engines tie them to this page.
+      alternateName: ['Peter A. Massih', 'P. A. Massih'],
       url: 'https://peteramassih.com/',
       image: 'https://peteramassih.com/peter.jpg',
       description: 'I do ML research and build the software that ships it.',
@@ -56,11 +57,12 @@ const jsonLd = [
           questions on satellite images. For my master's thesis at Bank Lombard Odier & Co Ltd, I
           deployed three AI systems used daily by bankers, fund screeners and tax specialists.
         </p>
-        <p class="socials">
-          <a href="https://github.com/PeterAMassih">github</a> ·
-          <a href="https://huggingface.co/PeterAM4">huggingface</a> ·
-          <a href="https://www.linkedin.com/in/peteramassih/">linkedin</a> ·
-          <a href="mailto:peteramassih@gmail.com">email</a>
+        <p class="links">
+          <a href="/cv.pdf">CV</a> ·
+          <a href="mailto:peteramassih@gmail.com">Email</a> ·
+          <a href="https://github.com/PeterAMassih">GitHub</a> ·
+          <a href="https://huggingface.co/PeterAM4">Hugging Face</a> ·
+          <a href="https://www.linkedin.com/in/peteramassih/">LinkedIn</a>
         </p>
       </div>
       <img class="photo" src="/peter.jpg" alt="Peter Massih" width="480" height="480" />
@@ -76,7 +78,7 @@ const jsonLd = [
       </ul>
       <h3 class="label">Education</h3>
       <ul class="dated">
-        <li><span class="when">2023–2026</span>MSc Computer Science (Data Analytics and Machine Learning) @ EPFL · GPA 5.5/6.0</li>
+        <li><span class="when">2023–2026</span><span>MSc Computer Science (Data Analytics and Machine Learning) @ EPFL<span class="note">GPA 5.5/6.0</span></span></li>
         <li><span class="when">2022–2023</span>Exchange year @ ETH Zurich</li>
         <li><span class="when">2020–2023</span>BSc Communication Systems @ EPFL</li>
       </ul>
@@ -126,11 +128,12 @@ const jsonLd = [
     align-items: start;
     margin-bottom: var(--space-16);
   }
+  .intro h1 { font-size: var(--text-3xl); }
   .bio { margin-top: var(--space-2); color: var(--color-text-muted); max-width: 52ch; }
   .photo { width: 240px; height: 240px; border-radius: 4px; object-fit: cover; }
-  .socials { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
-  .socials a { padding-block: var(--space-1); color: var(--color-text-muted); }
-  .socials a:hover { color: var(--color-text); }
+  .links { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-subtle); }
+  .links a { padding-block: var(--space-1); color: var(--color-text); }
+  .links a:hover { color: var(--color-accent); }
   section { margin-top: var(--space-12); }
   section > h2 { margin-bottom: var(--space-4); }
   ul { list-style: none; padding: 0; }
@@ -139,22 +142,22 @@ const jsonLd = [
   .dated li + li { margin-top: var(--space-2); }
   .when, .recent time, .label { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .label { font-weight: 400; letter-spacing: 0; margin-bottom: var(--space-3); }
+  .note { display: block; color: var(--color-text-muted); font-size: var(--text-sm); }
   ul + .label { margin-top: var(--space-8); }
   .entries li + li { margin-top: var(--space-4); }
   .name { font-weight: 600; color: var(--color-text); }
   .name:hover { color: var(--color-accent); }
-  .muted { color: var(--color-text-muted); }
   .recent li + li { margin-top: var(--space-3); }
   .recent a { color: var(--color-text); }
   .recent a:hover .title { color: var(--color-accent); }
   .recent .title { transition: color var(--transition); }
   .more { margin-top: var(--space-6); font-size: var(--text-sm); }
   .more a { padding-block: var(--space-1); }
-  /* On phones the bio has to start on the first screen: the page starts
-     higher and the photo moves under the text. */
+  /* On phones the photo moves under the text and shrinks, so the roles still
+     reach the first screen. */
   @media (max-width: 600px) {
-    main { margin-top: var(--space-8); }
-    .intro { grid-template-columns: 1fr; }
+    .intro { grid-template-columns: 1fr; margin-bottom: var(--space-12); }
+    .photo { width: 144px; height: 144px; }
     .dated li { grid-template-columns: 1fr; gap: 0; }
   }
 </style>

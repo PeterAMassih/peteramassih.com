@@ -36,44 +36,44 @@ The equation shows one input channel. A practical image convolution also sums ov
 <svg class="m2f-conv" style="min-width: 560px" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One convolution step. A 3 by 3 filter lines up with an input patch and produces one value in the output feature map.">
 <defs>
 <style>
-.cv-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13px; }
-.cv-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
-.cv-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #52525b; font-size: 11px; }
+.cv-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
+.cv-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.cv-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
 </style>
-<marker id="cv-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
+<marker id="cv-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
 </defs>
-<rect width="700" height="240" rx="6" fill="#fafafa"/>
+<rect width="700" height="240" rx="6" style="fill: var(--color-bg)"/>
 <text class="cv-lbl" x="93" y="38" text-anchor="middle">input</text>
-<rect x="28" y="52" width="130" height="130" fill="none" stroke="#9a9a9a"/>
-<line x1="54" y1="52" x2="54" y2="182" stroke="#d4d4d4"/><line x1="80" y1="52" x2="80" y2="182" stroke="#d4d4d4"/><line x1="106" y1="52" x2="106" y2="182" stroke="#d4d4d4"/><line x1="132" y1="52" x2="132" y2="182" stroke="#d4d4d4"/>
-<line x1="28" y1="78" x2="158" y2="78" stroke="#d4d4d4"/><line x1="28" y1="104" x2="158" y2="104" stroke="#d4d4d4"/><line x1="28" y1="130" x2="158" y2="130" stroke="#d4d4d4"/><line x1="28" y1="156" x2="158" y2="156" stroke="#d4d4d4"/>
-<rect x="28" y="52" width="78" height="78" fill="#b8860b" fill-opacity="0.10" stroke="#b8860b" stroke-width="2"/>
+<rect x="28" y="52" width="130" height="130" fill="none" style="stroke: var(--viz-line)"/>
+<line x1="54" y1="52" x2="54" y2="182" style="stroke: var(--viz-grid)"/><line x1="80" y1="52" x2="80" y2="182" style="stroke: var(--viz-grid)"/><line x1="106" y1="52" x2="106" y2="182" style="stroke: var(--viz-grid)"/><line x1="132" y1="52" x2="132" y2="182" style="stroke: var(--viz-grid)"/>
+<line x1="28" y1="78" x2="158" y2="78" style="stroke: var(--viz-grid)"/><line x1="28" y1="104" x2="158" y2="104" style="stroke: var(--viz-grid)"/><line x1="28" y1="130" x2="158" y2="130" style="stroke: var(--viz-grid)"/><line x1="28" y1="156" x2="158" y2="156" style="stroke: var(--viz-grid)"/>
+<rect x="28" y="52" width="78" height="78" fill-opacity="0.10" stroke-width="2" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
 <g class="cv-num">
 <text x="41" y="70" text-anchor="middle">0</text><text x="67" y="70" text-anchor="middle">.5</text><text x="93" y="70" text-anchor="middle">1</text>
 <text x="41" y="96" text-anchor="middle">0</text><text x="67" y="96" text-anchor="middle">.5</text><text x="93" y="96" text-anchor="middle">1</text>
 <text x="41" y="122" text-anchor="middle">0</text><text x="67" y="122" text-anchor="middle">.5</text><text x="93" y="122" text-anchor="middle">1</text>
 </g>
-<rect x="54" y="52" width="78" height="78" fill="none" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.55"/>
+<rect x="54" y="52" width="78" height="78" fill="none" stroke-dasharray="3 3" opacity="0.55" style="stroke: var(--viz-line)"/>
 <text class="cv-sub" x="145" y="200" text-anchor="middle">slide &#8594;</text>
 <text class="cv-lbl" x="275" y="38" text-anchor="middle">3&#215;3 filter</text>
-<rect x="236" y="52" width="78" height="78" fill="#b8860b" fill-opacity="0.13" stroke="#b8860b"/>
-<line x1="262" y1="52" x2="262" y2="130" stroke="#d4d4d4"/><line x1="288" y1="52" x2="288" y2="130" stroke="#d4d4d4"/>
-<line x1="236" y1="78" x2="314" y2="78" stroke="#d4d4d4"/><line x1="236" y1="104" x2="314" y2="104" stroke="#d4d4d4"/>
+<rect x="236" y="52" width="78" height="78" fill-opacity="0.13" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
+<line x1="262" y1="52" x2="262" y2="130" style="stroke: var(--viz-grid)"/><line x1="288" y1="52" x2="288" y2="130" style="stroke: var(--viz-grid)"/>
+<line x1="236" y1="78" x2="314" y2="78" style="stroke: var(--viz-grid)"/><line x1="236" y1="104" x2="314" y2="104" style="stroke: var(--viz-grid)"/>
 <g class="cv-num">
 <text x="249" y="70" text-anchor="middle">&#8722;1</text><text x="275" y="70" text-anchor="middle">0</text><text x="301" y="70" text-anchor="middle">+1</text>
 <text x="249" y="96" text-anchor="middle">&#8722;1</text><text x="275" y="96" text-anchor="middle">0</text><text x="301" y="96" text-anchor="middle">+1</text>
 <text x="249" y="122" text-anchor="middle">&#8722;1</text><text x="275" y="122" text-anchor="middle">0</text><text x="301" y="122" text-anchor="middle">+1</text>
 </g>
-<line x1="106" y1="91" x2="234" y2="91" stroke="#9a9a9a" stroke-dasharray="4 3"/>
-<text class="cv-sub" x="388" y="66" text-anchor="middle">&#8857; then &#931;</text>
+<line x1="106" y1="91" x2="234" y2="91" stroke-dasharray="4 3" style="stroke: var(--viz-line)"/>
+<text class="cv-sub" x="388" y="66" text-anchor="middle">multiply, then sum</text>
 <text class="cv-num" x="388" y="120" text-anchor="middle">sum of 9</text>
-<line x1="316" y1="91" x2="460" y2="66" stroke="#9a9a9a" marker-end="url(#cv-ar)"/>
+<line x1="316" y1="91" x2="460" y2="66" marker-end="url(#cv-ar)" style="stroke: var(--viz-line)"/>
 <text class="cv-lbl" x="501" y="38" text-anchor="middle">feature map</text>
-<rect x="462" y="52" width="78" height="78" fill="none" stroke="#9a9a9a"/>
-<line x1="488" y1="52" x2="488" y2="130" stroke="#d4d4d4"/><line x1="514" y1="52" x2="514" y2="130" stroke="#d4d4d4"/>
-<line x1="462" y1="78" x2="540" y2="78" stroke="#d4d4d4"/><line x1="462" y1="104" x2="540" y2="104" stroke="#d4d4d4"/>
-<rect x="462" y="52" width="26" height="26" fill="#0f766e"/>
-<text x="475" y="69" text-anchor="middle" fill="#ffffff" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="12px">3.0</text>
+<rect x="462" y="52" width="78" height="78" fill="none" style="stroke: var(--viz-line)"/>
+<line x1="488" y1="52" x2="488" y2="130" style="stroke: var(--viz-grid)"/><line x1="514" y1="52" x2="514" y2="130" style="stroke: var(--viz-grid)"/>
+<line x1="462" y1="78" x2="540" y2="78" style="stroke: var(--viz-grid)"/><line x1="462" y1="104" x2="540" y2="104" style="stroke: var(--viz-grid)"/>
+<rect x="462" y="52" width="26" height="26" style="fill: var(--viz-slate)"/>
+<text x="475" y="69" text-anchor="middle" style="fill: var(--color-bg)" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="12px">3.0</text>
 <text class="cv-sub" x="501" y="152" text-anchor="middle">one patch &#8594; one pixel</text>
 <text class="cv-sub" x="350" y="224" text-anchor="middle">the same nine weights sweep every position, lighting up wherever the filter's pattern appears</text>
 </svg>
@@ -108,45 +108,45 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
 <defs>
 <style>
-.av-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13px; }
-.av-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
-.av-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #52525b; font-size: 11px; }
+.av-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
+.av-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.av-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
 </style>
-<marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
+<marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
 </defs>
-<rect width="700" height="270" rx="6" fill="#fafafa"/>
+<rect width="700" height="270" rx="6" style="fill: var(--color-bg)"/>
 <text class="av-lbl" x="208" y="44" text-anchor="middle">keys</text>
 <text class="av-lbl" x="296" y="44" text-anchor="middle">values</text>
 <text class="av-lbl" x="372" y="44" text-anchor="middle">score q&#183;k/&#8730;d</text>
 <text class="av-lbl" x="525" y="44" text-anchor="middle">weights</text>
 <text class="av-sub" x="525" y="58" text-anchor="middle">sum to 1</text>
 <text class="av-lbl" x="70" y="120" text-anchor="middle">query q</text>
-<rect x="30" y="130" width="80" height="20" fill="#b8860b" fill-opacity="0.13" stroke="#b8860b"/>
-<line x1="50" y1="130" x2="50" y2="150" stroke="#d4d4d4"/><line x1="70" y1="130" x2="70" y2="150" stroke="#d4d4d4"/><line x1="90" y1="130" x2="90" y2="150" stroke="#d4d4d4"/>
+<rect x="30" y="130" width="80" height="20" fill-opacity="0.13" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
+<line x1="50" y1="130" x2="50" y2="150" style="stroke: var(--viz-grid)"/><line x1="70" y1="130" x2="70" y2="150" style="stroke: var(--viz-grid)"/><line x1="90" y1="130" x2="90" y2="150" style="stroke: var(--viz-grid)"/>
 <text class="av-sub" x="70" y="168" text-anchor="middle">the question</text>
-<line x1="112" y1="140" x2="166" y2="74" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
-<line x1="112" y1="140" x2="166" y2="118" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
-<line x1="112" y1="140" x2="166" y2="162" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
-<line x1="112" y1="140" x2="166" y2="206" stroke="#9a9a9a" stroke-dasharray="3 3" opacity="0.6"/>
+<line x1="112" y1="140" x2="166" y2="74" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
+<line x1="112" y1="140" x2="166" y2="118" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
+<line x1="112" y1="140" x2="166" y2="162" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
+<line x1="112" y1="140" x2="166" y2="206" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
 <g>
-<rect x="170" y="64" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
-<rect x="170" y="108" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
-<rect x="170" y="152" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
-<rect x="170" y="196" width="76" height="20" fill="#64748b" fill-opacity="0.08" stroke="#64748b"/>
-<line x1="189" y1="64" x2="189" y2="84" stroke="#d4d4d4"/><line x1="208" y1="64" x2="208" y2="84" stroke="#d4d4d4"/><line x1="227" y1="64" x2="227" y2="84" stroke="#d4d4d4"/>
-<line x1="189" y1="108" x2="189" y2="128" stroke="#d4d4d4"/><line x1="208" y1="108" x2="208" y2="128" stroke="#d4d4d4"/><line x1="227" y1="108" x2="227" y2="128" stroke="#d4d4d4"/>
-<line x1="189" y1="152" x2="189" y2="172" stroke="#d4d4d4"/><line x1="208" y1="152" x2="208" y2="172" stroke="#d4d4d4"/><line x1="227" y1="152" x2="227" y2="172" stroke="#d4d4d4"/>
-<line x1="189" y1="196" x2="189" y2="216" stroke="#d4d4d4"/><line x1="208" y1="196" x2="208" y2="216" stroke="#d4d4d4"/><line x1="227" y1="196" x2="227" y2="216" stroke="#d4d4d4"/>
+<rect x="170" y="64" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="170" y="108" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="170" y="152" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="170" y="196" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<line x1="189" y1="64" x2="189" y2="84" style="stroke: var(--viz-grid)"/><line x1="208" y1="64" x2="208" y2="84" style="stroke: var(--viz-grid)"/><line x1="227" y1="64" x2="227" y2="84" style="stroke: var(--viz-grid)"/>
+<line x1="189" y1="108" x2="189" y2="128" style="stroke: var(--viz-grid)"/><line x1="208" y1="108" x2="208" y2="128" style="stroke: var(--viz-grid)"/><line x1="227" y1="108" x2="227" y2="128" style="stroke: var(--viz-grid)"/>
+<line x1="189" y1="152" x2="189" y2="172" style="stroke: var(--viz-grid)"/><line x1="208" y1="152" x2="208" y2="172" style="stroke: var(--viz-grid)"/><line x1="227" y1="152" x2="227" y2="172" style="stroke: var(--viz-grid)"/>
+<line x1="189" y1="196" x2="189" y2="216" style="stroke: var(--viz-grid)"/><line x1="208" y1="196" x2="208" y2="216" style="stroke: var(--viz-grid)"/><line x1="227" y1="196" x2="227" y2="216" style="stroke: var(--viz-grid)"/>
 </g>
 <g>
-<rect x="258" y="64" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
-<rect x="258" y="108" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
-<rect x="258" y="152" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
-<rect x="258" y="196" width="76" height="20" fill="#0d9488" fill-opacity="0.08" stroke="#0d9488"/>
-<line x1="277" y1="64" x2="277" y2="84" stroke="#d4d4d4"/><line x1="296" y1="64" x2="296" y2="84" stroke="#d4d4d4"/><line x1="315" y1="64" x2="315" y2="84" stroke="#d4d4d4"/>
-<line x1="277" y1="108" x2="277" y2="128" stroke="#d4d4d4"/><line x1="296" y1="108" x2="296" y2="128" stroke="#d4d4d4"/><line x1="315" y1="108" x2="315" y2="128" stroke="#d4d4d4"/>
-<line x1="277" y1="152" x2="277" y2="172" stroke="#d4d4d4"/><line x1="296" y1="152" x2="296" y2="172" stroke="#d4d4d4"/><line x1="315" y1="152" x2="315" y2="172" stroke="#d4d4d4"/>
-<line x1="277" y1="196" x2="277" y2="216" stroke="#d4d4d4"/><line x1="296" y1="196" x2="296" y2="216" stroke="#d4d4d4"/><line x1="315" y1="196" x2="315" y2="216" stroke="#d4d4d4"/>
+<rect x="258" y="64" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="258" y="108" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="258" y="152" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<rect x="258" y="196" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
+<line x1="277" y1="64" x2="277" y2="84" style="stroke: var(--viz-grid)"/><line x1="296" y1="64" x2="296" y2="84" style="stroke: var(--viz-grid)"/><line x1="315" y1="64" x2="315" y2="84" style="stroke: var(--viz-grid)"/>
+<line x1="277" y1="108" x2="277" y2="128" style="stroke: var(--viz-grid)"/><line x1="296" y1="108" x2="296" y2="128" style="stroke: var(--viz-grid)"/><line x1="315" y1="108" x2="315" y2="128" style="stroke: var(--viz-grid)"/>
+<line x1="277" y1="152" x2="277" y2="172" style="stroke: var(--viz-grid)"/><line x1="296" y1="152" x2="296" y2="172" style="stroke: var(--viz-grid)"/><line x1="315" y1="152" x2="315" y2="172" style="stroke: var(--viz-grid)"/>
+<line x1="277" y1="196" x2="277" y2="216" style="stroke: var(--viz-grid)"/><line x1="296" y1="196" x2="296" y2="216" style="stroke: var(--viz-grid)"/><line x1="315" y1="196" x2="315" y2="216" style="stroke: var(--viz-grid)"/>
 </g>
 <g class="av-num">
 <text x="372" y="78" text-anchor="middle">2.0</text>
@@ -154,9 +154,9 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <text x="372" y="166" text-anchor="middle">&#8722;2.2</text>
 <text x="372" y="210" text-anchor="middle">1.1</text>
 </g>
-<line x1="402" y1="140" x2="456" y2="140" stroke="#9a9a9a" marker-end="url(#av-ar)"/>
+<line x1="402" y1="140" x2="456" y2="140" marker-end="url(#av-ar)" style="stroke: var(--viz-line)"/>
 <text class="av-sub" x="429" y="130" text-anchor="middle">softmax</text>
-<g fill="#b8860b" fill-opacity="0.75">
+<g fill-opacity="0.75" style="fill: var(--viz-gold)">
 <rect x="470" y="68" width="94" height="12"/>
 <rect x="470" y="112" width="7" height="12"/>
 <rect x="470" y="156" width="2.5" height="12"/>
@@ -168,13 +168,13 @@ $QK^\top$ contains every query-key score. Softmax turns each row into weights ov
 <text x="479" y="166">0.01</text>
 <text x="514" y="210">0.27</text>
 </g>
-<line x1="600" y1="74" x2="616" y2="136" stroke="#b8860b" stroke-width="1.3" opacity="0.85"/>
-<line x1="600" y1="118" x2="616" y2="139" stroke="#b8860b" stroke-width="1.3" opacity="0.3"/>
-<line x1="600" y1="162" x2="616" y2="141" stroke="#b8860b" stroke-width="1.3" opacity="0.2"/>
-<line x1="600" y1="206" x2="616" y2="144" stroke="#b8860b" stroke-width="1.3" opacity="0.55"/>
+<line x1="600" y1="74" x2="616" y2="136" stroke-width="1.3" opacity="0.85" style="stroke: var(--viz-gold)"/>
+<line x1="600" y1="118" x2="616" y2="139" stroke-width="1.3" opacity="0.3" style="stroke: var(--viz-gold)"/>
+<line x1="600" y1="162" x2="616" y2="141" stroke-width="1.3" opacity="0.2" style="stroke: var(--viz-gold)"/>
+<line x1="600" y1="206" x2="616" y2="144" stroke-width="1.3" opacity="0.55" style="stroke: var(--viz-gold)"/>
 <text class="av-lbl" x="651" y="120" text-anchor="middle">output</text>
-<rect x="618" y="130" width="66" height="20" fill="#0d9488" fill-opacity="0.15" stroke="#0d9488"/>
-<line x1="635" y1="130" x2="635" y2="150" stroke="#d4d4d4"/><line x1="651" y1="130" x2="651" y2="150" stroke="#d4d4d4"/><line x1="668" y1="130" x2="668" y2="150" stroke="#d4d4d4"/>
+<rect x="618" y="130" width="66" height="20" fill-opacity="0.15" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
+<line x1="635" y1="130" x2="635" y2="150" style="stroke: var(--viz-grid)"/><line x1="651" y1="130" x2="651" y2="150" style="stroke: var(--viz-grid)"/><line x1="668" y1="130" x2="668" y2="150" style="stroke: var(--viz-grid)"/>
 <text class="av-sub" x="350" y="234" text-anchor="middle">each row is one image location, its key matched against the query, its value carrying what the location contains</text>
 <text class="av-sub" x="350" y="252" text-anchor="middle">output = 0.67&#183;v&#8321; + 0.05&#183;v&#8322; + 0.01&#183;v&#8323; + 0.27&#183;v&#8324;, one row of softmax(QK&#7488;/&#8730;d)V</text>
 </svg>
@@ -205,6 +205,8 @@ IoU is 1 when the regions are identical and 0 when they are disjoint. It is used
 
 ## Notation
 
+In the figures, gold marks what the model predicts (queries and masks), green marks ground truth, and slate marks image features.
+
 | symbol | meaning |
 |---|---|
 | $I \in \mathbb{R}^{3\times H\times W}$ | input image. $H_l \times W_l$ is the size of the feature map used at decoder layer $l$ |
@@ -216,7 +218,7 @@ IoU is 1 when the regions are identical and 0 when they are disjoint. It is used
 | $\hat p_i(c)$ | predicted probability that query $i$ has class $c$ |
 | $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
 | $\widetilde{\mathbf{X}}_l$ | intermediate residual state immediately after adding the cross-attention output in layer $l$, before LayerNorm and the remaining sublayers |
-| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
+| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{Q}_l \in \mathbb{R}^{N\times C}$ comes from the queries, and $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
 | $Z_l$ | mask logits predicted at output $l$, one logit map per query |
 | $B_l(i,x)$ | binary gate for query $i$ at location $x$, obtained by resizing $Z_l$, applying the sigmoid, and thresholding at $0.5$ |
 | $\mathcal{M}_{l}(i,x)$ | additive attention mask built from $B_l(i,x)$. It is $0$ on allowed locations and $-\infty$ elsewhere |
@@ -304,11 +306,46 @@ So every matching prediction covers more than half of $g$. Now suppose two predi
 Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching, pairing segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/query_becomes_segment_poster.webp" width="1920" height="1080" aria-label="Animation of query refinement and the three segmentation outputs">
-<source data-src="/assets/m2f/query_becomes_segment.webm" type="video/webm">
-<source data-src="/assets/m2f/query_becomes_segment.mp4" type="video/mp4">
-</video>
-<figcaption>Fig. 1. An illustration of query refinement. Gold circles are query slots and gold fields are mask predictions. The fields sharpen across nine decoder layers. The arc represents self-attention, which lets queries exchange information. The apparent duplicate resolution is schematic. One-to-one training discourages duplicate predictions. The final panels show task-specific interpretations of the masks and classes. The paper trains a separate checkpoint for each task.</figcaption>
+<svg class="m2f-tasks" style="min-width: 560px" viewBox="0 0 720 236" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One street scene segmented three ways. Semantic segmentation merges two adjacent cars into one car region and labels sky and road. Instance segmentation keeps car 1 and car 2 apart and leaves sky and road unlabeled. Panoptic segmentation labels sky and road and keeps both cars apart.">
+<defs><style>
+.tk-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
+.tk-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.tk-in { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 11px; }
+</style></defs>
+<rect width="720" height="236" rx="6" style="fill: var(--color-bg)"/>
+<text class="tk-lbl" x="128.0" y="32" text-anchor="middle">semantic</text>
+<rect x="24" y="46" width="208" height="84" style="fill: var(--viz-slate); fill-opacity: 0.14"/>
+<rect x="24" y="130" width="208" height="44" style="fill: var(--viz-line); fill-opacity: 0.32"/>
+<text class="tk-in" x="222" y="64" text-anchor="end">sky</text>
+<text class="tk-in" x="222" y="164" text-anchor="end">road</text>
+<rect x="24" y="46" width="208" height="128" style="fill: none; stroke: var(--viz-grid)"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.55;" d="M 48 146 L 48 136 Q 48 132 52 132 L 62 132 L 70 120 L 98 120 L 108 132 L 120 132 Q 124 132 124 136 L 124 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.55;" cx="64" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.55;" cx="108" cy="147" r="6"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.55;" d="M 124 146 L 124 136 Q 124 132 128 132 L 138 132 L 146 120 L 174 120 L 184 132 L 196 132 Q 200 132 200 136 L 200 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.55;" cx="140" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.55;" cx="184" cy="147" r="6"/>
+<text class="tk-in" x="123" y="110" text-anchor="middle">car</text>
+<text class="tk-sub" x="128.0" y="196" text-anchor="middle">one class per pixel:</text>
+<text class="tk-sub" x="128.0" y="211" text-anchor="middle">the two cars merge</text>
+<text class="tk-lbl" x="360.0" y="32" text-anchor="middle">instance</text>
+<rect x="256" y="46" width="208" height="128" style="fill: none; stroke: var(--viz-grid)"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" d="M 280 146 L 280 136 Q 280 132 284 132 L 294 132 L 302 120 L 330 120 L 340 132 L 352 132 Q 356 132 356 136 L 356 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" cx="296" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" cx="340" cy="147" r="6"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" d="M 356 146 L 356 136 Q 356 132 360 132 L 370 132 L 378 120 L 406 120 L 416 132 L 428 132 Q 432 132 432 136 L 432 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" cx="372" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" cx="416" cy="147" r="6"/>
+<text class="tk-in" x="318" y="110" text-anchor="middle">car 1</text>
+<text class="tk-in" x="394" y="110" text-anchor="middle">car 2</text>
+<text class="tk-sub" x="360.0" y="196" text-anchor="middle">one mask per thing:</text>
+<text class="tk-sub" x="360.0" y="211" text-anchor="middle">sky and road left out</text>
+<text class="tk-lbl" x="592.0" y="32" text-anchor="middle">panoptic</text>
+<rect x="488" y="46" width="208" height="84" style="fill: var(--viz-slate); fill-opacity: 0.14"/>
+<rect x="488" y="130" width="208" height="44" style="fill: var(--viz-line); fill-opacity: 0.32"/>
+<text class="tk-in" x="686" y="64" text-anchor="end">sky</text>
+<text class="tk-in" x="686" y="164" text-anchor="end">road</text>
+<rect x="488" y="46" width="208" height="128" style="fill: none; stroke: var(--viz-grid)"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" d="M 512 146 L 512 136 Q 512 132 516 132 L 526 132 L 534 120 L 562 120 L 572 132 L 584 132 Q 588 132 588 136 L 588 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" cx="528" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.6; stroke: var(--color-text); stroke-width: 1.2;" cx="572" cy="147" r="6"/>
+<path style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" d="M 588 146 L 588 136 Q 588 132 592 132 L 602 132 L 610 120 L 638 120 L 648 132 L 660 132 Q 664 132 664 136 L 664 146 Z"/><circle style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" cx="604" cy="147" r="6"/><circle style="fill: var(--viz-gold); fill-opacity: 0.25; stroke: var(--color-text); stroke-width: 1.2;" cx="648" cy="147" r="6"/>
+<text class="tk-in" x="550" y="110" text-anchor="middle">car 1</text>
+<text class="tk-in" x="626" y="110" text-anchor="middle">car 2</text>
+<text class="tk-sub" x="592.0" y="196" text-anchor="middle">every pixel labeled,</text>
+<text class="tk-sub" x="592.0" y="211" text-anchor="middle">ids kept on things</text>
+</svg>
+<figcaption>Fig. 1. One street scene, three tasks. Semantic segmentation gives every pixel a class, so the two adjacent cars merge into one car region. Instance segmentation returns one mask per detected thing, each with a confidence score, and leaves sky and road unlabeled. Panoptic segmentation labels every pixel and keeps the two cars apart.</figcaption>
 </figure>
 
 The output semantics differ, but the underlying problem is still pixel grouping. Mask2Former asks whether one architecture can serve all three tasks.
@@ -343,24 +380,11 @@ $$
 
 The same prediction format supports all three tasks. Semantic targets contain one mask per class present in the image. Instance targets contain one mask per object. Panoptic targets contain one mask per thing or stuff segment. The architecture and loss keep the same form, while targets, checkpoints, and post-processing remain task-specific.
 
-**Example.** For the puppy below, one query predicts class $c_i = \texttt{dog}$ and a mask $m_i$. A small binary version of that mask looks like this.
-
-$$
-c_i = \texttt{dog}, \qquad
-m_i \;\longrightarrow\;
-\begin{pmatrix}
-0 & 0 & 1 & 1 & 0\\
-0 & 1 & 1 & 1 & 1\\
-0 & 1 & 1 & 1 & 0\\
-0 & 0 & 1 & 0 & 0
-\end{pmatrix}.
-$$
-
-The model emits mask probabilities rather than hard zeros and ones.
+**Example.** For the puppy in Fig. 2, one query predicts class $c_i = \texttt{dog}$ and a mask $m_i$. The mask holds a probability for every pixel rather than hard zeros and ones. Thresholding it at $0.5$ gives a binary mask.
 
 <figure class="viz">
-<img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="A photograph of a French bulldog with its predicted mask in gold, followed by a coarse grid view of the same mask.">
-<figcaption>Fig. 2. One dog query and its predicted mask. The right panel shows a coarse binary view of the same mask. A Swin-L checkpoint trained on COCO panoptic segmentation processed the public-domain photograph.</figcaption>
+<img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="A photograph of a French bulldog with its predicted mask in gold, and beside it the soft mask, gold where the probability is high, with its 0.5 level outlined.">
+<figcaption>Fig. 2. The dog query on a public-domain photograph, from the Swin-L checkpoint trained on COCO panoptic segmentation. Left, its thresholded mask. Right, the soft mask m<sub>i</sub>, off-white at 0 and gold at 1, at a quarter of the input resolution, with the 0.5 level drawn in black. The class head gives p&#770;<sub>i</sub>(dog) = 0.999. Away from the edge the probabilities sit near 0 or 1, so the uncertainty lives in a thin band along the boundary.</figcaption>
 </figure>
 
 Universal architectures still trailed specialized instance systems in 2021. MaskFormer reached 40.1 instance AP with a Swin-L backbone, compared with 49.5 for Swin-HTC++ [[Chen et al. 2019](#ref-chen2019), [Liu et al. 2021](#ref-liu2021)]. MaskFormer also trained for 300 epochs and its dense mask losses limited training to one image per 32 GB GPU. Mask2Former's thesis was that the paradigm was right and the decoder and the recipe were wrong.
@@ -551,10 +575,77 @@ Once the assignment is fixed, it determines which target supplies each query's t
 An independent nearest-target choice could assign two queries to one object and leave another unmatched. One-to-one training discourages these duplicates and enables inference without non-maximum suppression.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/hungarian_matching_poster.webp" width="1920" height="1080" aria-label="Animation of Hungarian matching using cords between predictions and targets">
-<source data-src="/assets/m2f/hungarian_matching.mp4" type="video/mp4">
-</video>
-<figcaption>Fig. 3. A geometric analogy for bipartite matching. Gold shapes are predictions and green shapes are targets. Each cord stands for the combined class, BCE, and Dice cost. The positions, cord lengths, and swaps are schematic. They are not learned coordinates, measured costs, or a trace of the solver. The assignment chooses one prediction for each target and leaves the others unmatched. Reordering the prediction list leaves the minimum cost unchanged.</figcaption>
+<svg class="m2f-match" style="min-width: 560px" viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two copies of the 3 by 3 cost matrix with rows 4 1 3, 2 0 5 and 3 2 2. Taking the cheapest pair first picks costs 0, 2 and 4 for a total of 6. The optimal assignment picks costs 1, 2 and 2 for a total of 5.">
+<defs><style>
+.hm-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
+.hm-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.hm-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 15px; }
+</style></defs>
+<rect width="700" height="260" rx="6" style="fill: var(--color-bg)"/>
+<text class="hm-lbl" x="214.0" y="38" text-anchor="middle">cheapest pair first</text>
+<text class="hm-sub" x="214.0" y="58" text-anchor="middle" style="fill: var(--viz-green)">target</text>
+<text class="hm-sub" x="170.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">1</text>
+<text class="hm-sub" x="214.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">2</text>
+<text class="hm-sub" x="258.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">3</text>
+<text class="hm-sub" x="136" y="108.0" text-anchor="middle" style="fill: var(--viz-gold-text)">1</text>
+<text class="hm-sub" x="136" y="152.0" text-anchor="middle" style="fill: var(--viz-gold-text)">2</text>
+<text class="hm-sub" x="136" y="196.0" text-anchor="middle" style="fill: var(--viz-gold-text)">3</text>
+<text class="hm-sub" transform="translate(118 148.0) rotate(-90)" text-anchor="middle" style="fill: var(--viz-gold-text)">prediction</text>
+<rect x="148" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="192" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="236" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="148" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="192" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="236" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="148" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="192" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="236" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="194" y="128" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
+<rect x="238" y="172" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
+<rect x="150" y="84" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
+<text class="hm-num" x="170.0" y="109.0" text-anchor="middle">4</text>
+<text class="hm-num" x="214.0" y="109.0" text-anchor="middle">1</text>
+<text class="hm-num" x="258.0" y="109.0" text-anchor="middle">3</text>
+<text class="hm-num" x="170.0" y="153.0" text-anchor="middle">2</text>
+<text class="hm-num" x="214.0" y="153.0" text-anchor="middle">0</text>
+<text class="hm-num" x="258.0" y="153.0" text-anchor="middle">5</text>
+<text class="hm-num" x="170.0" y="197.0" text-anchor="middle">3</text>
+<text class="hm-num" x="214.0" y="197.0" text-anchor="middle">2</text>
+<text class="hm-num" x="258.0" y="197.0" text-anchor="middle">2</text>
+<text class="hm-lbl" x="214.0" y="242" text-anchor="middle" style="fill: var(--viz-ember)">J = 0 + 2 + 4 = 6</text>
+<text class="hm-lbl" x="486.0" y="38" text-anchor="middle">optimal assignment</text>
+<text class="hm-sub" x="486.0" y="58" text-anchor="middle" style="fill: var(--viz-green)">target</text>
+<text class="hm-sub" x="442.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">1</text>
+<text class="hm-sub" x="486.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">2</text>
+<text class="hm-sub" x="530.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">3</text>
+<text class="hm-sub" x="408" y="108.0" text-anchor="middle" style="fill: var(--viz-gold-text)">1</text>
+<text class="hm-sub" x="408" y="152.0" text-anchor="middle" style="fill: var(--viz-gold-text)">2</text>
+<text class="hm-sub" x="408" y="196.0" text-anchor="middle" style="fill: var(--viz-gold-text)">3</text>
+<text class="hm-sub" transform="translate(390 148.0) rotate(-90)" text-anchor="middle" style="fill: var(--viz-gold-text)">prediction</text>
+<rect x="420" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="464" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="508" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="420" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="464" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="508" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="420" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="464" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="508" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
+<rect x="466" y="84" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
+<rect x="422" y="128" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
+<rect x="510" y="172" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
+<text class="hm-num" x="442.0" y="109.0" text-anchor="middle">4</text>
+<text class="hm-num" x="486.0" y="109.0" text-anchor="middle">1</text>
+<text class="hm-num" x="530.0" y="109.0" text-anchor="middle">3</text>
+<text class="hm-num" x="442.0" y="153.0" text-anchor="middle">2</text>
+<text class="hm-num" x="486.0" y="153.0" text-anchor="middle">0</text>
+<text class="hm-num" x="530.0" y="153.0" text-anchor="middle">5</text>
+<text class="hm-num" x="442.0" y="197.0" text-anchor="middle">3</text>
+<text class="hm-num" x="486.0" y="197.0" text-anchor="middle">2</text>
+<text class="hm-num" x="530.0" y="197.0" text-anchor="middle">2</text>
+<text class="hm-lbl" x="486.0" y="242" text-anchor="middle" style="fill: var(--color-text)">J = 1 + 2 + 2 = 5</text>
+</svg>
+<figcaption>Fig. 3. Matching is a global choice. The costs are the worked 3 by 3 example in the fold above. Taking the cheapest pair first, cost 0, and then the cheapest remaining pair, cost 2, forces the last pair to cost 4, a total of 6. The optimal assignment pays 1 + 2 + 2 = 5, and the Hungarian algorithm finds it. With more predictions than targets, zero-cost no-object columns make the matrix square, and the predictions placed on them are trained as no-object.</figcaption>
 </figure>
 
 ### 3.2 The training loss
@@ -680,60 +771,60 @@ The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{c
 <svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former architecture from image and backbone features to pixel decoder, Transformer decoder, class predictions, and mask predictions.">
 <defs>
 <style>
-.lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #171717; font-size: 13.5px; }
-.sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: #6b6b6b; font-size: 11px; }
-.tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
-.box { fill: #ffffff; stroke: #d4d4d4; stroke-width: 1; }
-.flow { stroke: #9a9a9a; stroke-width: 1.3; fill: none; }
+.ar-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13.5px; }
+.ar-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.ar-tag { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 10.5px; }
+.ar-box { fill: var(--viz-box); stroke: var(--viz-grid); stroke-width: 1; }
+.ar-flow { stroke: var(--viz-line); stroke-width: 1.3; fill: none; }
 </style>
-<marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9a9a9a"/></marker>
-<marker id="ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b8860b"/></marker>
-<marker id="at" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0d9488"/></marker>
-<marker id="as" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker>
+<marker id="ar-a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
+<marker id="ar-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker>
+<marker id="ar-as" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-slate)"/></marker>
 </defs>
-<rect width="720" height="260" rx="6" fill="#fafafa"/>
-<rect class="box" x="24" y="48" width="58" height="48" rx="4"/>
-<text class="lbl" x="53" y="76" text-anchor="middle">Image</text>
-<line class="flow" x1="82" y1="72" x2="104" y2="72" marker-end="url(#a)"/>
-<rect class="box" x="106" y="44" width="94" height="56" rx="4"/>
-<text class="lbl" x="153" y="68" text-anchor="middle">Backbone</text>
-<text class="sub" x="153" y="85" text-anchor="middle">ResNet / Swin</text>
-<line class="flow" x1="200" y1="72" x2="222" y2="72" marker-end="url(#a)"/>
-<rect class="box" x="224" y="44" width="110" height="56" rx="4"/>
-<text class="lbl" x="279" y="68" text-anchor="middle">Pixel decoder</text>
-<text class="sub" x="279" y="85" text-anchor="middle">MSDeformAttn</text>
-<line class="flow" x1="334" y1="56" x2="422" y2="56" marker-end="url(#a)"/>
-<line class="flow" x1="334" y1="72" x2="422" y2="72" marker-end="url(#a)"/>
-<line class="flow" x1="334" y1="88" x2="422" y2="88" marker-end="url(#a)"/>
-<text class="tag" x="378" y="52" text-anchor="middle" fill="#6b6b6b">1/32</text>
-<text class="tag" x="378" y="68" text-anchor="middle" fill="#6b6b6b">1/16</text>
-<text class="tag" x="378" y="84" text-anchor="middle" fill="#6b6b6b">1/8</text>
-<rect x="424" y="24" width="190" height="112" rx="8" fill="#0d9488" fill-opacity="0.05" stroke="#0d9488" stroke-width="1.4"/>
-<text class="lbl" x="519" y="46" text-anchor="middle">Transformer decoder</text>
-<rect class="box" x="436" y="58" width="100" height="60" rx="5"/>
-<text class="tag" x="486" y="76" text-anchor="middle" fill="#0f766e">masked attn</text>
-<text class="tag" x="486" y="92" text-anchor="middle" fill="#171717">self-attn</text>
-<text class="tag" x="486" y="108" text-anchor="middle" fill="#171717">FFN</text>
-<text class="lbl" x="576" y="80" text-anchor="middle">&#215; 9</text>
-<text class="sub" x="576" y="96" text-anchor="middle">layers</text>
-<text class="tag" x="576" y="112" text-anchor="middle" fill="#6b6b6b">coarse to fine</text>
-<g fill="#b8860b"><circle cx="392" cy="166" r="4.2"/><circle cx="392" cy="178" r="4.2"/><circle cx="392" cy="190" r="4.2"/></g>
-<text class="tag" x="392" y="210" text-anchor="middle" fill="#8a6508">N learned queries</text>
-<path class="flow" d="M 404 178 C 436 178, 452 158, 458 140" stroke="#b8860b" marker-end="url(#ag)"/>
-<text class="tag" x="669" y="34" text-anchor="middle" fill="#6b6b6b">what</text>
-<rect class="box" x="622" y="40" width="94" height="42" rx="4"/>
-<text class="lbl" x="669" y="59" text-anchor="middle">Class head</text>
-<text class="sub" x="669" y="74" text-anchor="middle">c &#8712; {1..K, &#8709;}</text>
-<text class="tag" x="669" y="102" text-anchor="middle" fill="#6b6b6b">where</text>
-<rect class="box" x="622" y="108" width="94" height="42" rx="4"/>
-<text class="lbl" x="669" y="127" text-anchor="middle">Mask head</text>
-<text class="sub" x="669" y="142" text-anchor="middle">&#963;(MLP(q)&#183;&#949;)</text>
-<path class="flow" d="M 614 60 C 617 60, 619 60, 622 61" stroke="#b8860b" marker-end="url(#ag)"/>
-<path class="flow" d="M 614 120 C 617 122, 619 126, 622 128" stroke="#b8860b" marker-end="url(#ag)"/>
-<path d="M 634 150 C 634 170, 628 178, 608 178 L 546 178 C 528 178, 522 170, 522 146" fill="none" stroke="#0d9488" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#at)"/>
-<text class="tag" x="578" y="196" text-anchor="middle" fill="#0f766e">mask &#8594; next layer's attention mask</text>
-<path d="M 279 100 L 279 226 L 690 226 L 690 154" fill="none" stroke="#64748b" stroke-width="1.3" marker-end="url(#as)"/>
-<text class="tag" x="470" y="240" text-anchor="middle" fill="#64748b">&#949; per-pixel embeddings &#183; stride 4</text>
+<rect width="720" height="260" rx="6" style="fill: var(--color-bg)"/>
+<rect class="ar-box" x="24" y="48" width="58" height="48" rx="4"/>
+<text class="ar-lbl" x="53" y="76" text-anchor="middle">Image</text>
+<line class="ar-flow" x1="82" y1="72" x2="104" y2="72" marker-end="url(#ar-a)"/>
+<rect class="ar-box" x="106" y="44" width="94" height="56" rx="4"/>
+<text class="ar-lbl" x="153" y="68" text-anchor="middle">Backbone</text>
+<text class="ar-sub" x="153" y="85" text-anchor="middle">ResNet / Swin</text>
+<line class="ar-flow" x1="200" y1="72" x2="222" y2="72" marker-end="url(#ar-a)"/>
+<rect class="ar-box" x="224" y="44" width="110" height="56" rx="4"/>
+<text class="ar-lbl" x="279" y="68" text-anchor="middle">Pixel decoder</text>
+<text class="ar-sub" x="279" y="85" text-anchor="middle">MSDeformAttn</text>
+<line class="ar-flow" x1="334" y1="56" x2="422" y2="56" marker-end="url(#ar-a)"/>
+<line class="ar-flow" x1="334" y1="72" x2="422" y2="72" marker-end="url(#ar-a)"/>
+<line class="ar-flow" x1="334" y1="88" x2="422" y2="88" marker-end="url(#ar-a)"/>
+<text class="ar-tag" x="378" y="52" text-anchor="middle" style="fill: var(--color-text-muted)">1/32</text>
+<text class="ar-tag" x="378" y="68" text-anchor="middle" style="fill: var(--color-text-muted)">1/16</text>
+<text class="ar-tag" x="378" y="84" text-anchor="middle" style="fill: var(--color-text-muted)">1/8</text>
+<rect x="424" y="24" width="190" height="112" rx="8" fill="none" stroke-width="1.4" style="stroke: var(--viz-line)"/>
+<text class="ar-lbl" x="519" y="46" text-anchor="middle">Transformer decoder</text>
+<rect class="ar-box" x="436" y="58" width="100" height="60" rx="5"/>
+<text class="ar-tag" x="486" y="76" text-anchor="middle" style="fill: var(--viz-gold-text)">masked attn</text>
+<text class="ar-tag" x="486" y="92" text-anchor="middle" style="fill: var(--color-text)">self-attn</text>
+<text class="ar-tag" x="486" y="108" text-anchor="middle" style="fill: var(--color-text)">FFN</text>
+<text class="ar-lbl" x="576" y="80" text-anchor="middle">&#215; 9</text>
+<text class="ar-sub" x="576" y="96" text-anchor="middle">layers</text>
+<text class="ar-tag" x="576" y="112" text-anchor="middle" style="fill: var(--color-text-muted)">32 &#8594; 16 &#8594; 8</text>
+<text class="ar-tag" x="576" y="126" text-anchor="middle" style="fill: var(--color-text-muted)">repeated &#215;3</text>
+<g style="fill: var(--viz-gold)"><circle cx="392" cy="166" r="4.2"/><circle cx="392" cy="178" r="4.2"/><circle cx="392" cy="190" r="4.2"/></g>
+<text class="ar-tag" x="392" y="210" text-anchor="middle" style="fill: var(--viz-gold-text)">N learned queries</text>
+<path class="ar-flow" d="M 404 178 C 436 178, 452 158, 458 140" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
+<text class="ar-tag" x="669" y="34" text-anchor="middle" style="fill: var(--color-text-muted)">what</text>
+<rect class="ar-box" x="622" y="40" width="94" height="42" rx="4"/>
+<text class="ar-lbl" x="669" y="59" text-anchor="middle">Class head</text>
+<text class="ar-sub" x="669" y="74" text-anchor="middle">softmax over K+1</text>
+<text class="ar-tag" x="669" y="102" text-anchor="middle" style="fill: var(--color-text-muted)">where</text>
+<rect class="ar-box" x="622" y="108" width="94" height="42" rx="4"/>
+<text class="ar-lbl" x="669" y="127" text-anchor="middle">Mask head</text>
+<text class="ar-sub" x="669" y="142" text-anchor="middle">&#963;(MLP(q)&#183;&#8496;<tspan font-size="8" dy="3">pixel</tspan><tspan dy="-3">)</tspan></text>
+<path class="ar-flow" d="M 614 60 C 617 60, 619 60, 622 61" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
+<path class="ar-flow" d="M 614 120 C 617 122, 619 126, 622 128" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
+<path d="M 634 150 C 634 170, 628 178, 608 178 L 546 178 C 528 178, 522 170, 522 146" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
+<text class="ar-tag" x="578" y="196" text-anchor="middle" style="fill: var(--viz-gold-text)">mask &#8594; next layer's attention mask</text>
+<path d="M 279 100 L 279 226 L 690 226 L 690 154" fill="none" stroke-width="1.3" marker-end="url(#ar-as)" style="stroke: var(--viz-slate)"/>
+<text class="ar-tag" x="470" y="240" text-anchor="middle" style="fill: var(--viz-slate)">&#8496;<tspan font-size="8" dy="3">pixel</tspan><tspan dy="-3"> per-pixel embeddings &#183; stride 4</tspan></text>
 </svg>
 <figcaption>Fig. 4. Mask2Former's full pipeline. The pixel decoder produces features at strides 32, 16, and 8. The Transformer decoder reads one scale per layer and repeats the cycle three times. Each query produces a class distribution and a mask. The mask is also resized, thresholded at 0.5, and used to restrict the next layer's cross-attention.</figcaption>
 </figure>
@@ -852,11 +943,56 @@ The paper's R50 ablation on COCO compares four updates. Plain cross-attention re
 Additive attention masking already existed in Transformer decoders [[Vaswani et al. 2017](#ref-vaswani2017)]. Mask2Former makes the mask spatial, query-specific, and dependent on the previous mask prediction. The prediction restricts the next read, and the next query state produces a new prediction.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/masked_attention_poster.webp" width="1920" height="1080" aria-label="Animation of masked attention using a stencil over image locations">
-<source data-src="/assets/m2f/masked_attention.webm" type="video/webm">
-<source data-src="/assets/m2f/masked_attention.mp4" type="video/mp4">
-</video>
-<figcaption>Fig. 5. A masked-attention analogy. Strand width represents attention weight and the plate represents the previous mask. Blocking a location gives it zero weight. Every surviving strand is multiplied by the same normalization factor, so the ratios between allowed weights are preserved. The opening changes after each layer. If it becomes empty, the implementation removes the restriction for every head of that query for one layer.</figcaption>
+<svg class="m2f-mask" style="min-width: 560px" viewBox="0 0 700 296" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The four attention scores of Fig. 0b with a mask that allows locations 1 and 4. Standard softmax gives weights 0.67, 0.05, 0.01 and 0.27. With the mask, locations 2 and 3 get weight 0 and the allowed weights become 0.71 and 0.29, keeping their ratio of 2.46.">
+<defs><style>
+.ma-lbl { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text); font-size: 13px; }
+.ma-sub { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+.ma-num { font-family: Geist, ui-sans-serif, system-ui, sans-serif; fill: var(--color-text-muted); font-size: 11px; }
+</style></defs>
+<rect width="700" height="296" rx="6" style="fill: var(--color-bg)"/>
+<text class="ma-lbl" x="70" y="44" text-anchor="middle">gate B</text>
+<text class="ma-sub" x="70" y="58" text-anchor="middle">previous mask</text>
+<text class="ma-lbl" x="160" y="44" text-anchor="middle">score</text>
+<text class="ma-sub" x="160" y="58" text-anchor="middle">from Fig. 0b</text>
+<text class="ma-lbl" x="240" y="44" text-anchor="middle">added &#8499;</text>
+<text class="ma-lbl" x="380" y="44" text-anchor="middle">softmax</text>
+<text class="ma-sub" x="380" y="58" text-anchor="middle">without the mask</text>
+<text class="ma-lbl" x="570" y="44" text-anchor="middle">softmax</text>
+<text class="ma-sub" x="570" y="58" text-anchor="middle">with the mask</text>
+<rect x="50" y="72" width="40" height="20" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--viz-gold)"/>
+<text class="ma-num" x="70" y="86" text-anchor="middle">1</text>
+<text class="ma-num" x="160" y="86" text-anchor="middle">2.0</text>
+<text class="ma-num" x="240" y="86" text-anchor="middle">0</text>
+<rect x="330" y="76" width="93.6" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="429.6" y="86">0.67</text>
+<rect x="520" y="76" width="99.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="625.5" y="86">0.71</text>
+<rect x="50" y="116" width="40" height="20" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/>
+<text class="ma-num" x="70" y="130" text-anchor="middle">0</text>
+<text class="ma-num" x="160" y="130" text-anchor="middle">&#8722;0.6</text>
+<text class="ma-num" x="240" y="130" text-anchor="middle">&#8722;&#8734;</text>
+<rect x="330" y="120" width="7.0" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="343.0" y="130">0.05</text>
+<text class="ma-num" x="520" y="130">0</text>
+<rect x="50" y="160" width="40" height="20" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/>
+<text class="ma-num" x="70" y="174" text-anchor="middle">0</text>
+<text class="ma-num" x="160" y="174" text-anchor="middle">&#8722;2.2</text>
+<text class="ma-num" x="240" y="174" text-anchor="middle">&#8722;&#8734;</text>
+<rect x="330" y="164" width="2.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="338.5" y="174">0.01</text>
+<text class="ma-num" x="520" y="174">0</text>
+<rect x="50" y="204" width="40" height="20" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--viz-gold)"/>
+<text class="ma-num" x="70" y="218" text-anchor="middle">1</text>
+<text class="ma-num" x="160" y="218" text-anchor="middle">1.1</text>
+<text class="ma-num" x="240" y="218" text-anchor="middle">0</text>
+<rect x="330" y="208" width="38.1" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="374.1" y="218">0.27</text>
+<rect x="520" y="208" width="40.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
+<text class="ma-num" x="566.5" y="218">0.29</text>
+<text class="ma-sub" x="350" y="256" text-anchor="middle">blocked locations get score &#8722;&#8734; and weight 0, and both allowed weights grow by the same factor, about 1.06</text>
+<text class="ma-sub" x="350" y="276" text-anchor="middle">so their ratio stays exp(2.0 &#8722; 1.1) &#8776; 2.46, with or without the mask</text>
+</svg>
+<figcaption>Fig. 5. Masked attention on the four scores of Fig. 0b. The previous mask allows locations 1 and 4. Locations 2 and 3 receive &#8722;&#8734; from &#8499;, so their weights become 0 and softmax renormalizes over the allowed set. Both surviving weights grow by the same factor, so their ratio is unchanged. If a query's mask is empty, the implementation removes the restriction for every head of that query for one layer.</figcaption>
 </figure>
 
 ### 5.3 Gradients and empty masks
@@ -916,13 +1052,6 @@ Cross-attention cost grows with the number of image tokens. Its main attention o
 Mask2Former reads one scale per decoder layer. Layers 1, 2, and 3 use strides 32, 16, and 8, and the cycle repeats twice more. Feeding all three scales to every layer reaches 44.0 AP at 247 GFLOPs. Using only stride 8 reaches the same AP at 239 GFLOPs. The round-robin schedule reaches 43.7 AP at 226 GFLOPs, trading 0.3 AP for lower cost. Removing high-resolution features lowers AP by 2.2.
 
 Each feature also receives DETR's two-dimensional sinusoidal position encoding and a learned embedding that identifies its scale. The position coordinates are normalized per axis before the sine and cosine features are formed. The scale embedding follows Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)].
-
-<figure class="viz">
-<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/scales_breathe_poster.webp" width="1920" height="1080" aria-label="Animation of a query reading three feature scales from coarse to fine">
-<source data-src="/assets/m2f/scales_breathe.mp4" type="video/mp4">
-</video>
-<figcaption>Fig. 6. Feature maps at strides 32, 16, and 8. Finer maps retain more small-object detail but contain more tokens. The fading duckling is an analogy for weaker localization at coarse resolution, not a claim that the feature contains no object information. The decoder reads one scale per layer and repeats the cycle three times. The sagging slab is a cost analogy for feeding every scale to every layer, not a proportional timing measurement.</figcaption>
-</figure>
 
 ### 6.3 The pixel decoder
 
@@ -1018,38 +1147,35 @@ Independent point sets make the covariance term zero. Shared points can make it 
 This training sampler is intentionally nonuniform and applies no importance correction. Its selected coordinates are treated as fixed when gradients are computed, so it does not provide an unbiased estimate of the dense loss. Instead, it concentrates the stochastic training signal on uncertain regions.
 
 <figure class="viz">
-<video data-lazy loop muted playsinline preload="none" poster="/assets/m2f/shoreline_probes_poster.webp" width="1920" height="1080" aria-label="Animation of uniform matching points and prediction-dependent uncertain training points">
-<source data-src="/assets/m2f/shoreline_probes.webm" type="video/webm">
-<source data-src="/assets/m2f/shoreline_probes.mp4" type="video/mp4">
-</video>
-<figcaption>Fig. 7. Point sampling for matching and training. The shoreline is a hard-mask analogy, not the literal BCE or Dice loss. The balance represents equality in expectation for a uniform additive estimator. Matching reuses one uniform coordinate set across every cost. Training keeps 75 percent prediction-uncertain points and adds 25 percent fresh uniform points with equal loss weight. Selection never reads the ground truth. The final lattice represents 12,544 coordinates.</figcaption>
+<img src="/assets/m2f/point_sampling.webp" width="1572" height="568" loading="lazy" decoding="async" alt="Two copies of the dog photograph with sampled points. Left, uniform points over the whole image. Right, gold points concentrated along the predicted outline of the dog, plus a few uniform points.">
+<figcaption>Fig. 6. The two point rules on the dog prediction of Fig. 2. Left, matching: uniform points, one set shared by every mask in the image. Right, training: of 3K<sub>pt</sub> uniform candidates, the 0.75K<sub>pt</sub> whose logits are closest to zero (gold), plus 0.25K<sub>pt</sub> fresh uniform points (dark). The gold line is the prediction's 0.5 level. Selection reads only the prediction, so the chosen points follow its boundary and its uncertain interior, not the true outline. The figure draws K<sub>pt</sub> = 400 points, and training uses 12,544.</figcaption>
 </figure>
 
 ### 8.3 Point-sampling ablation
 
-| matching on | training loss on | AP (COCO) | mIoU (ADE20K) | memory |
-|---|---|---|---|---|
-| masks | masks | 41.0 | 45.9 | 18 GB |
-| masks | points | 41.0 | 45.9 | **6 GB** |
-| points | masks | 43.1 | **47.3** | 18 GB |
-| **points** | **points** | **43.7** | 47.2 | **6 GB** |
+| matching on | training loss on | AP (COCO) | mIoU (ADE20K) | training memory (GB) |
+|---|---|---:|---:|---:|
+| masks | masks | 41.0 | 45.9 | 18 |
+| masks | points | 41.0 | 45.9 | **6** |
+| points | masks | 43.1 | **47.3** | 18 |
+| points | points (default) | **43.7** | 47.2 | **6** |
 
 Point-sampled training cuts reported memory from 18 GB to 6 GB in the paper's R50 COCO ablation without lowering AP or mIoU in the dense-matching comparison. Point-based matching provides the larger accuracy gain, including 2.1 AP with dense training. Why it improves the assignment is left open.
 
 ## 9. Training recipe
 
-The table compares Mask2Former's training recipe with MaskFormer's. In the decoder row, SA, CA, and MA abbreviate self-attention, cross-attention, and masked attention.
+The table compares Mask2Former's training recipe with MaskFormer's. Both use the AdamW optimizer [[Loshchilov & Hutter 2019](#ref-loshchilov2019)]. In the decoder row, SA, CA, and MA abbreviate self-attention, cross-attention, and masked attention.
 
 | setting | MaskFormer | Mask2Former |
 |---|---|---|
-| optimizer | AdamW [[Loshchilov & Hutter 2019](#ref-loshchilov2019)], lr $10^{-4}$ | AdamW, lr $10^{-4}$ |
-| weight decay | $10^{-4}$ | **0.05** |
+| optimizer | AdamW, lr $10^{-4}$ | AdamW, lr $10^{-4}$ |
+| weight decay | $10^{-4}$ | 0.05 |
 | backbone lr multiplier | 0.1 (CNN backbones) | 0.1 (CNN and Transformer backbones) |
-| schedule (COCO) | 300 epochs at batch 64 | **50 epochs** at batch 16, lr ×0.1 at 90% and 95% of steps |
-| augmentation | standard scale and crop | **LSJ** (large-scale jittering) [[Ghiasi et al. 2021](#ref-ghiasi2021)], scale 0.1 to 2.0 with a fixed $1024^2$ crop |
-| mask loss | focal ($\lambda{=}20$) + dice ($\lambda{=}1$), dense | **BCE ($\lambda{=}5$) + dice ($\lambda{=}5$)** on 12,544 points |
-| $\lambda_{\text{cls}}$ | 1.0 | 2.0, with a 0.1 no-object multiplier |
-| decoder | 6 layers, SA→CA→FFN, dropout 0.1, stride 32 only, zero-init queries | **9 layers, MA→SA→FFN, no dropout, strides {32,16,8}×3, learnable supervised queries** |
+| schedule (COCO) | 300 epochs at batch 64 | 50 epochs at batch 16, lr ×0.1 at 90% and 95% of steps |
+| augmentation | standard scale and crop | LSJ (large-scale jittering) [[Ghiasi et al. 2021](#ref-ghiasi2021)], scale 0.1 to 2.0 with a fixed $1024^2$ crop |
+| mask loss | focal ($\lambda{=}20$) + Dice ($\lambda{=}1$), dense | BCE ($\lambda{=}5$) + Dice ($\lambda{=}5$) on 12,544 points |
+| $\lambda_{\text{cls}}$ | 1.0 | 2.0 |
+| decoder | 6 layers, SA→CA→FFN, dropout 0.1, stride 32 only, zero-init queries | 9 layers, MA→SA→FFN, no dropout, strides {32,16,8}×3, learnable supervised queries |
 
 COCO inference resizes the shorter image side to 800 pixels and caps the longer side at 1333. Most models use 100 queries. The largest panoptic and instance models use 200. In the R50 ablation, 100 queries gives the best AP and mIoU, while 200 raises PQ from 51.9 to 52.2. The best setting depends on how many segments an image contains.
 
@@ -1078,9 +1204,9 @@ The implementation uses $\varepsilon = 10^{-6}$, so an empty foreground scores z
 
 The largest models reported in the paper achieve the following results.
 
-| task / dataset | Mask2Former (Swin-L) | previous best | margin |
+| task / dataset | Mask2Former (Swin-L) | compared with | margin |
 |---|---|---|---|
-| Panoptic, COCO val | **57.8 PQ** | MaskFormer 52.7, K-Net 54.6 | +5.1 / +3.2 |
+| Panoptic, COCO val | **57.8 PQ** | MaskFormer 52.7, <span style="white-space: nowrap">K-Net 54.6</span> | +5.1 / +3.2 |
 | Instance, COCO val | **50.1 AP** (36.2 boundary AP) | Swin-HTC++ 49.5 (34.1) | +0.6 (+2.1) |
 | Semantic, ADE20K val | **57.7 mIoU** (Swin-L, FaPN, multi-scale inference) | [BEiT](#ref-bao2022) 57.0 | +0.7 at less than half the parameters |
 
@@ -1100,12 +1226,12 @@ The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. 
 
 The table reports controlled R50 ablations across all three tasks.
 
-| change (removed or varied) | ΔAP | ΔPQ | ΔmIoU | takeaway |
-|---|---|---|---|---|
+| change (removed or varied) | ΔAP (COCO) | ΔPQ (COCO) | ΔmIoU (ADE20K) | takeaway |
+|---|---:|---:|---:|---|
 | remove masked attention | **−5.9** | **−4.8** | −1.7 | largest AP and PQ drop |
+| replace point matching with dense masks* | −2.7 | −1.1 | −1.3 | point matching improves all three tasks |
 | remove multi-scale high-res features | −2.2 | −1.7 | −1.1 | finer features matter |
-| replace point matching with dense masks | −2.7 | −1.1 | −1.3* | point matching improves all three tasks |
-| replace supervised learnable features with zero-init | −0.8 | −0.7 | −1.8 | direct supervision of initial queries matters |
+| replace supervised learnable features with zero-init | −0.8 | −0.7 | **−1.8** | direct supervision of initial queries matters |
 | restore dropout | −0.7 | −0.6 | 0.0 | dropout hurts AP and PQ in this setup |
 | vanilla layer order | −0.5 | −0.3 | −0.9 | masked attention first performs better |
 
@@ -1281,55 +1407,3 @@ Massih, Peter. "Mask2Former, Dissected." *peteramassih.com*, Jul 2026. https://p
   url     = {https://peteramassih.com/writing/mask2former/}
 }
 ```
-
-<script>
-// Videos behave like GIFs: muted, looping, no visible controls. They load
-// lazily and autoplay only for readers who allow motion; under
-// prefers-reduced-motion they get controls and start nothing. Posters are
-// inline in the markup, so a box is never blank; the wide margin below
-// starts the fetch early enough that the loop is already running on arrival.
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-for (const v of document.querySelectorAll('video[data-lazy]')) {
-  // Click, Enter or Space toggles playback, so motion stays stoppable
-  // without a control bar, by mouse or keyboard. Once native controls show
-  // (reduced motion, blocked autoplay) they own clicks and keys; toggling
-  // here as well would undo them.
-  const toggle = () => { v.paused ? v.play() : v.pause(); };
-  v.tabIndex = 0;
-  v.addEventListener('click', () => { if (!v.controls) toggle(); });
-  v.addEventListener('keydown', (e) => {
-    if (v.controls || (e.key !== 'Enter' && e.key !== ' ')) return;
-    e.preventDefault();
-    toggle();
-  });
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      for (const s of e.target.querySelectorAll('source[data-src]')) {
-        s.src = s.dataset.src;
-      }
-      e.target.load();
-      if (reduceMotion) {
-        e.target.controls = true;
-      } else {
-        // If the browser blocks autoplay (e.g. battery saver), fall back to controls.
-        e.target.play().catch(() => { e.target.controls = true; });
-      }
-      io.disconnect();
-    }
-  }, { rootMargin: '1600px 0px' });
-  io.observe(v);
-}
-// Wide math, tables and figures scroll sideways on narrow screens; a tab stop lets
-// keyboard users scroll them too. Off-screen blocks are not laid out yet
-// (content-visibility above), so each box is measured when it gets a size:
-// first render, rotation, and once more after the KaTeX fonts load.
-const markScroller = (el) => {
-  if (el.scrollWidth > el.clientWidth) el.tabIndex = 0;
-  else el.removeAttribute('tabindex');
-};
-const scrollers = document.querySelectorAll('.katex-display, figure.viz, .body table');
-const sized = new ResizeObserver((entries) => entries.forEach((e) => markScroller(e.target)));
-scrollers.forEach((el) => sized.observe(el));
-document.fonts.ready.then(() => scrollers.forEach(markScroller));
-</script>

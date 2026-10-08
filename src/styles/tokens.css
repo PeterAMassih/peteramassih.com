@@ -50,6 +50,17 @@
   --color-accent: #0f766e;
   --color-accent-hover: #115e59;
   --color-code-bg: #f4f4f5;
+  /* Figure palette for the inline diagrams in posts, one meaning per hue in
+     every figure: gold is what the model predicts (queries, masks), green the
+     ground truth, slate image features, ember cost or error. */
+  --viz-gold: #b8860b;
+  --viz-gold-text: #8a6508;   /* gold for small labels: 5:1 on the background */
+  --viz-green: #2e7d32;
+  --viz-slate: #64748b;
+  --viz-ember: #c1440e;
+  --viz-line: #9a9a9a;
+  --viz-grid: #d4d4d4;
+  --viz-box: #ffffff;
 }
 [data-theme='light'] { color-scheme: light; }
 
@@ -65,6 +76,14 @@
   --color-accent: #76b5ab;
   --color-accent-hover: #a3d4cc;
   --color-code-bg: #171717;
+  --viz-gold: #d4a53a;
+  --viz-gold-text: #d4a53a;
+  --viz-green: #5fae63;
+  --viz-slate: #94a3b8;
+  --viz-ember: #e8794a;
+  --viz-line: #737373;
+  --viz-grid: #333333;
+  --viz-box: #171717;
 }
 
 /* Honor system preference only if user hasn't manually set one */
@@ -78,5 +97,13 @@
     --color-accent: #76b5ab;
     --color-accent-hover: #a3d4cc;
     --color-code-bg: #171717;
+    --viz-gold: #d4a53a;
+    --viz-gold-text: #d4a53a;
+    --viz-green: #5fae63;
+    --viz-slate: #94a3b8;
+    --viz-ember: #e8794a;
+    --viz-line: #737373;
+    --viz-grid: #333333;
+    --viz-box: #171717;
   }
 }

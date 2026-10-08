@@ -48,6 +48,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
   </main>
 </BaseLayout>
 
+<script>import '../../scripts/scrollable.js';</script>
+
 <style>
   /* Prose, the notation table, and math keep the column of every other page
      (the content width minus main's padding), so they line up with the
@@ -67,9 +69,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
   }
   /* Long math posts leave tens of thousands of elements in the DOM. Blocks
      far offscreen skip style, layout, and paint until the reader approaches;
-     the placeholder height keeps the scrollbar honest before first render.
-     Figures stay rendered so the lazy-video observer keeps its full lead. */
-  .body > :global(:not(figure)) {
+     the placeholder height keeps the scrollbar honest before first render. */
+  .body > :global(*) {
     content-visibility: auto;
     contain-intrinsic-size: auto 10rem;
   }
@@ -123,9 +124,11 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
     padding: var(--space-1) var(--space-3);
     border-bottom: 1px solid var(--color-border);
     text-align: left;
+    font-variant-numeric: tabular-nums;
   }
+  /* Number columns (---: in Markdown) align on their digits. */
+  .body :global(:is(th, td)[align='right']) { text-align: right; }
   .body :global(figure.viz) { margin: var(--space-8) 0; overflow-x: auto; }
-  .body :global(figure.viz video),
   .body :global(figure.viz img),
   .body :global(figure.viz svg) {
     width: 100%;

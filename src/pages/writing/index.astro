@@ -8,12 +8,8 @@ const posts = (await getCollection('writing', ({ data }) =>
   import.meta.env.PROD ? !data.draft : true,
 )).sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
 
-const byYear = new Map<number, typeof posts>();
-for (const p of posts) {
-  const y = p.data.pubDate.getFullYear();
-  if (!byYear.has(y)) byYear.set(y, []);
-  byYear.get(y)!.push(p);
-}
+// UTC, like the dates below, so a post never lands in the wrong year.
+const byYear = Map.groupBy(posts, (p) => p.data.pubDate.getUTCFullYear());
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
 
@@ -23,9 +19,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', t
       <h1>Writing</h1>
     </header>
 
-    {posts.length === 0 ? (
-      <p class="muted">No posts yet.</p>
-    ) : Array.from(byYear, ([year, group]) => (
+    {Array.from(byYear, ([year, group]) => (
       <section class="year">
         <h2>{year}</h2>
         <ul class="posts">

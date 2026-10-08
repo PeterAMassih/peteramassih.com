@@ -6,8 +6,8 @@ pubDate: 2025-01-16
 context: "Master project in Prof. Sabine Süsstrunk's lab (EPFL IVRL)"
 links:
   - { label: "GitHub", href: "https://github.com/PeterAMassih/3D-BlockGen" }
-  - { label: "PeterAM4/blockgen-3d", href: "https://huggingface.co/datasets/PeterAM4/blockgen-3d" }
-  - { label: "PeterAM4/blockgen-3d-finetune", href: "https://huggingface.co/datasets/PeterAM4/blockgen-3d-finetune" }
+  - { label: "Dataset", href: "https://huggingface.co/datasets/PeterAM4/blockgen-3d" }
+  - { label: "Fine-tuning set", href: "https://huggingface.co/datasets/PeterAM4/blockgen-3d-finetune" }
 ---
 
 CLIP text conditioning, 32³ RGBA voxels, LEGO conversion. The 542,292 samples come from about 135,000 unique voxelized Objaverse models with 90-degree rotation augmentation (515,177 train, 27,115 test). Fine-tuning set of 11,464 samples. Code, model and data are open source.

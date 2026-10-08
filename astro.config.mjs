@@ -1,6 +1,5 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import { unified } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math';
@@ -12,7 +11,7 @@ import cloudflare from '@astrojs/cloudflare';
 export default defineConfig({
   site: 'https://peteramassih.com',
   // /play/ is noindex, so the sitemap leaves it out.
-  integrations: [mdx(), sitemap({ filter: (page) => !page.endsWith('/play/') })],
+  integrations: [sitemap({ filter: (page) => !page.endsWith('/play/') })],
   // Astro 7's default 'jsx' whitespace mode drops the spaces between inline
   // elements, such as the separators in "CV · Email"; keep the old behavior.
   compressHTML: true,
@@ -37,5 +36,7 @@ export default defineConfig({
     },
   },
 
-  adapter: cloudflare(),
+  // Images are served as-is from public/; passthrough keeps the adapter from
+  // shipping an unused on-the-fly resizing endpoint in the Worker.
+  adapter: cloudflare({ imageService: 'passthrough' }),
 });

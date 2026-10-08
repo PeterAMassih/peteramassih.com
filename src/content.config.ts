@@ -7,7 +7,7 @@ import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 
 const writing = defineCollection({
-  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/writing' }),
+  loader: glob({ pattern: '**/*.md', base: './src/content/writing' }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
@@ -21,7 +21,7 @@ const writing = defineCollection({
 // Top-level files only: entries moved into projects/archive/ stay in the repo
 // but are not built, listed or put in the sitemap.
 const projects = defineCollection({
-  loader: glob({ pattern: '*.{md,mdx}', base: './src/content/projects' }),
+  loader: glob({ pattern: '*.md', base: './src/content/projects' }),
   schema: z.object({
     title: z.string(),
     // The result line: shown under the title and used as the meta description.
@@ -35,7 +35,7 @@ const projects = defineCollection({
 });
 
 const publications = defineCollection({
-  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/publications' }),
+  loader: glob({ pattern: '**/*.md', base: './src/content/publications' }),
   schema: z.object({
     title: z.string(),
     description: z.string(),

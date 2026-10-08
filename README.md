@@ -2,7 +2,7 @@
 
 Source of Peter Massih's site: publications, projects, writing and a few toys.
 
-Astro with MDX content, deployed as a Cloudflare Worker that serves the static
+Astro with Markdown content, deployed as a Cloudflare Worker that serves the static
 build. Pushing `main` triggers Cloudflare Workers Builds; `npm run deploy` is
 the manual path.
 

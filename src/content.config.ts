@@ -18,8 +18,6 @@ const writing = defineCollection({
   }).strict(),
 });
 
-// Top-level files only: entries moved into projects/archive/ stay in the repo
-// but are not built, listed or put in the sitemap.
 const projects = defineCollection({
   loader: glob({ pattern: '*.md', base: './src/content/projects' }),
   schema: z.object({
@@ -29,8 +27,10 @@ const projects = defineCollection({
     // End month. It orders the list; a startDate turns it into a range.
     pubDate: z.coerce.date(),
     startDate: z.coerce.date().optional(),
-    context: z.string(),
-    links: z.array(z.object({ label: z.string(), href: z.url() })),
+    // Course or setting, shown on the project's own page.
+    context: z.string().optional(),
+    links: z.array(z.object({ label: z.string(), href: z.url() })).default([]),
+    tags: z.array(z.string()).default([]),
   }).strict(),
 });
 
@@ -39,6 +39,8 @@ const publications = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
+    // Orders the list and dates the paper's own page.
+    pubDate: z.coerce.date(),
     authors: z.array(z.string()),
     // The byline after the authors: status, advisor, host.
     venue: z.string(),

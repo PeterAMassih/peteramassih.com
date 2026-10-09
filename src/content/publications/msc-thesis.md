@@ -1,6 +1,7 @@
 ---
 title: "Three Modalities of Production AI in Financial Services: Retrieval, Generation, and Detection"
 description: "Master's thesis, EPFL, 2026: Three Modalities of Production AI in Financial Services. Deployed 3 AI systems under FINMA rules, used daily by bankers, fund screeners and tax specialists."
+pubDate: 2026-03-27
 authors: ["P. A. Massih"]
 venue: "Master's thesis, EPFL, 2026. Advised by Prof. Amir Zamir (VILAB). Hosted by Bank Lombard Odier & Co Ltd, Oct 2025 – Apr 2026."
 links:

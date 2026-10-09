@@ -1,6 +1,7 @@
 ---
 title: "Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics"
 description: "A benchmark of 2,000 quantitative questions on satellite images. Having GPT-5 write Python over segmentation masks raises its accuracy from 28.1% to 42.0%."
+pubDate: 2026-01-15
 authors: ["P. A. Massih", "E. Cosatto"]
 venue: "Preprint, arXiv:2601.13401, 2026. Dataset on Hugging Face."
 links:

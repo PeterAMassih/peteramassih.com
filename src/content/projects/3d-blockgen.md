@@ -4,6 +4,7 @@ description: "Turned text into buildable LEGO models with a two-stage diffusion 
 startDate: 2024-09-01
 pubDate: 2025-01-16
 context: "Master project in Prof. Sabine Süsstrunk's lab (EPFL IVRL)"
+tags: ["diffusion", "3D", "PyTorch", "CLIP"]
 links:
   - { label: "GitHub", href: "https://github.com/PeterAMassih/3D-BlockGen" }
   - { label: "Dataset", href: "https://huggingface.co/datasets/PeterAM4/blockgen-3d" }

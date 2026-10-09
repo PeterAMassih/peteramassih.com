@@ -21,7 +21,7 @@ export async function getStaticPaths() {
 type Props = { post: CollectionEntry<'writing'> };
 const { post } = Astro.props;
 const { Content } = await render(post);
-const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 ---
 
 <BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
@@ -36,7 +36,10 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
   <article>
     <header>
       <div class="meta-row">
-        <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
+        <p class="meta">
+          <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
+          {post.data.tags?.length ? <span> · {post.data.tags.join(' · ')}</span> : null}
+        </p>
         <LikeButton slug={post.id} />
       </div>
       <h1>{post.data.title}</h1>
@@ -51,9 +54,8 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
 <script>import '../../scripts/scrollable.js';</script>
 
 <style>
-  /* Prose, the notation table, and math keep the column of every other page
-     (the content width minus main's padding), so they line up with the
-     header; only code blocks and figures break out to --wide-width. */
+  /* Prose, the notation table, and math stay at the readable measure and stay
+     aligned; only code blocks and figures break out to --wide-width. */
   .post { max-width: var(--wide-width); }
   .post article > header,
   .body :global(p),
@@ -64,7 +66,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
   .body :global(blockquote),
   .body :global(table),
   .body :global(.katex-display) {
-    max-width: calc(var(--content-width) - 2 * var(--space-4));
+    max-width: var(--content-width);
     margin-inline: auto;
   }
   /* Long math posts leave tens of thousands of elements in the DOM. Blocks
@@ -82,7 +84,12 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', 
     gap: var(--space-4);
     margin-bottom: var(--space-4);
   }
-  time { font-size: var(--text-sm); color: var(--color-text-muted); }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+  .post h1 { line-height: 1.2; }
   /* In-page links (the contents line) never break inside a label. */
   .body :global(p a[href^='#']) { white-space: nowrap; }
   /* Proof folds stay closed by default so the argument reads without the

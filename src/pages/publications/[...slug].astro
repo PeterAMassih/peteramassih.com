@@ -1,7 +1,7 @@
 ---
 // src/pages/publications/[...slug].astro
-// Detail page for a publication that has one: title, byline and links as
-// the header, then the Markdown body.
+// Detail page for one publication: date, title, authors, status and links,
+// then the Markdown body.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection, render, type CollectionEntry } from 'astro:content';
 
@@ -12,20 +12,25 @@ export async function getStaticPaths() {
 
 type Props = { pub: CollectionEntry<'publications'> };
 const { pub } = Astro.props;
-const { title, description, authors, venue, links } = pub.data;
+const { title, description, pubDate, authors, venue, links } = pub.data;
 const { Content } = await render(pub);
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', timeZone: 'UTC' });
 ---
 
 <BaseLayout title={`${title} — Peter Massih`} description={description}>
   <main id="main">
     <article>
       <header>
-        <h1>{title}</h1>
-        <p class="byline">
-          {authors.map((a, i) => <>{i > 0 && ', '}{a === 'P. A. Massih' ? <strong>{a}</strong> : a}</>)}. {venue}
+        <p class="meta">
+          <time datetime={pubDate.toISOString().slice(0, 7)}>{fmt.format(pubDate)}</time>
         </p>
-        <p class="links">
-          {links.map((l, i) => <>{i > 0 && ' · '}<a href={l.href}>{l.label}</a></>)}
+        <h1>{title}</h1>
+        <p class="authors">
+          {authors.map((a, i) => <>{i > 0 && ', '}{a === 'P. A. Massih' ? <strong>{a}</strong> : a}</>)}
+        </p>
+        <p class="venue">
+          {venue}
+          {links.map((l) => <> · <a href={l.href}>{l.label} →</a></>)}
         </p>
       </header>
       <div class="body">
@@ -36,12 +41,18 @@ const { Content } = await render(pub);
 </BaseLayout>
 
 <style>
-  header { margin-bottom: var(--space-6); }
-  /* Paper titles run long; one size down keeps them to two or three lines. */
-  h1 { font-size: var(--text-2xl); }
-  .byline { margin-top: var(--space-2); color: var(--color-text-muted); }
-  .links { margin-top: var(--space-1); font-size: var(--text-sm); }
-  .links a { padding-block: var(--space-1); }
+  article > header { margin-bottom: var(--space-12); }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-4);
+  }
+  h1 { line-height: 1.2; margin-bottom: var(--space-4); }
+  .authors { color: var(--color-text-muted); font-size: var(--text-sm); margin-top: var(--space-3); }
+  .venue { color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); margin-top: var(--space-2); }
+  .venue a { padding-block: var(--space-1); color: var(--color-text-muted); }
+  .venue a:hover { color: var(--color-text); }
   .body :global(details) { margin-top: var(--space-4); font-size: var(--text-sm); }
   .body :global(summary) { cursor: pointer; padding-block: var(--space-1); color: var(--color-text-muted); }
 </style>

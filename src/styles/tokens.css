@@ -6,11 +6,9 @@
   /* Native scrollbars, form controls and <details> markers follow the theme. */
   color-scheme: light dark;
 
-  /* Typography: the system faces, San Francisco on Apple devices and Segoe UI
-     on Windows. Nothing to download, and text renders the way the platform's
-     own apps render it. */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  /* Typography */
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Scale */
   --text-xs: 0.8125rem;   /* 13px */
@@ -20,7 +18,6 @@
   --text-xl: 1.375rem;    /* 22px */
   --text-2xl: 1.75rem;    /* 28px */
   --text-3xl: 2.25rem;    /* 36px */
-  --text-4xl: 2.5rem;     /* 40px, the name on the home page */
 
   /* Spacing */
   --space-1: 0.25rem;
@@ -34,26 +31,25 @@
   --space-24: 6rem;
 
   /* Layout */
-  --content-width: 680px;      /* the page column, padding included */
+  --content-width: 680px;      /* prose, tables, and math: the readable measure */
   --wide-width: 800px;         /* code blocks and figures break out a little wider */
+  --page-width: 768px;
 
   /* Motion */
   --transition: 150ms ease;
 }
 
-/* Light theme (default): white page, near-black text, one gray for secondary
-   text (5:1 on white), and one muted accent. */
+/* Light theme (default) */
 :root,
 [data-theme='light'] {
-  --color-bg: #ffffff;
-  --color-text: #1d1d1f;
-  --color-text-muted: #6e6e73;
-  --color-text-subtle: #6e6e73;
-  --color-border: #e8e8ed;
-  /* Dark enough for 4.5:1 contrast on --color-bg; a lighter teal fails for body-size links. */
-  --color-accent: #0f766e;
-  --color-accent-hover: #115e59;
-  --color-code-bg: #f5f5f7;
+  --color-bg: #fafafa;
+  --color-text: #171717;
+  --color-text-muted: #6b6b6b;
+  --color-text-subtle: #717171;
+  --color-border: #e5e5e5;
+  --color-accent: #0d9488;
+  --color-accent-hover: #0f766e;
+  --color-code-bg: #f4f4f5;
   /* Figure palette for the inline diagrams in posts, one meaning per hue in
      every figure: gold is what the model predicts (queries, masks), green the
      ground truth, slate image features, ember cost or error. */
@@ -64,12 +60,11 @@
   --viz-ember: #c1440e;
   --viz-line: #9a9a9a;
   --viz-grid: #d4d4d4;
-  --viz-box: #f5f5f7;
+  --viz-box: #ffffff;
 }
 [data-theme='light'] { color-scheme: light; }
 
-/* Dark theme. The accent is a muted teal (8.4:1 on the background), not a
-   saturated mint, so links stay quiet in long text. */
+/* Dark theme */
 [data-theme='dark'] {
   color-scheme: dark;
   --color-bg: #0a0a0a;
@@ -77,8 +72,8 @@
   --color-text-muted: #a3a3a3;
   --color-text-subtle: #8c8c8c;
   --color-border: #262626;
-  --color-accent: #76b5ab;
-  --color-accent-hover: #a3d4cc;
+  --color-accent: #5eead4;
+  --color-accent-hover: #99f6e4;
   --color-code-bg: #171717;
   --viz-gold: #d4a53a;
   --viz-gold-text: #d4a53a;
@@ -98,8 +93,8 @@
     --color-text-muted: #a3a3a3;
     --color-text-subtle: #8c8c8c;
     --color-border: #262626;
-    --color-accent: #76b5ab;
-    --color-accent-hover: #a3d4cc;
+    --color-accent: #5eead4;
+    --color-accent-hover: #99f6e4;
     --color-code-bg: #171717;
     --viz-gold: #d4a53a;
     --viz-gold-text: #d4a53a;

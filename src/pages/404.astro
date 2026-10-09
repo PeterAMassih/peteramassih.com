@@ -11,10 +11,16 @@ import '../styles/canvas-toy.css';
 
 const k = (tex: string, displayMode = false) => katex.renderToString(tex, { displayMode });
 
+// Squared distance from (x, y) to a well center (x_i, y_i). Shared between the
+// loss and its gradient so the two rendered formulas can never drift apart.
+const sqDist = '(x - x_i)^2 + (y - y_i)^2';
+const lossFormula = k(`L(x, y) = -\\sum_{i=1}^{4} \\underbrace{A_i}_{\\text{depth}}\\, \\exp\\!\\left(-\\frac{\\overbrace{${sqDist}}^{\\text{squared distance to well } i}}{2\\,{\\underbrace{\\sigma_i}_{\\text{width}}}^{2}}\\right)`, true);
+const gradFormula = k(`\\nabla L(x, y) = \\sum_{i=1}^{4} \\frac{A_i}{\\sigma_i^2} \\exp\\!\\left(-\\frac{${sqDist}}{2\\sigma_i^2}\\right) \\begin{pmatrix} x - x_i \\\\ y - y_i \\end{pmatrix}`, true);
 const gdFormula = k('\\theta_{t+1} = \\theta_t - \\eta \\, \\nabla L(\\theta_t)', true);
 const momentumFormula = k('\\begin{aligned} v_{t+1} &= \\beta v_t - \\eta \\nabla L(\\theta_t) \\\\ \\theta_{t+1} &= \\theta_t + v_{t+1} \\end{aligned}', true);
 const adamFormula = k('\\begin{aligned} m_t &= \\beta_1 m_{t-1} + (1 - \\beta_1)\\, \\nabla L \\\\ v_t &= \\beta_2 v_{t-1} + (1 - \\beta_2)\\, (\\nabla L)^2 \\\\ \\hat m_t &= m_t / (1 - \\beta_1^{\\,t}), \\quad \\hat v_t = v_t / (1 - \\beta_2^{\\,t}) \\\\ \\theta_{t+1} &= \\theta_t - \\eta \\, \\frac{\\hat m_t}{\\sqrt{\\hat v_t} + \\epsilon} \\end{aligned}', true);
 const lossInline = k('L');
+const symCenter = k('(x_i,\\ y_i)');
 const symGradL = k('\\nabla L');
 ---
 
@@ -26,9 +32,31 @@ const symGradL = k('\\nabla L');
       <p><a class="home" href="/">Back to home →</a></p>
     </header>
 
-    <p class="explainer">The map is a loss <span set:html={lossInline}></span> built from four Gaussian wells. Three are shallow local minima where simple methods get stuck. The fourth is deeper and wider, the global minimum. An optimizer knows only the gradient <span set:html={symGradL}></span> where it stands, and steps downhill.</p>
+    <section class="explainer">
+      <p>The colored map is a loss function <span set:html={lossInline}></span> built from four Gaussian wells. Each term in the sum is a bump centered on a well, and the leading minus sign turns every bump into a basin. Three are shallow local minima where simple methods get stuck. The fourth is deeper and wider, the global minimum.</p>
+      <div class="formula" set:html={lossFormula} />
+      <dl class="glossary">
+        <dt set:html={k('\\theta = (x, y)')}></dt><dd>the ball's position, the value the optimizers below update</dd>
+        <dt set:html={symCenter}></dt><dd>where a well is centered, at its bump's peak</dd>
+      </dl>
+      {/* Values mirror WELLS in src/scripts/gradient.js. Keep the two in sync. */}
+      <p>Each well in the sum uses these exact values:</p>
+      <table class="wells">
+        <thead>
+          <tr><th set:html={k('i')}></th><th set:html={symCenter}></th><th set:html={k('A_i')}></th><th set:html={k('\\sigma_i')}></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>(&minus;2.5, &minus;2.5)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>2</td><td>(2.5, &minus;2.0)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>3</td><td>(&minus;2.0, 2.5)</td><td>2.0</td><td>1.3</td></tr>
+          <tr><td>4</td><td>(1.5, 1.5)</td><td>3.2</td><td>1.6</td></tr>
+        </tbody>
+      </table>
+      <p>An optimizer never sees the whole map. It knows only the gradient <span set:html={symGradL}></span> at its current position, which points uphill toward steeper loss. It steps the other way, downhill:</p>
+      <div class="formula" set:html={gradFormula} />
+    </section>
 
-    <canvas id="grad-canvas" class="canvas" role="img" aria-label="Gradient descent visualization"></canvas>
+    <canvas id="grad-canvas" class="canvas" aria-label="Gradient descent visualization"></canvas>
 
     <div class="legend">
       <span set:html={lossInline}></span>
@@ -36,6 +64,15 @@ const symGradL = k('\\nabla L');
       <span class="legend-bar" aria-hidden="true"></span>
       <span>higher</span>
     </div>
+
+    <dl class="glossary">
+      <dt>contour lines</dt><dd>points of equal loss (closer together means steeper gradient)</dd>
+      <dt>ball</dt><dd>current position of the optimizer</dd>
+      <dt>path</dt><dd>recent trajectory (last 120 steps)</dd>
+      <dt>t</dt><dd>iteration count (current step)</dd>
+      <dt>L</dt><dd>loss at the current position (lower is better)</dd>
+      <dt>‖∇L‖</dt><dd>gradient magnitude (near zero means converged)</dd>
+    </dl>
 
     <p class="meta">
       <span set:html={k('t = ')}></span><span id="step">0</span><span set:html={k(',\\quad L = ')}></span><span id="loss">—</span><span set:html={k(',\\quad \\lVert \\nabla L \\rVert = ')}></span><span id="gnorm">—</span>
@@ -64,7 +101,7 @@ const symGradL = k('\\nabla L');
     <div class="opt-formula" data-opt-formula="gd" set:html={gdFormula} />
     <div class="opt-formula" data-opt-formula="momentum" set:html={momentumFormula} hidden />
     <div class="opt-formula" data-opt-formula="adam" set:html={adamFormula} hidden />
-    <p class="opt-note muted" data-opt-formula="gd">Here <span set:html={symGradL}></span> is the exact gradient of the map, so this is plain gradient descent. Replace it with a noisy minibatch estimate and the same rule becomes stochastic gradient descent (SGD).</p>
+    <p class="opt-note muted" data-opt-formula="gd">Here <span set:html={symGradL}></span> is the exact gradient computed above, so this is plain gradient descent. Replace it with a noisy minibatch estimate and the same rule becomes stochastic gradient descent (SGD).</p>
 
     <dl class="glossary">
       <div data-opt-gloss="gd momentum adam">
@@ -103,10 +140,15 @@ const symGradL = k('\\nabla L');
 <script>import '../scripts/gradient.js';</script>
 
 <style>
+  main { max-width: var(--page-width); margin-top: var(--space-16); }
   .head { margin-bottom: var(--space-6); }
   .head p { margin-top: var(--space-2); }
   .home { padding-block: var(--space-1); }
-  .explainer { margin-bottom: var(--space-4); color: var(--color-text-muted); }
+  .explainer { margin-bottom: var(--space-4); max-width: 65ch; }
+  .explainer p { margin-top: var(--space-3); color: var(--color-text-muted); }
+  /* overflow-x lets the wider gradient (with its column vector) scroll on
+     narrow screens instead of forcing the page wider. */
+  .formula { margin-top: var(--space-3); font-size: var(--text-sm); overflow-x: auto; }
   .legend {
     display: flex;
     align-items: center;
@@ -123,6 +165,26 @@ const symGradL = k('\\nabla L');
     border: 1px solid var(--color-border);
     background: linear-gradient(to right, var(--color-text), var(--color-code-bg));
   }
+  .wells {
+    margin-top: var(--space-3);
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+  }
+  /* Right padding spaces the columns; the first column sits flush at the
+     left margin and the last drops its trailing pad. */
+  .wells th, .wells td {
+    padding: var(--space-2) var(--space-6) var(--space-2) 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .wells th {
+    color: var(--color-text-subtle);
+    font-weight: 400;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .wells th:last-child, .wells td:last-child { padding-right: 0; }
   .meta {
     margin-top: var(--space-6);
     font-family: 'KaTeX_Main', 'Cambria', 'Times New Roman', serif;
@@ -145,15 +207,11 @@ const symGradL = k('\\nabla L');
   .glossary > div[hidden] { display: none; }
   .glossary dt { color: var(--color-text-muted); }
   .glossary dd { margin: 0; }
-  /* The Adam block is wide; it scrolls inside its box on narrow screens.
-     Formulas sit flush left with the rest of the page, not centered. */
   .opt-formula {
     margin-top: var(--space-3);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
-    overflow-x: auto;
   }
-  .opt-formula :global(:is(.katex-display, .katex-display > .katex)) { text-align: left; }
   .opt-note {
     margin-top: var(--space-2);
     font-size: var(--text-sm);

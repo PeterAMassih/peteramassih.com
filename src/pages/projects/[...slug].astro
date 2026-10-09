@@ -1,8 +1,8 @@
 ---
 // src/pages/projects/[...slug].astro
-// One project: the same facts as its list entry, then any detail from its Markdown body.
+// Detail page for one project: date, title, result, links and tags, then the
+// Markdown body. Frontmatter-only projects still produce a usable page.
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import ProjectItem from '../../components/ProjectItem.astro';
 import { getCollection, render, type CollectionEntry } from 'astro:content';
 
 export async function getStaticPaths() {
@@ -12,15 +12,53 @@ export async function getStaticPaths() {
 
 type Props = { project: CollectionEntry<'projects'> };
 const { project } = Astro.props;
+const { title, description, pubDate, startDate, context, links, tags } = project.data;
 const { Content } = await render(project);
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', timeZone: 'UTC' });
+const month = (d: Date) => d.toISOString().slice(0, 7);
 ---
 
-<BaseLayout title={`${project.data.title} — Peter Massih`} description={project.data.description}>
+<BaseLayout title={`${title} — Peter Massih`} description={description}>
   <main id="main">
-    <ProjectItem project={project} heading="h1">
+    <article>
+      <header>
+        <p class="meta">
+          {startDate && <><time datetime={month(startDate)}>{fmt.format(startDate)}</time> – </>}
+          <time datetime={month(pubDate)}>{fmt.format(pubDate)}</time>
+          {context && <> · {context}</>}
+        </p>
+        <h1>{title}</h1>
+        <p class="desc">{description}</p>
+        <p class="aux">
+          {links.map((l) => <a href={l.href}>{l.label} →</a>)}
+          {tags.length > 0 && <span class="tags">{tags.join(' · ')}</span>}
+        </p>
+      </header>
       <div class="body">
         <Content />
       </div>
-    </ProjectItem>
+    </article>
   </main>
 </BaseLayout>
+
+<style>
+  article > header { margin-bottom: var(--space-12); }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-4);
+  }
+  h1 { line-height: 1.2; margin-bottom: var(--space-3); }
+  .desc { color: var(--color-text-muted); margin-top: var(--space-2); }
+  .aux {
+    margin-top: var(--space-4);
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .aux a { padding-block: var(--space-1); }
+  .aux .tags { color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); margin-left: auto; }
+</style>

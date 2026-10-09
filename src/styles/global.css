@@ -13,21 +13,21 @@ body {
   transition: background var(--transition), color var(--transition);
 }
 
-/* Headings: few sizes, tight tracking at display sizes, as the system face
-   is drawn to be set. Section headings stay modest so the page reads as
-   whitespace and text, not a stack of banners. */
+/* Headings */
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
-h1 { font-size: var(--text-3xl); line-height: 1.1; letter-spacing: -0.022em; }
+
+h1 { font-size: var(--text-3xl); }
+h2 { font-size: var(--text-2xl); }
+h3 { font-size: var(--text-xl); }
+
 /* Balanced headings and no single-word last lines in paragraphs, where the
    browser supports it. */
 h1, h2, h3 { text-wrap: balance; }
 p, li, figcaption { text-wrap: pretty; }
-h2 { font-size: var(--text-xl); }
-h3 { font-size: var(--text-lg); }
 
 /* Links */
 a {
@@ -54,10 +54,6 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
-/* Code blocks use the site's code background rather than Shiki's white,
-   which would disappear on the white page. */
-.astro-code { background-color: var(--color-code-bg) !important; }
-
 /* Shiki inlines both themes' colors; switch to the dark set with the site theme. */
 :root[data-theme='dark'] .astro-code,
 :root[data-theme='dark'] .astro-code span {
@@ -78,11 +74,6 @@ main {
   max-width: var(--content-width);
   margin: var(--space-24) auto var(--space-16);
   padding: 0 var(--space-4);
-}
-main > h1 { margin-bottom: var(--space-8); }
-/* On phones the first content has to start on the first screen. */
-@media (max-width: 600px) {
-  main { margin-top: var(--space-8); }
 }
 
 /* Body text on the project, publication and post pages. */
@@ -167,10 +158,9 @@ pre code {
   color: var(--color-text-muted);
 }
 
-/* On post and publication pages the opening paragraph reads as a summary:
-   muted, but the same size and flow as the body. Project pages already lead
-   with their result line, so their body starts in full color. */
-header + .body > p:first-child {
+/* A post's opening paragraph reads as a summary: muted, but the same size and
+   flow as the body (no quote block). */
+.body > p:first-child {
   color: var(--color-text-muted);
 }
 

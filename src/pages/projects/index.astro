@@ -1,20 +1,80 @@
 ---
 // src/pages/projects/index.astro
-// All projects, newest first.
+// Single chronological list. Each item shows title, month, description, links, tags.
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import ProjectItem from '../../components/ProjectItem.astro';
 import { getCollection } from 'astro:content';
 
 const projects = (await getCollection('projects'))
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+
+// Dates are stored as UTC midnight; formatting in UTC keeps the 1st of a
+// month from rendering as the previous month west of Greenwich.
+const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', timeZone: 'UTC' });
 ---
 
 <BaseLayout
   title="Projects — Peter Massih"
-  description="Six projects by Peter Massih: 3D-BlockGen, an LLM teaching assistant, a reasoning-model paraphraser, RL on Mountain Car, a Wikispeedia navigation study and yeast cell segmentation."
+  description="Projects by Peter Massih, from 3D-BlockGen and an LLM teaching assistant to systems, security and hardware coursework."
 >
   <main id="main">
-    <h1>Projects</h1>
-    {projects.map((project) => <ProjectItem project={project} />)}
+    <header class="head">
+      <h1>Projects</h1>
+      <p class="muted">Selected things I've built, most recent first.</p>
+    </header>
+
+    <ul class="list">
+      {projects.map((p) => (
+        <li>
+          <header class="meta">
+            <h2><a href={`/projects/${p.id}/`}>{p.data.title}</a></h2>
+            <time datetime={p.data.pubDate.toISOString().slice(0, 7)}>{fmt.format(p.data.pubDate)}</time>
+          </header>
+          <p class="desc">{p.data.description}</p>
+          <p class="aux">
+            {p.data.links.map((l) => <a href={l.href}>{l.label} →</a>)}
+            {p.data.tags.length > 0 && <span class="tags">{p.data.tags.join(' · ')}</span>}
+          </p>
+        </li>
+      ))}
+    </ul>
   </main>
 </BaseLayout>
+
+<style>
+  .head { margin-bottom: var(--space-12); }
+  .head p { margin-top: var(--space-2); }
+  .list { list-style: none; padding: 0; }
+  .list li { padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border); }
+  .list li:last-child { border-bottom: none; }
+  .meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+  .meta h2 { font-size: var(--text-xl); }
+  .meta h2 a { color: var(--color-text); transition: color var(--transition); }
+  .meta h2 a:hover { color: var(--color-accent); }
+  .meta time {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    flex-shrink: 0;
+  }
+  .desc { margin-top: var(--space-2); color: var(--color-text-muted); }
+  .aux {
+    margin-top: var(--space-3);
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .aux a { padding-block: var(--space-1); }
+  .aux .tags {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    margin-left: auto;
+  }
+</style>

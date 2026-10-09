@@ -1,13 +1,9 @@
----
-// src/components/PublicationList.astro
-// The four entries in a fixed order. The home page shows the first two compact
-// (title and byline only); /publications/ shows all four with summaries,
-// links and BibTeX. Entries with a page also live in src/content/publications/.
-// Papers under review get no link, page or BibTeX until they are public.
-interface Props { compact?: boolean }
-const { compact = false } = Astro.props;
+// src/data/publications.ts
+// The four papers in a fixed order, shared by the home page and /publications/.
+// Entries with a page also live in src/content/publications/. Papers under
+// review get no link, page or BibTeX until they are public.
 
-interface Pub {
+export interface Pub {
   authors: string[];
   title: string;
   status: string;
@@ -17,9 +13,10 @@ interface Pub {
   bibtex?: string;
 }
 
-const ME = 'P. A. Massih';
+// How his name is printed on the papers, set in bold in author lists.
+export const ME = 'P. A. Massih';
 
-const pubs: Pub[] = [
+export const pubs: Pub[] = [
   {
     authors: ['P. A. Massih', 'E. Cosatto'],
     title: 'Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics',
@@ -69,41 +66,3 @@ const pubs: Pub[] = [
 }`,
   },
 ];
----
-
-<ol class:list={['pubs', { compact }]}>
-  {(compact ? pubs.slice(0, 2) : pubs).map((pub) => (
-    <li>
-      <cite>{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</cite>
-      <p class="byline">
-        {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)} · {pub.status}
-      </p>
-      {!compact && pub.summary && <p class="summary">{pub.summary}</p>}
-      {!compact && pub.links && (
-        <p class="links">{pub.links.map((l, i) => <>{i > 0 && ' · '}<a href={l.href}>{l.label}</a></>)}</p>
-      )}
-      {!compact && pub.bibtex && (
-        <details>
-          <summary>BibTeX</summary>
-          <pre><code>{pub.bibtex}</code></pre>
-        </details>
-      )}
-    </li>
-  ))}
-</ol>
-
-<style>
-  .pubs { list-style: none; padding: 0; }
-  .pubs li + li { margin-top: var(--space-8); }
-  .compact li + li { margin-top: var(--space-4); }
-  cite { font-style: normal; font-weight: 600; }
-  cite a { color: var(--color-text); }
-  cite a:hover { color: var(--color-accent); }
-  .byline, .summary { color: var(--color-text-muted); }
-  .summary { margin-top: var(--space-1); }
-  .links { margin-top: var(--space-1); font-size: var(--text-sm); }
-  .links a { padding-block: var(--space-1); }
-  details { margin-top: var(--space-1); font-size: var(--text-sm); }
-  summary { cursor: pointer; padding-block: var(--space-1); color: var(--color-text-muted); }
-  pre { margin: var(--space-2) 0 0; font-size: var(--text-xs); }
-</style>

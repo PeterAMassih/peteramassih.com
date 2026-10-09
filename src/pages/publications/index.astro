@@ -1,8 +1,9 @@
 ---
 // src/pages/publications/index.astro
-// The four entries with summaries, links and BibTeX.
+// The four papers: title, authors, then status and links in one quiet line.
+// BibTeX folds open under the papers that are public.
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import PublicationList from '../../components/PublicationList.astro';
+import { pubs, ME } from '../../data/publications';
 ---
 
 <BaseLayout
@@ -10,7 +11,48 @@ import PublicationList from '../../components/PublicationList.astro';
   description="Papers by Peter Massih, including the SQuID benchmark preprint on arXiv and a master's thesis on production AI in financial services."
 >
   <main id="main">
-    <h1>Publications</h1>
-    <PublicationList />
+    <header class="head">
+      <h1>Publications</h1>
+    </header>
+
+    <ul class="list">
+      {pubs.map((pub) => (
+        <li>
+          <p class="title">{pub.page ? <a href={pub.page}>{pub.title}</a> : pub.title}</p>
+          <p class="authors">
+            {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)}
+          </p>
+          {pub.summary && <p class="summary">{pub.summary}</p>}
+          <p class="venue">
+            {pub.status}
+            {pub.links?.map((l) => <> · <a href={l.href}>{l.label} →</a></>)}
+          </p>
+          {pub.bibtex && (
+            <details>
+              <summary>BibTeX</summary>
+              <pre><code>{pub.bibtex}</code></pre>
+            </details>
+          )}
+        </li>
+      ))}
+    </ul>
   </main>
 </BaseLayout>
+
+<style>
+  .head { margin-bottom: var(--space-12); }
+  .list { list-style: none; padding: 0; }
+  .list li { padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border); }
+  .list li:last-child { border-bottom: none; }
+  .title { font-weight: 600; line-height: 1.4; }
+  .title a { color: var(--color-text); transition: color var(--transition); }
+  .title a:hover { color: var(--color-accent); }
+  .authors { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .summary { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .venue { margin-top: var(--space-2); color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .venue a { padding-block: var(--space-1); color: var(--color-text-muted); }
+  .venue a:hover { color: var(--color-text); }
+  details { margin-top: var(--space-2); font-size: var(--text-xs); }
+  summary { cursor: pointer; padding-block: var(--space-1); font-family: var(--font-mono); color: var(--color-text-subtle); }
+  pre { margin: var(--space-2) 0 0; font-size: var(--text-xs); }
+</style>

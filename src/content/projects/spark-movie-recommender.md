@@ -1,6 +1,6 @@
 ---
 title: "Large-Scale Movie Recommender — Spark + Scala"
-description: "Distributed recommender in Scala 3.3 + Spark 3.5. ALS collaborative filtering, LSH/MinHash similarity search, biased baseline predictor across a 25-partition HashPartitioner."
+description: "Distributed recommender in Scala 3.3 + Spark 3.5. ALS collaborative filtering, LSH/MinHash similarity search and a biased baseline predictor."
 pubDate: 2024-05-25
 tags: ["Spark", "Scala", "ALS", "distributed"]
 ---

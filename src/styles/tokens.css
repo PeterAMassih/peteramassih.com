@@ -47,8 +47,10 @@
   --color-text-muted: #6b6b6b;
   --color-text-subtle: #717171;
   --color-border: #e5e5e5;
-  --color-accent: #0d9488;
-  --color-accent-hover: #0f766e;
+  /* The owner's green at a depth that reads at 5:1 on the off-white, so small
+     link text meets WCAG AA; hover goes one step darker. */
+  --color-accent: #0f766e;
+  --color-accent-hover: #115e59;
   --color-code-bg: #f4f4f5;
   /* Figure palette for the inline diagrams in posts, one meaning per hue in
      every figure: gold is what the model predicts (queries, masks), green the

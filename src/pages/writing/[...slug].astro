@@ -22,15 +22,29 @@ type Props = { post: CollectionEntry<'writing'> };
 const { post } = Astro.props;
 const { Content } = await render(post);
 const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+// Points the author at the Person on the home page, so search engines credit
+// the post to the same Peter Massih.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.pubDate.toISOString().slice(0, 10),
+  url: new URL(Astro.url.pathname, Astro.site).href,
+  author: { '@id': 'https://peteramassih.com/#person', name: 'Peter Massih' },
+};
 ---
 
 <BaseLayout title={`${post.data.title} — Peter Massih`} description={post.data.description}>
-  {post.data.math && (
-    <Fragment slot="head">
-      <link rel="preload" href={katexMainUrl} as="font" type="font/woff2" crossorigin />
-      <link rel="preload" href={katexMathUrl} as="font" type="font/woff2" crossorigin />
-    </Fragment>
-  )}
+  <Fragment slot="head">
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    {post.data.math && (
+      <>
+        <link rel="preload" href={katexMainUrl} as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href={katexMathUrl} as="font" type="font/woff2" crossorigin />
+      </>
+    )}
+  </Fragment>
 
   <main id="main" class="post">
   <article>

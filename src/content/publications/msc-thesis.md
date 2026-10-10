@@ -3,7 +3,7 @@ title: "Three Modalities of Production AI in Financial Services: Retrieval, Gene
 description: "Master's thesis, EPFL, 2026. Three AI systems deployed under FINMA rules and used daily by bankers, fund screeners and tax specialists."
 pubDate: 2026-03-27
 authors: ["P. A. Massih"]
-venue: "Master's thesis, EPFL, 2026. Advised by Prof. Amir Zamir (VILAB). Hosted by Bank Lombard Odier & Co Ltd, Oct 2025 – Apr 2026."
+venue: "Master's thesis, EPFL, 2026. Advised by Prof. Amir Zamir (VILAB). Hosted by Bank Lombard Odier, Oct 2025 – Apr 2026."
 links:
   - { label: "DOI", href: "https://doi.org/10.5281/zenodo.21074981" }
   - { label: "PDF", href: "/master-thesis.pdf" }

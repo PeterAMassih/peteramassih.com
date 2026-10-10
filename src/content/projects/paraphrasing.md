@@ -9,4 +9,4 @@ links:
   - { label: "Model", href: "https://huggingface.co/PeterAM4/deepseek-paraphrase" }
 ---
 
-On 212 test sentences, BERTScore is 0.9521 vs 0.9587 for BART and 0.9952 for T5, and BLEU diversity is 0.5135 vs 0.2347 for BART and 0.0416 for T5. BART and T5 score higher on BERTScore. The gain is diversity.
+On 212 test sentences, BERTScore is 0.9521 vs 0.9587 for BART and 0.9952 for T5, and BLEU diversity is 0.5135 vs 0.2347 for BART and 0.0416 for T5. BART and T5 score higher on BERTScore. The gain is in diversity.

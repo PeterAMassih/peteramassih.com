@@ -1,6 +1,6 @@
 ---
 title: "Three Modalities of Production AI in Financial Services: Retrieval, Generation, and Detection"
-description: "Master's thesis, EPFL, 2026: Three Modalities of Production AI in Financial Services. Deployed 3 AI systems under FINMA rules, used daily by bankers, fund screeners and tax specialists."
+description: "Master's thesis, EPFL, 2026. Three AI systems deployed under FINMA rules and used daily by bankers, fund screeners and tax specialists."
 pubDate: 2026-03-27
 authors: ["P. A. Massih"]
 venue: "Master's thesis, EPFL, 2026. Advised by Prof. Amir Zamir (VILAB). Hosted by Bank Lombard Odier & Co Ltd, Oct 2025 – Apr 2026."
@@ -12,7 +12,7 @@ links:
 
 ## Production
 
-Deployed 3 AI systems under FINMA rules, used daily by bankers, fund screeners and tax specialists, and managed their releases, CI/CD, unit tests and Kafka integration.
+Deployed three AI systems under FINMA rules, used daily by bankers, fund screeners and tax specialists. Managed their releases, CI/CD, unit tests and Kafka integration.
 
 ## Retrieval
 
@@ -20,16 +20,16 @@ Sped up indexing of a 52-page prospectus from 17 minutes to 44 seconds at 95% pa
 
 Cut vector search latency from about 40 to under 10 seconds for 300-chunk queries by moving the index from in-memory LlamaIndex storage to Elasticsearch HNSW.
 
-Designed a callback architecture in which Python services post embeddings to a Spring Boot endpoint that writes to Elasticsearch, with idempotent IDs and exponential backoff, avoiding months of database access review.
+Designed a callback architecture in which Python services post embeddings to a Spring Boot endpoint that writes to Elasticsearch, with idempotent IDs and exponential backoff. This avoided months of database access review.
 
 Shrank the on-premises embedding model 70% at a 0.62 perplexity cost by benchmarking 30 GGUF quantization variants, and published them [on Hugging Face](https://huggingface.co/PeterAM4/Qwen3-Embedding-0.6B-GGUF).
 
 ## Generation
 
-Built an on-premises LLM advisory pipeline (Qwen3-30B-A3B) whose buy and sell recommendations passed the bank's research, CIO and portfolio checks 96% of the time, on par with GPT-5.1 with RAG (93%). Pooled over three test portfolios, that is 24 of 25 vs 28 of 30, and 14 of 30 for GPT-5.1 with web search. The thesis abstract quotes only the web-search comparison.
+Built an on-premises LLM advisory pipeline (Qwen3-30B-A3B) whose buy and sell recommendations passed the bank's research, CIO and portfolio checks 96% of the time, on par with GPT-5.1 with RAG (93%). Pooled over three test portfolios: 24 of 25 for the pipeline, 28 of 30 for GPT-5.1 with RAG, and 14 of 30 for GPT-5.1 with web search. The thesis abstract quotes only the web-search comparison.
 
 ## Detection
 
-Cut the false positive rate of unsupervised anomaly detection on 21,679 tax statements from 90% to 5% by filtering out non-cash payments and merging same-day rows, with 8 of 10 escalations confirmed as errors.
+Cut the false positive rate of unsupervised anomaly detection on 21,679 tax statements from 90% to 5% by filtering out non-cash payments and merging same-day rows. Of 10 escalations, 8 were confirmed as errors.
 
 Learned tax-field relations with ElasticNet at out-of-fold R² of 0.93 to 0.97 in nested 5-fold cross-validation over 4,267 clients (160,461 rows), then calibrated alert thresholds on held-out residuals.

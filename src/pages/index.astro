@@ -17,8 +17,6 @@ const recent = (await getCollection('writing', ({ data }) =>
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
   .slice(0, 3);
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-// The home list keeps each paper's status to its first sentence.
-const firstSentence = (s: string) => s.split('. ')[0].replace(/\.?$/, '.');
 // "Turned text into…" reads as "3D-BlockGen: turned text into…" after the name.
 const lower = (s: string) => s[0].toLowerCase() + s.slice(1);
 
@@ -102,8 +100,8 @@ const jsonLd = [
           <p><strong><a href={pub.page}>{pub.title}</a></strong></p>
           <p class="muted">
             {pub.authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)}
-            {' · '}{firstSentence(pub.status)}
-            {pub.links && <> <a href={pub.links[0].href}>{pub.links[0].label} →</a></>}
+            {' · '}{pub.status}
+            {pub.links && <>{' · '}<a href={pub.links[0].href}>{pub.links[0].label} →</a></>}
           </p>
         </>
       ))}

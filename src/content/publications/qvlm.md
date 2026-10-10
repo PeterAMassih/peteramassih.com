@@ -9,7 +9,7 @@ links:
   - { label: "Dataset", href: "https://huggingface.co/datasets/PeterAM4/SQuID" }
 ---
 
-A benchmark of 2,000 quantitative questions on satellite images with tolerance ranges calibrated from human annotations. A code-generation baseline reaches 42.0% vs 28.1% for the best zero-shot VLM.
+SQuID is a benchmark of 2,000 quantitative questions on satellite images. A code-generation baseline reaches 42.0% vs 28.1% for the best zero-shot VLM.
 
 Answer tolerances come from the median absolute deviation of 500 human annotations. QVLM has GPT-5 write Python that calls segmentation models and measures the masks.
 

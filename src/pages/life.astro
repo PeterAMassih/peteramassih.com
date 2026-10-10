@@ -11,7 +11,7 @@ import '../styles/canvas-toy.css';
     <header class="head">
       <h1>Life</h1>
       <p>
-        Conway's Game of Life is a cellular automaton invented by John Conway in 1970. Each cell on a grid is alive or dead. Every tick, the grid evolves by four simple rules applied to each cell based on its eight neighbors:
+        The Game of Life is a cellular automaton John Conway invented in 1970. Each cell on a grid is alive or dead. Every tick, each cell updates by four rules based on its eight neighbors:
       </p>
       <ol class="rules">
         <li>A live cell with fewer than 2 live neighbors dies (underpopulation).</li>
@@ -34,9 +34,9 @@ import '../styles/canvas-toy.css';
 
     <div class="controls">
       <span class="label">Speed:</span>
-      <button data-fps="3" type="button">slow</button>
-      <button data-fps="10" type="button" class="active">normal</button>
-      <button data-fps="30" type="button">fast</button>
+      <button data-fps="3" type="button">Slow</button>
+      <button data-fps="10" type="button" class="active">Normal</button>
+      <button data-fps="30" type="button">Fast</button>
     </div>
 
     <div class="controls patterns">
@@ -48,7 +48,7 @@ import '../styles/canvas-toy.css';
       <button data-pattern="gun" type="button">Gosper gun</button>
     </div>
 
-    <p class="hint muted">Click a pattern, then click on the grid to place it. Otherwise, click a cell to toggle.</p>
+    <p class="hint muted">Click a pattern, then click the grid to place it. Or click a cell to toggle it.</p>
   </main>
 </BaseLayout>
 

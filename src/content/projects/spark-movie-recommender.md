@@ -20,4 +20,4 @@ Four modules in the jar:
 
 JUnit tests on each stage. JDK 11, Scala 3.3.1, Spark 3.5.0.
 
-CS-460 Systems for Data Management & DS at EPFL.
+CS-460 Systems for Data Management and Data Science at EPFL.

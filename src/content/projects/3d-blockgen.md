@@ -1,6 +1,6 @@
 ---
 title: "3D-BlockGen"
-description: "Turned text into buildable LEGO models with a two-stage diffusion model (shape, then color) trained on a 542,292-sample voxelized Objaverse dataset, beating single-stage variants on IoU, F1 and color."
+description: "Turned text into buildable LEGO models with a two-stage diffusion model (shape, then color) trained on 542,292 voxelized Objaverse samples. It beats single-stage variants on IoU, F1 and color."
 startDate: 2024-09-01
 pubDate: 2025-01-16
 context: "Master project in Prof. Sabine Süsstrunk's lab (EPFL IVRL)"

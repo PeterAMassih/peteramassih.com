@@ -78,17 +78,17 @@ const jsonLd = [
       <div class="bg-row">
         <span class="bg-label">Experience</span>
         <ul>
-          <li><span>Machine Learning Research Intern<span class="where">NEC Laboratories America</span></span><span class="when">2025–2026</span></li>
-          <li><span>Software Engineer Intern, AI/ML<span class="where">Bank Lombard Odier</span></span><span class="when">2025–2026</span></li>
-          <li><span>Full-Stack AI Engineer Intern<span class="where">Ageospatial</span></span><span class="when">2024</span></li>
+          <li><span><span class="org">NEC Laboratories America</span>, Machine Learning Research Intern</span><span class="when">2025–2026</span></li>
+          <li><span><span class="org">Bank Lombard Odier</span>, Software Engineer Intern, AI/ML</span><span class="when">2025–2026</span></li>
+          <li><span><span class="org">Ageospatial</span>, Full-Stack AI Engineer Intern</span><span class="when">2024</span></li>
         </ul>
       </div>
       <div class="bg-row">
         <span class="bg-label">Education</span>
         <ul>
-          <li><span>MSc in Computer Science<span class="where">EPFL, Data Analytics and Machine Learning</span></span><span class="when">2023–2026</span></li>
-          <li><span>Exchange year<span class="where">ETH Zurich, Computer Science and Electrical Engineering</span></span><span class="when">2022–2023</span></li>
-          <li><span>BSc in Communication Systems<span class="where">EPFL, Electrical Engineering and Computer Science</span></span><span class="when">2020–2023</span></li>
+          <li><span><span class="org">EPFL</span>, MSc in Computer Science</span><span class="when">2023–2026</span></li>
+          <li><span><span class="org">ETH Zurich</span>, exchange year</span><span class="when">2022–2023</span></li>
+          <li><span><span class="org">EPFL</span>, BSc in Communication Systems</span><span class="when">2020–2023</span></li>
         </ul>
       </div>
     </section>
@@ -156,13 +156,14 @@ const jsonLd = [
   .bg-row + .bg-row { margin-top: var(--space-3); }
   .bg-label { width: 6rem; flex-shrink: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .bg-row ul { list-style: none; padding: 0; margin: 0; flex: 1; }
-  .bg-row li + li { margin-top: var(--space-3); }
+  .bg-row li + li { margin-top: var(--space-1); }
   /* Years sit flush right in their own column, like the dates on /projects/,
      so a long name wraps inside its cell instead of stranding the years. */
   .bg-row li { display: flex; justify-content: space-between; gap: var(--space-4); align-items: baseline; }
-  /* The place and field sit under the role in grey, so every word fits
-     without a long line wrapping mid-name. */
-  .where { display: block; font-size: var(--text-sm); color: var(--color-text-muted); }
+  /* Organization first, as on the CV; the role follows in smaller grey text
+     so each entry stays on one line. */
+  .bg-row li > span:first-child { font-size: var(--text-sm); color: var(--color-text-muted); }
+  .org { font-size: var(--text-base); color: var(--color-text); }
   .when { flex-shrink: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .name { color: var(--color-text); }
   .name:hover { color: var(--color-accent); }

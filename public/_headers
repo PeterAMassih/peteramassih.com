@@ -1,6 +1,16 @@
 # Cache policy for stable public assets. The build adds its own immutable
 # rule for hashed /_astro/* files; these cover the unhashed paths.
 
+# Baseline security headers on every static response: HTTPS only for a year,
+# no MIME sniffing, no framing by other sites, no referrer path to other
+# origins, and no camera, microphone or location access for any script.
+/*
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
 # Font files never change in place; a change means a new filename.
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable

@@ -9,8 +9,9 @@ import { pubs, ME } from '../data/publications';
 const picks = ['3d-blockgen', 'epfl-ta-meister', 'paraphrasing', 'rl-mountain-car'];
 const projects = (await getCollection('projects', ({ id }) => picks.includes(id)))
   .sort((a, b) => picks.indexOf(a.id) - picks.indexOf(b.id));
-// The two papers with their own page; the rest are on /publications/.
-const papers = pubs.filter((p) => p.page).reverse();
+// The two papers with their own page, the first-author preprint first; the
+// rest are on /publications/.
+const papers = pubs.filter((p) => p.page);
 const recent = (await getCollection('writing', ({ data }) =>
   import.meta.env.PROD ? !data.draft : true,
 ))
@@ -123,7 +124,10 @@ const jsonLd = [
           <li>
             <a href={`/writing/${post.id}/`}>
               <time datetime={post.data.pubDate.toISOString().slice(0, 10)}>{fmt.format(post.data.pubDate)}</time>
-              <span class="title">{post.data.title}</span>
+              <span>
+                <span class="title">{post.data.title}</span>
+                <span class="desc">{post.data.description}</span>
+              </span>
             </a>
           </li>
         ))}
@@ -173,6 +177,7 @@ const jsonLd = [
   .recent a:hover .title { color: var(--color-accent); }
   .recent time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-subtle); }
   .recent .title { transition: color var(--transition); }
+  .recent .desc { display: block; margin-top: var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); }
   .more { margin-top: var(--space-6); font-size: var(--text-sm); }
   .more a { padding-block: var(--space-1); }
   @media (max-width: 600px) {

@@ -6,13 +6,74 @@ tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
 ---
 
-**In short.** By late 2021, universal segmentation architectures were strong on semantic and panoptic segmentation but still trailed specialized instance systems. MaskFormer handled all three tasks with one design, yet lagged the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed that gap without abandoning the paradigm by rebuilding the decoder and the training recipe.
+**In short.** By late 2021, universal segmentation architectures were strong on semantic and panoptic segmentation but still trailed specialized instance systems. MaskFormer handled all three tasks with one design, yet lagged the best instance specialist by over 9 AP while needing 300 training epochs and a 32 GB GPU per image. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] closed that gap by rebuilding the decoder and the training recipe while keeping the paradigm.
 
-Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls to 50 epochs and reported training memory to 6 GB.
+Each query predicts a class and a mask. Masked cross-attention restricts the query's next image read to its current mask, the decoder cycles through three feature scales, and mask losses are evaluated at sampled points. These changes form a feedback loop. Matching assigns one target to each query, deep supervision trains every intermediate mask, each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable. The strongest Swin-L variants reach 57.8 PQ and 50.1 AP on COCO and 57.7 mIoU on ADE20K. With ResNet-50, the COCO schedule falls to 50 epochs and reported training memory to 6 GB.
 
-**Contents.** [0. Background](#0-the-background-you-need) · [1. The problem](#1-the-segmentation-problem) · [2. Two paradigms](#2-two-paradigms) · [3. Set prediction](#3-set-prediction-and-matching) · [4. Architecture](#4-the-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-feeding-the-decoder) · [7. Decoder rewiring](#7-rewiring-the-decoder-layer) · [8. Point-sampled losses](#8-matching-and-training-on-points) · [9. Training](#9-training-recipe) · [10. Results](#10-results) · [11. Ablations](#11-ablations-and-interactions) · [12. Limitations](#12-limitations) · [13. Later work](#13-later-work) · [14. Conclusion](#14-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [Appendix B](#appendix-b-questions-and-answers) · [References](#references) · [Citation](#citation)
+<figure class="viz" id="overview">
+<svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former in one picture. The backbone and pixel decoder turn the image into features at three resolutions and a per-pixel embedding map. N learned queries read those features in a nine-layer Transformer decoder. Each query predicts a class and a mask, and each mask limits where the next layer looks.">
+<defs><style>
+.ar-h { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; font-weight: 600; }
+.ar-t { font-family: var(--font-sans); fill: var(--color-text); font-size: 12px; }
+.ar-s { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.ar-g { font-family: var(--font-sans); fill: var(--viz-gold-text); font-size: 12px; }
+</style><marker id="ar-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker><marker id="ar-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker></defs>
+<rect width="720" height="280" rx="6" style="fill: var(--color-bg)"/>
+<rect x="16" y="52" width="70" height="46" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="51.0" y="80.0" text-anchor="middle">Image</text>
+<line x1="86" y1="75" x2="104" y2="75" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<rect x="106" y="46" width="104" height="58" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="158.0" y="66" text-anchor="middle">Backbone</text>
+<text class="ar-s" x="158.0" y="82" text-anchor="middle">finds features</text>
+<text class="ar-s" x="158.0" y="96" text-anchor="middle">ResNet or Swin</text>
+<line x1="210" y1="75" x2="228" y2="75" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<rect x="230" y="46" width="118" height="58" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="289.0" y="66" text-anchor="middle">Pixel decoder</text>
+<text class="ar-s" x="289.0" y="82" text-anchor="middle">3 feature sizes</text>
+<text class="ar-s" x="289.0" y="96" text-anchor="middle">+ pixel embeddings</text>
+<line x1="348" y1="61" x2="414" y2="61" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<text class="ar-s" x="381" y="57" text-anchor="middle">1/32</text>
+<line x1="348" y1="75" x2="414" y2="75" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<text class="ar-s" x="381" y="71" text-anchor="middle">1/16</text>
+<line x1="348" y1="89" x2="414" y2="89" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<text class="ar-s" x="381" y="85" text-anchor="middle">1/8</text>
+<rect x="416" y="30" width="176" height="96" rx="5" style="fill: var(--viz-box); stroke: var(--color-text); stroke-width: 1.4"/>
+<text class="ar-h" x="504.0" y="50" text-anchor="middle">Transformer decoder</text>
+<text class="ar-s" x="504.0" y="66" text-anchor="middle">queries read the features</text>
+<text class="ar-s" x="504.0" y="80" text-anchor="middle">9 layers, sizes 32, 16, 8</text>
+<text class="ar-s" x="504.0" y="94" text-anchor="middle">cycled three times</text>
+<circle cx="470" cy="182" r="6" style="fill: var(--viz-gold)"/>
+<circle cx="488" cy="182" r="6" style="fill: var(--viz-gold)"/>
+<circle cx="506" cy="182" r="6" style="fill: var(--viz-gold)"/>
+<text class="ar-g" x="488" y="206" text-anchor="middle">N learned queries</text>
+<path d="M 488 174 L 488 130" style="stroke: var(--viz-gold); stroke-width: 1.4; fill: none" marker-end="url(#ar-ag)"/>
+<rect x="614" y="30" width="92" height="42" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="660.0" y="50" text-anchor="middle">Class</text>
+<text class="ar-s" x="660.0" y="66" text-anchor="middle">what it is</text>
+<rect x="614" y="84" width="92" height="42" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="660.0" y="104" text-anchor="middle">Mask</text>
+<text class="ar-s" x="660.0" y="120" text-anchor="middle">where it is</text>
+<line x1="592" y1="56" x2="612" y2="51" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<line x1="592" y1="100" x2="612" y2="105" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<path d="M 660 126 C 660 160, 650 166, 630 166 L 600 166 C 580 166, 576 150, 576 130" style="stroke: var(--viz-gold); stroke-width: 1.4; stroke-dasharray: 4 3; fill: none" marker-end="url(#ar-ag)"/>
+<text class="ar-g" x="614" y="188" text-anchor="middle">each mask limits</text>
+<text class="ar-g" x="614" y="202" text-anchor="middle">where the next</text>
+<text class="ar-g" x="614" y="216" text-anchor="middle">layer looks</text>
+<path d="M 289 104 L 289 240 L 686 240 L 686 128" style="stroke: var(--viz-slate); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
+<text class="ar-s" x="488" y="258" text-anchor="middle" style="fill: var(--viz-slate)">pixel embedding map: a mask is each query compared with every pixel here</text>
+</svg>
+<figcaption>Overview. Mask2Former in one picture. The backbone and pixel decoder turn the image into features at three resolutions and a per-pixel embedding map. N learned queries read those features in nine decoder layers, cycling through the three resolutions. Each query predicts a class and a mask, and each mask limits where the next layer looks. §4 walks through each part.</figcaption>
+</figure>
 
 If you already know DETR and segmentation metrics, start at §4. For a shorter path, read sections 4 through 8 and section 11. Proofs and longer derivations are folded, and the main argument does not depend on them.
+
+**Contents.**
+
+- **Background.** [0. The background you need](#0-the-background-you-need) · [Notation](#notation) · [1. The segmentation problem](#1-the-segmentation-problem) · [2. Per-pixel versus mask classification](#2-per-pixel-versus-mask-classification)
+- **Matching and loss.** [3. Set prediction and matching](#3-set-prediction-and-matching)
+- **The model.** [4. The architecture](#4-the-architecture) · [5. Masked attention](#5-masked-attention) · [6. Multi-scale features](#6-multi-scale-features) · [7. Three changes to the decoder layer](#7-three-changes-to-the-decoder-layer) · [8. Matching and training on points](#8-matching-and-training-on-points)
+- **Training and results.** [9. Training recipe](#9-training-recipe) · [10. Results](#10-results) · [11. Ablations and interactions](#11-ablations-and-interactions) · [12. Limitations](#12-limitations)
+- **Wrap-up.** [13. Later work](#13-later-work) · [14. Conclusion](#14-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [Appendix B](#appendix-b-questions-and-answers) · [References](#references) · [Citation](#citation)
 
 ## 0. The background you need
 
@@ -102,86 +163,66 @@ $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V.
 $$
 
-$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location. In practice the model runs several lookups in parallel. Each head learns its own query, key, and value projections into a smaller feature space. The head outputs are concatenated and projected back to width $d$.
+$QK^\top$ contains every query-key score. Softmax turns each row into weights over locations, and multiplication by $V$ returns a weighted average of their values. Dividing by $\sqrt d$ keeps the logits from growing with the key dimension and pushing softmax toward saturation. Cross-attention builds $Q$ from the queries and $K,V$ from the image. Self-attention builds all three from the same token set. A token is one vector in that set, a query or the vector at one image location. In practice the model runs several lookups, called heads, in parallel. Each head learns its own query, key, and value projections into a smaller feature space. The head outputs are concatenated and projected back to width $d$.
 
 <figure class="viz">
-<svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One attention lookup. A query is scored against four keys and softmax turns the scores into weights that sum to 1.">
-<defs>
-<style>
-.av-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
-.av-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-.av-num { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-</style>
-<marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
-</defs>
-<rect width="700" height="270" rx="6" style="fill: var(--color-bg)"/>
-<text class="av-lbl" x="208" y="44" text-anchor="middle">keys</text>
-<text class="av-lbl" x="296" y="44" text-anchor="middle">values</text>
-<text class="av-lbl" x="372" y="44" text-anchor="middle">score q&#183;k/&#8730;d</text>
-<text class="av-lbl" x="525" y="44" text-anchor="middle">weights</text>
-<text class="av-sub" x="525" y="58" text-anchor="middle">sum to 1</text>
-<text class="av-lbl" x="70" y="120" text-anchor="middle">query q</text>
-<rect x="30" y="130" width="80" height="20" fill-opacity="0.13" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
-<line x1="50" y1="130" x2="50" y2="150" style="stroke: var(--viz-grid)"/><line x1="70" y1="130" x2="70" y2="150" style="stroke: var(--viz-grid)"/><line x1="90" y1="130" x2="90" y2="150" style="stroke: var(--viz-grid)"/>
-<text class="av-sub" x="70" y="168" text-anchor="middle">the question</text>
-<line x1="112" y1="140" x2="166" y2="74" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
-<line x1="112" y1="140" x2="166" y2="118" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
-<line x1="112" y1="140" x2="166" y2="162" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
-<line x1="112" y1="140" x2="166" y2="206" stroke-dasharray="3 3" opacity="0.6" style="stroke: var(--viz-line)"/>
-<g>
-<rect x="170" y="64" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="170" y="108" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="170" y="152" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="170" y="196" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<line x1="189" y1="64" x2="189" y2="84" style="stroke: var(--viz-grid)"/><line x1="208" y1="64" x2="208" y2="84" style="stroke: var(--viz-grid)"/><line x1="227" y1="64" x2="227" y2="84" style="stroke: var(--viz-grid)"/>
-<line x1="189" y1="108" x2="189" y2="128" style="stroke: var(--viz-grid)"/><line x1="208" y1="108" x2="208" y2="128" style="stroke: var(--viz-grid)"/><line x1="227" y1="108" x2="227" y2="128" style="stroke: var(--viz-grid)"/>
-<line x1="189" y1="152" x2="189" y2="172" style="stroke: var(--viz-grid)"/><line x1="208" y1="152" x2="208" y2="172" style="stroke: var(--viz-grid)"/><line x1="227" y1="152" x2="227" y2="172" style="stroke: var(--viz-grid)"/>
-<line x1="189" y1="196" x2="189" y2="216" style="stroke: var(--viz-grid)"/><line x1="208" y1="196" x2="208" y2="216" style="stroke: var(--viz-grid)"/><line x1="227" y1="196" x2="227" y2="216" style="stroke: var(--viz-grid)"/>
-</g>
-<g>
-<rect x="258" y="64" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="258" y="108" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="258" y="152" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<rect x="258" y="196" width="76" height="20" fill-opacity="0.08" style="fill: var(--viz-slate); stroke: var(--viz-slate)"/>
-<line x1="277" y1="64" x2="277" y2="84" style="stroke: var(--viz-grid)"/><line x1="296" y1="64" x2="296" y2="84" style="stroke: var(--viz-grid)"/><line x1="315" y1="64" x2="315" y2="84" style="stroke: var(--viz-grid)"/>
-<line x1="277" y1="108" x2="277" y2="128" style="stroke: var(--viz-grid)"/><line x1="296" y1="108" x2="296" y2="128" style="stroke: var(--viz-grid)"/><line x1="315" y1="108" x2="315" y2="128" style="stroke: var(--viz-grid)"/>
-<line x1="277" y1="152" x2="277" y2="172" style="stroke: var(--viz-grid)"/><line x1="296" y1="152" x2="296" y2="172" style="stroke: var(--viz-grid)"/><line x1="315" y1="152" x2="315" y2="172" style="stroke: var(--viz-grid)"/>
-<line x1="277" y1="196" x2="277" y2="216" style="stroke: var(--viz-grid)"/><line x1="296" y1="196" x2="296" y2="216" style="stroke: var(--viz-grid)"/><line x1="315" y1="196" x2="315" y2="216" style="stroke: var(--viz-grid)"/>
-</g>
-<g class="av-num">
-<text x="372" y="78" text-anchor="middle">2.0</text>
-<text x="372" y="122" text-anchor="middle">&#8722;0.6</text>
-<text x="372" y="166" text-anchor="middle">&#8722;2.2</text>
-<text x="372" y="210" text-anchor="middle">1.1</text>
-</g>
-<line x1="402" y1="140" x2="456" y2="140" marker-end="url(#av-ar)" style="stroke: var(--viz-line)"/>
-<text class="av-sub" x="429" y="130" text-anchor="middle">softmax</text>
-<g fill-opacity="0.75" style="fill: var(--viz-gold)">
-<rect x="470" y="68" width="94" height="12"/>
-<rect x="470" y="112" width="7" height="12"/>
-<rect x="470" y="156" width="2.5" height="12"/>
-<rect x="470" y="200" width="38" height="12"/>
-</g>
-<g class="av-num">
-<text x="570" y="78">0.67</text>
-<text x="483" y="122">0.05</text>
-<text x="479" y="166">0.01</text>
-<text x="514" y="210">0.27</text>
-</g>
-<line x1="600" y1="74" x2="616" y2="136" stroke-width="1.3" opacity="0.85" style="stroke: var(--viz-gold)"/>
-<line x1="600" y1="118" x2="616" y2="139" stroke-width="1.3" opacity="0.3" style="stroke: var(--viz-gold)"/>
-<line x1="600" y1="162" x2="616" y2="141" stroke-width="1.3" opacity="0.2" style="stroke: var(--viz-gold)"/>
-<line x1="600" y1="206" x2="616" y2="144" stroke-width="1.3" opacity="0.55" style="stroke: var(--viz-gold)"/>
-<text class="av-lbl" x="651" y="120" text-anchor="middle">output</text>
-<rect x="618" y="130" width="66" height="20" fill-opacity="0.15" style="fill: var(--viz-gold); stroke: var(--viz-gold)"/>
-<line x1="635" y1="130" x2="635" y2="150" style="stroke: var(--viz-grid)"/><line x1="651" y1="130" x2="651" y2="150" style="stroke: var(--viz-grid)"/><line x1="668" y1="130" x2="668" y2="150" style="stroke: var(--viz-grid)"/>
-<text class="av-sub" x="350" y="234" text-anchor="middle">each row is one image location, its key matched against the query, its value carrying what the location contains</text>
-<text class="av-sub" x="350" y="252" text-anchor="middle">output = 0.67&#183;v&#8321; + 0.05&#183;v&#8322; + 0.01&#183;v&#8323; + 0.27&#183;v&#8324;, one row of softmax(QK&#7488;/&#8730;d)V</text>
+<svg class="m2f-attn" style="min-width: 560px" viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Attention as a soft lookup. A query is compared with the keys of four image locations. Softmax turns the match scores 2.0, minus 0.6, minus 2.2 and 1.1 into weights 0.67, 0.05, 0.01 and 0.27, which add up to 1. The output mixes the four values by those weights.">
+<defs><style>
+.av-h { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; font-weight: 600; }
+.av-t { font-family: var(--font-sans); fill: var(--color-text); font-size: 12px; }
+.av-s { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.av-g { font-family: var(--font-sans); fill: var(--viz-gold-text); font-size: 12px; }
+</style><marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker><marker id="av-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker></defs>
+<rect width="700" height="300" rx="6" style="fill: var(--color-bg)"/>
+<text class="av-h" x="70" y="40" text-anchor="middle">query</text>
+<text class="av-s" x="70" y="56" text-anchor="middle">what it looks for</text>
+<text class="av-h" x="205" y="40" text-anchor="middle">key</text>
+<text class="av-s" x="205" y="56" text-anchor="middle">gets matched</text>
+<text class="av-h" x="300" y="40" text-anchor="middle">value</text>
+<text class="av-s" x="300" y="56" text-anchor="middle">gets mixed in</text>
+<text class="av-h" x="385" y="40" text-anchor="middle">match</text>
+<text class="av-s" x="385" y="56" text-anchor="middle">query vs key</text>
+<text class="av-h" x="505" y="40" text-anchor="middle">weight</text>
+<text class="av-s" x="505" y="56" text-anchor="middle">softmax, sums to 1</text>
+<text class="av-h" x="650" y="40" text-anchor="middle">output</text>
+<text class="av-s" x="650" y="56" text-anchor="middle">mix of values</text>
+<rect x="30" y="141.0" width="80" height="22" rx="4" style="fill: var(--viz-gold); fill-opacity: 0.14; stroke: var(--viz-gold)"/><text class="av-t" x="70.0" y="156.0" text-anchor="middle">query</text>
+<line x1="110" y1="152.0" x2="168" y2="86" style="stroke: var(--viz-line); stroke-dasharray: 3 3; opacity: 0.6"/>
+<rect x="170" y="75" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="205.0" y="90" text-anchor="middle">key 1</text>
+<rect x="265" y="75" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="300.0" y="90" text-anchor="middle">value 1</text>
+<text class="av-t" x="385" y="90" text-anchor="middle">2.0</text>
+<rect x="440" y="80" width="93.6" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="av-s" x="539.6" y="90">0.67</text>
+<line x1="569.6" y1="86" x2="608" y2="152.0" style="stroke: var(--viz-gold); stroke-width: 2.07; opacity: 0.72"/>
+<line x1="110" y1="152.0" x2="168" y2="130" style="stroke: var(--viz-line); stroke-dasharray: 3 3; opacity: 0.6"/>
+<rect x="170" y="119" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="205.0" y="134" text-anchor="middle">key 2</text>
+<rect x="265" y="119" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="300.0" y="134" text-anchor="middle">value 2</text>
+<text class="av-t" x="385" y="134" text-anchor="middle">&#8722;0.6</text>
+<rect x="440" y="124" width="7.0" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="av-s" x="453.0" y="134">0.05</text>
+<line x1="483.0" y1="130" x2="608" y2="152.0" style="stroke: var(--viz-gold); stroke-width: 0.71; opacity: 0.28"/>
+<line x1="110" y1="152.0" x2="168" y2="174" style="stroke: var(--viz-line); stroke-dasharray: 3 3; opacity: 0.6"/>
+<rect x="170" y="163" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="205.0" y="178" text-anchor="middle">key 3</text>
+<rect x="265" y="163" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="300.0" y="178" text-anchor="middle">value 3</text>
+<text class="av-t" x="385" y="178" text-anchor="middle">&#8722;2.2</text>
+<rect x="440" y="168" width="2.5" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="av-s" x="448.5" y="178">0.01</text>
+<line x1="478.5" y1="174" x2="608" y2="152.0" style="stroke: var(--viz-gold); stroke-width: 0.62; opacity: 0.26"/>
+<line x1="110" y1="152.0" x2="168" y2="218" style="stroke: var(--viz-line); stroke-dasharray: 3 3; opacity: 0.6"/>
+<rect x="170" y="207" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="205.0" y="222" text-anchor="middle">key 4</text>
+<rect x="265" y="207" width="70" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="av-s" x="300.0" y="222" text-anchor="middle">value 4</text>
+<text class="av-t" x="385" y="222" text-anchor="middle">1.1</text>
+<rect x="440" y="212" width="38.1" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="av-s" x="484.1" y="222">0.27</text>
+<line x1="514.1" y1="218" x2="608" y2="152.0" style="stroke: var(--viz-gold); stroke-width: 1.20; opacity: 0.44"/>
+<rect x="610" y="141.0" width="80" height="22" rx="4" style="fill: var(--viz-gold); fill-opacity: 0.14; stroke: var(--viz-gold)"/><text class="av-t" x="650.0" y="156.0" text-anchor="middle">output</text>
+<text class="av-s" x="350" y="264" text-anchor="middle">each row is one image location: its key is matched against the query, its value is mixed in</text>
+<text class="av-t" x="350" y="284" text-anchor="middle">output = 0.67 &#215; value 1 + 0.05 &#215; value 2 + 0.01 &#215; value 3 + 0.27 &#215; value 4</text>
 </svg>
-<figcaption>Fig. 0b. One attention lookup. The query is scored against every location's key. Softmax turns the scores into positive weights that sum to 1. The output is the weighted average of the values. §5 shows how Mask2Former excludes locations before this average is computed.</figcaption>
+<figcaption>Fig. 0b. Attention is a soft lookup. The query is matched against each location's key, softmax turns the match scores into weights that sum to 1, and the output mixes the values by those weights. §5 shows how Mask2Former blocks locations before this mix.</figcaption>
 </figure>
 
-**Transformers and decoders.** A Transformer decoder layer combines two attention steps with a per-token network and residual connections. Each query carries a vector $x$. Omitting normalization and learned projections, Mask2Former applies three updates in order.
+**Transformers and decoders.** A Transformer decoder layer combines two attention steps with a per-token feed-forward network (FFN) and residual connections. Each query carries a vector $x$. Omitting normalization and learned projections, Mask2Former applies three updates in order.
 
 $$
 x \,\leftarrow\, x + \operatorname{Attention}(x,\ \text{image}), \qquad
@@ -191,7 +232,7 @@ $$
 
 The first attention step reads image features, using $x$ to form queries and the image features to form keys and values. The second is self-attention and lets queries exchange information. The feed-forward network then processes each query independently. Residual connections add each update to the current state. Mask2Former stacks nine decoder layers, and each query produces one candidate segment.
 
-**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Plain gradient descent illustrates the basic update. It computes $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, then moves a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The step size $\eta$ is the learning rate. Mask2Former uses AdamW rather than this plain update, as §9 explains. Sections 3 and 8 define the loss and show how predictions receive training signals.
+**Losses, gradients, training.** A loss $\mathcal{L}$ is a single number measuring how wrong the current output is. Plain gradient descent illustrates the basic update. For model weights $w$, it computes $\nabla_w \mathcal{L}$, the direction in weight space that increases the loss fastest, then moves a small step the other way, $w \leftarrow w - \eta\, \nabla_w \mathcal{L}$. The step size $\eta$ is the learning rate. Mask2Former uses AdamW rather than this plain update (§9). Sections 3 and 8 define the loss and show how predictions receive training signals.
 
 **IoU.** Intersection over union compares two regions $A$ and $B$ with nonempty union.
 
@@ -225,7 +266,7 @@ In the figures, gold marks what the model predicts (queries and masks), green ma
 | $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
 | $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which maps finite real scores into $(0,1)$ and approaches the endpoints in the limit. This $\sigma$ is unrelated to §3's matching permutation |
 | $\mathbb{1}[\cdot]$ | the indicator, with $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
-| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | BCE, Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
+| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | Binary cross-entropy (BCE), Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
 | $K_{\text{pt}}$ | number of sampled points for mask losses, $12{,}544 = 112^2$ |
 
 ## 1. The segmentation problem
@@ -240,7 +281,7 @@ $$
 
 where $P_c$ and $G_c$ are the predicted and ground-truth pixel sets of class $c$ [[Everingham et al. 2015](#ref-everingham2015)]. Restricting the average to classes with nonzero union removes the $0/0$ case.
 
-**Instance segmentation** returns one scored mask per detected thing. Mask AP ranks predictions by confidence and measures precision and recall across IoU thresholds from $0.50$ to $0.95$ [[Lin et al. 2014](#ref-lin2014)].
+**Instance segmentation** returns one scored mask per detected thing. Mask average precision (AP) ranks predictions by confidence and measures precision and recall across IoU thresholds from $0.50$ to $0.95$ [[Lin et al. 2014](#ref-lin2014)].
 
 <details class="proof">
 <summary>How COCO mask AP is computed</summary>
@@ -272,7 +313,7 @@ Here $|G|$ is the number of ground-truth masks, $\mathcal{T} = \{0.50, 0.55, \do
 
 </details>
 
-**Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every evaluated pixel receives a class and an instance id, with identities on things and plain categories on stuff. Evaluation first sets aside void pixels, which carry no label, and crowd regions, which group objects the annotators could not separate. Write $\mathit{TP}$ for matched pairs, $\mathit{FP}$ for unmatched predictions, and $\mathit{FN}$ for unmatched ground-truth segments. Quality is
+**Panoptic segmentation** [[Kirillov et al. 2019](#ref-kirillov2019pan)] unifies both. Every evaluated pixel receives a class and an instance id, with identities on things and plain categories on stuff. Evaluation first sets aside void pixels, which carry no label, and crowd regions, which group objects the annotators could not separate. Write $\mathit{TP}$ for matched pairs, $\mathit{FP}$ for unmatched predictions, and $\mathit{FN}$ for unmatched ground-truth segments. Panoptic quality (PQ) is
 
 $$
 \text{PQ} = \frac{\sum_{(p,g)\in \mathit{TP}}\text{IoU}(p,g)}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}
@@ -282,7 +323,7 @@ $$
 \underbrace{\frac{|\mathit{TP}|}{|\mathit{TP}| + \tfrac12|\mathit{FP}| + \tfrac12|\mathit{FN}|}}_{\text{RQ}}.
 $$
 
-A match requires $\text{IoU} > 0.5$. PQ is computed per class, then averaged over classes with at least one true-positive, false-positive, or false-negative segment. SQ is the average IoU of the matched pairs. RQ is an F1-like term that penalizes missed and extra segments. Their product follows by multiplying and dividing by $|\mathit{TP}|$ when at least one match exists. If $|\mathit{TP}| = 0$ but the denominator is nonzero, PQ is $0$ and the factorization is not used. The next lemma explains why matches above the threshold are unique.
+A match requires $\text{IoU} > 0.5$. PQ is computed per class, then averaged over classes with at least one true-positive, false-positive, or false-negative segment. Segmentation quality (SQ) is the average IoU of the matched pairs. Recognition quality (RQ) is an F1-like term that penalizes missed and extra segments. The factorization follows by multiplying and dividing by $|\mathit{TP}|$ when at least one match exists. If $|\mathit{TP}| = 0$ but the denominator is nonzero, PQ is $0$ and the factorization is not used. The next lemma explains why matches above the threshold are unique.
 
 **Lemma (matches are unique).** *If predicted segments and ground-truth segments are each pairwise disjoint, as the panoptic format requires, then $\text{IoU} > 0.5$ pairs one-to-one. Each segment can match at most one segment from the other set.*
 
@@ -303,7 +344,7 @@ So every matching prediction covers more than half of $g$. Now suppose two predi
 
 </details>
 
-Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matching, pairing segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and a genuine assignment problem appears.
+Above the $0.5$ threshold, matching is therefore unambiguous. Greedy matching, which pairs segments one at a time with the best still-unclaimed partner, is exact. Contrast this with training-time matching (§3), where predictions overlap freely, costs are soft, and an assignment problem appears.
 
 <figure class="viz">
 <svg class="m2f-tasks" style="min-width: 560px" viewBox="0 0 720 236" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One street scene segmented three ways. Semantic segmentation merges two adjacent cars into one car region and labels sky and road. Instance segmentation keeps car 1 and car 2 apart and leaves sky and road unlabeled. Panoptic segmentation labels sky and road and keeps both cars apart.">
@@ -350,7 +391,7 @@ Above the $0.5$ threshold, matching is therefore unambiguous, and greedy matchin
 
 The output semantics differ, but the underlying problem is still pixel grouping. Mask2Former asks whether one architecture can serve all three tasks.
 
-## 2. Two paradigms
+## 2. Per-pixel versus mask classification
 
 ### 2.1 Per-pixel classification (2015 onward)
 
@@ -380,7 +421,7 @@ $$
 
 The same prediction format supports all three tasks. Semantic targets contain one mask per class present in the image. Instance targets contain one mask per object. Panoptic targets contain one mask per thing or stuff segment. The architecture and loss keep the same form, while targets, checkpoints, and post-processing remain task-specific.
 
-**Example.** For the puppy in Fig. 2, one query predicts class $c_i = \texttt{dog}$ and a mask $m_i$. The mask holds a probability for every pixel rather than hard zeros and ones. Thresholding it at $0.5$ gives a binary mask.
+**Example.** For the dog in Fig. 2, one query predicts class $c_i = \texttt{dog}$ and a mask $m_i$. The mask holds a probability for every pixel rather than hard zeros and ones. Thresholding it at $0.5$ gives a binary mask.
 
 <figure class="viz">
 <img src="/assets/m2f/mask_classification.webp" width="1572" height="568" loading="lazy" decoding="async" alt="A photograph of a French bulldog with its predicted mask in gold, and beside it the soft mask, gold where the probability is high, with its 0.5 level outlined.">
@@ -391,11 +432,11 @@ Universal architectures still trailed specialized instance systems in 2021. Mask
 
 ## 3. Set prediction and matching
 
-This matching structure comes from DETR and MaskFormer. Mask2Former changes where the mask costs are evaluated, as §8 explains.
+This matching structure comes from DETR and MaskFormer. Readers who know DETR's matching can skip to §4. Mask2Former changes where the mask costs are evaluated, as §8 explains.
 
 ### 3.1 Matching as an assignment problem
 
-The model returns a fixed set of $N$ predictions, 100 by default. Before computing the loss, it finds the lowest-cost one-to-one pairing between predictions and ground truth. The Hungarian algorithm computes this matching. The loss then scores each matched pair, while unmatched predictions are trained as no-object.
+The model returns a fixed set of $N$ predictions, 100 by default. Before computing the loss, it finds the lowest-cost one-to-one pairing between predictions and ground truth. The Hungarian algorithm computes this matching. The loss then scores each matched pair, while unmatched predictions are trained as no-object. An independent nearest-target choice could assign two queries to one object and leave another unmatched. One-to-one training discourages these duplicates and enables inference without non-maximum suppression.
 
 Assume an image contains at most $N$ real targets. Pad the ground truth with $\varnothing$ entries up to size $N$, so predictions and targets are both $N$-element sets. Write $\text{cost}(i, j)$ for the cost of pairing prediction $i$ with target $j$, where target $j$ carries class $c^{\text{gt}}_j$ and mask $m^{\text{gt}}_j$. The padded entries have $c^{\text{gt}}_j = \varnothing$.
 
@@ -403,7 +444,7 @@ $$
 \text{cost}(i,j) = \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\!-\lambda_{\text{cls}}\,\hat p_{i}(c^{\text{gt}}_j) + \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big).
 $$
 
-The minus sign favors predictions that already assign high probability to the target class. The matcher uses class probability rather than log probability. Its mask terms use the same binary cross-entropy (BCE) and Dice forms used for training. The released code solves a rectangular predictions-by-targets problem over real targets. Padding with zero-cost no-object targets gives the equivalent square matching problem used in the proof below. The classification loss later trains every unmatched prediction as no-object.
+The minus sign favors predictions that already assign high probability to the target class. The matcher uses class probability rather than log probability. Its mask terms use the same binary cross-entropy (BCE) and Dice forms used for training. The released code solves a rectangular predictions-by-targets problem over real targets. Padding with zero-cost no-object targets gives the equivalent square matching problem used in the proof below.
 
 In the square view, an assignment is a permutation $\sigma \in S_N$, where $S_N$ is the set of all $N!$ reorderings. Restricted to the real targets, it pairs every target with one unique prediction. Padded targets have zero cost, so their order is irrelevant. The total cost is
 
@@ -412,6 +453,87 @@ J(\sigma) = \sum_{j=1}^{N} \text{cost}(\sigma(j),\, j),
 $$
 
 and the matcher chooses $\hat\sigma = \arg\min_{\sigma} J(\sigma)$. The classic Hungarian algorithm solves this assignment problem [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)]. A later bookkeeping refinement brings the runtime to $O(N^3)$. The released code calls [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html), which uses a modified Jonker-Volgenant algorithm. The code builds the cost matrix on sampled mask points, as §8 describes.
+
+<figure class="viz">
+<svg class="m2f-match" style="min-width: 560px" viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two ways to pair three predictions with three targets. Taking the cheapest pair first picks costs 0, then 2, and leaves a pair costing 4, total 6. The best assignment pays 1, 2 and 2, total 5.">
+<defs><style>
+.hm-h { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; font-weight: 600; }
+.hm-t { font-family: var(--font-sans); fill: var(--color-text); font-size: 12px; }
+.hm-s { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.hm-g { font-family: var(--font-sans); fill: var(--viz-gold-text); font-size: 12px; }
+</style><marker id="hm-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker><marker id="hm-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker></defs>
+<rect width="700" height="270" rx="6" style="fill: var(--color-bg)"/>
+<text class="hm-h" x="180" y="38" text-anchor="middle">Cheapest pair first</text>
+<text class="hm-g" x="90" y="72" text-anchor="middle">predictions</text>
+<text class="hm-s" x="270" y="72" text-anchor="middle" style="fill: var(--viz-green)">targets</text>
+<line x1="90" y1="104" x2="270" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="104" x2="270" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="104" x2="270" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="152" x2="270" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="152" x2="270" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="152" x2="270" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="200" x2="270" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="200" x2="270" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="200" x2="270" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="90" y1="152" x2="270" y2="152" style="stroke: var(--viz-ember); stroke-width: 2.4; stroke-dasharray: 6 4"/>
+<line x1="90" y1="200" x2="270" y2="200" style="stroke: var(--viz-ember); stroke-width: 2.4; stroke-dasharray: 6 4"/>
+<line x1="90" y1="104" x2="270" y2="104" style="stroke: var(--viz-ember); stroke-width: 2.4; stroke-dasharray: 6 4"/>
+<rect x="109.5" y="142.0" width="83.4" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="151.2" y="156.0" text-anchor="middle">0 &#183; 1st pick</text>
+<rect x="109.5" y="190.0" width="83.4" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="151.2" y="204.0" text-anchor="middle">2 &#183; 2nd pick</text>
+<rect x="106.4" y="94.0" width="89.6" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="151.2" y="108.0" text-anchor="middle">4 &#183; left over</text>
+<circle cx="90" cy="104" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="90" y="108" text-anchor="middle" style="fill: var(--color-bg)">1</text>
+<circle cx="270" cy="104" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="270" y="108" text-anchor="middle">1</text>
+<circle cx="90" cy="152" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="90" y="156" text-anchor="middle" style="fill: var(--color-bg)">2</text>
+<circle cx="270" cy="152" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="270" y="156" text-anchor="middle">2</text>
+<circle cx="90" cy="200" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="90" y="204" text-anchor="middle" style="fill: var(--color-bg)">3</text>
+<circle cx="270" cy="200" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="270" y="204" text-anchor="middle">3</text>
+<text class="hm-h" x="180" y="246" text-anchor="middle" style="fill: var(--viz-ember)">total cost 0 + 2 + 4 = 6</text>
+<text class="hm-h" x="520" y="38" text-anchor="middle">Best total (Hungarian)</text>
+<text class="hm-g" x="430" y="72" text-anchor="middle">predictions</text>
+<text class="hm-s" x="610" y="72" text-anchor="middle" style="fill: var(--viz-green)">targets</text>
+<line x1="430" y1="104" x2="610" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="104" x2="610" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="104" x2="610" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="152" x2="610" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="152" x2="610" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="152" x2="610" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="200" x2="610" y2="104" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="200" x2="610" y2="152" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="200" x2="610" y2="200" style="stroke: var(--viz-grid); stroke-width: 1"/>
+<line x1="430" y1="104" x2="610" y2="152" style="stroke: var(--color-text); stroke-width: 2.4"/>
+<line x1="430" y1="152" x2="610" y2="104" style="stroke: var(--color-text); stroke-width: 2.4"/>
+<line x1="430" y1="200" x2="610" y2="200" style="stroke: var(--color-text); stroke-width: 2.4"/>
+<rect x="462.0" y="104.6" width="15.2" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="469.6" y="118.6" text-anchor="middle">1</text>
+<rect x="462.0" y="131.4" width="15.2" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="469.6" y="145.4" text-anchor="middle">2</text>
+<rect x="462.0" y="190.0" width="15.2" height="19" rx="9" style="fill: var(--color-bg); stroke: var(--viz-grid)"/>
+<text class="hm-t" x="469.6" y="204.0" text-anchor="middle">2</text>
+<circle cx="430" cy="104" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="430" y="108" text-anchor="middle" style="fill: var(--color-bg)">1</text>
+<circle cx="610" cy="104" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="610" y="108" text-anchor="middle">1</text>
+<circle cx="430" cy="152" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="430" y="156" text-anchor="middle" style="fill: var(--color-bg)">2</text>
+<circle cx="610" cy="152" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="610" y="156" text-anchor="middle">2</text>
+<circle cx="430" cy="200" r="12" style="fill: var(--viz-gold)"/>
+<text class="hm-t" x="430" y="204" text-anchor="middle" style="fill: var(--color-bg)">3</text>
+<circle cx="610" cy="200" r="12" style="fill: var(--color-bg); stroke: var(--viz-green); stroke-width: 2"/>
+<text class="hm-t" x="610" y="204" text-anchor="middle">3</text>
+<text class="hm-h" x="520" y="246" text-anchor="middle" style="fill: var(--color-text)">total cost 1 + 2 + 2 = 5</text>
+</svg>
+<figcaption>Fig. 3. Matching is a global choice. Taking the cheapest pair first (cost 0) leaves a costly pair for last, for a total of 6. The best assignment accepts one slightly worse pair and pays 5 in total, and the Hungarian algorithm finds it. The costs come from the worked 3 by 3 example in the folds below.</figcaption>
+</figure>
 
 The linear-program relaxation has an optimal permutation vertex. A companion maximization problem supplies a lower bound, and the Hungarian method reaches that bound by growing a matching on zero reduced-cost edges.
 
@@ -428,7 +550,7 @@ $$
 
 The relaxation lets a prediction split fractionally across targets, which no real assignment can do. Total unimodularity guarantees that an optimal vertex is still a whole-number permutation.
 
-The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. That structure is what makes the matrix *totally unimodular*.
+The constraint matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ prediction constraints and the $N$ target constraints, and each variable $x_{ij}$ appears in exactly two of them, prediction $i$'s row and target $j$'s row. So the rows carry a 2-coloring, predictions against targets, with every column showing a single 1 in each color. This structure makes the matrix *totally unimodular*.
 
 **Lemma (total unimodularity).** *Every square submatrix $B$ of the constraint matrix has $\det B \in \{-1, 0, +1\}$.*
 
@@ -440,7 +562,7 @@ The matrix is the incidence matrix of a bipartite graph. Its rows are the $N$ pr
 
 - *Zero 1s.* The column is all zeros, so $\det B = 0$.
 - *One 1,* at row $r$, column $c$ of $B$. [Laplace-expand](https://en.wikipedia.org/wiki/Laplace_expansion) along that column. Only the single nonzero entry contributes, so $\det B = (-1)^{r+c}\det B'$, where $B'$ deletes row $r$ and column $c$. Now $B'$ has order $k-1$, so $\det B' \in \{-1,0,1\}$ by the hypothesis, hence $\det B = \pm\det B' \in \{-1,0,1\}$.
-- *Two 1s in every column.* Every constraint-matrix column carries its two 1s in one prediction-row and one target-row, so each column of $B$ has one 1 among the prediction-rows $P$ and one among the target-rows $T$. Summing the rows in $P$ picks up exactly one 1 per column, giving the all-ones vector $\mathbf 1$, and summing the rows in $T$ gives $\mathbf 1$ the same way. So $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 0$, a nontrivial dependence among the rows, and $B$ is [singular](https://en.wikipedia.org/wiki/Invertible_matrix) with $\det B = 0$.
+- *Two 1s in every column.* Every constraint-matrix column has one 1 in a prediction-row and one in a target-row. So each column of $B$ has one 1 among the prediction-rows $P$ and one among the target-rows $T$. Summing the rows in $P$ picks up exactly one 1 per column, giving the all-ones vector $\mathbf 1$, and summing the rows in $T$ gives $\mathbf 1$ the same way. So $\sum_{r\in P} B_r - \sum_{r\in T} B_r = \mathbf 0$, a nontrivial dependence among the rows, and $B$ is [singular](https://en.wikipedia.org/wiki/Invertible_matrix) with $\det B = 0$.
 
 Every case lands in $\{-1,0,1\}$. $\blacksquare$
 
@@ -511,11 +633,11 @@ $$
 \tilde c = C - u - v = \begin{pmatrix} 2 & 0 & 2\\ 1 & 0 & 5\\ 0 & 0 & 0 \end{pmatrix}.
 $$
 
-A reduced cost is the pairing cost after subtracting the current row and column potentials. It measures how far an edge sits above the current dual baseline. Every row and every column now holds a zero. The column pass cannot remove a row's zero because that zero sits in a column whose minimum is already $0$, so $v_j=0$ there and the entry stays unchanged.
+Every row and every column now holds a zero. The column pass cannot remove a row's zero because that zero sits in a column whose minimum is already $0$, so $v_j=0$ there and the entry stays unchanged.
 
 **Match on zeros.** Pair rows to columns through tight edges only, never reusing a row or a column. Row 1 takes column 2 and row 3 takes column 1. Row 2's only zero sits in column 2, already taken, so the matching stalls at two pairs.
 
-The tool for getting unstuck is the augmenting path. Call a row or column free while it has no partner. An augmenting path starts at a free row, steps to a column through a zero, steps from that column to its partner row through the matched edge, steps to a new column through another zero, and keeps alternating until it lands on a free column. Flip every edge along it, matched becoming unmatched and back. Each interior row and column trades one partner for another while the two free endpoints gain one, so the matching grows by exactly one pair. Matching as far as possible means flipping augmenting paths until none exists.
+The tool for getting unstuck is the augmenting path. Call a row or column free while it has no partner. An augmenting path starts at a free row and steps to a column through a zero. From that column it follows the matched edge to the partner row, then steps to a new column through another zero. It keeps alternating until it lands on a free column. Flip every edge along it, so matched edges become unmatched and unmatched edges become matched. Each interior row and column trades one partner for another while the two free endpoints gain one, so the matching grows by exactly one pair. Matching as far as possible means flipping augmenting paths until none exists.
 
 None exists here. From the free row 2 the only zero leads to column 2, column 2's partner is row 1, and row 1 owns no other zero to continue through.
 
@@ -525,13 +647,13 @@ $$
 \delta = \min_{i\in I,\ j\notin J}\tilde c(i,j) = \tilde c(2,1) = 1,
 $$
 
-and pay for it with the potentials. Raise $u_i$ by $\delta$ on every tree row and lower $v_j$ by $\delta$ on every tree column. Three checks, one per kind of entry, show the move is safe.
+and pay for it with the potentials. Raise $u_i$ by $\delta$ on every tree row and lower $v_j$ by $\delta$ on every tree column. Call this move a lift. Three checks, one per kind of entry, show it is safe.
 
 - *Tree row, outside column.* The reduced cost drops by $\delta$. By the choice of $\delta$ nothing goes negative, and the minimizer lands exactly on zero. That is the purchased edge, $(2,1)$ here.
 - *Tree row, tree column.* The raise and the drop cancel, so every edge inside the tree, the matched ones included, stays exactly as tight as it was.
 - *Outside row, tree column.* The reduced cost rises by $\delta$, harmless for nonnegativity, and the only zeros this can erase are unmatched ones, because a tree column's partner sits inside the tree.
 
-So the invariants hold and the tree gains ground. The dual objective $\sum_i u_i + \sum_j v_j$ also rises by $\delta$, because the tree always holds one more row than column, every column it reaches being matched (a free column would already end an augmenting path) and each matched column bringing its partner row along, so only the root row lacks a column. The lower bound climbs toward the optimum with every lift. With $u = (2, 1, 2)$ and $v = (1, -1, 0)$,
+So the invariants hold and the tree gains ground. The dual objective $\sum_i u_i + \sum_j v_j$ also rises by $\delta$, because the tree always holds one more row than column. Every column it reaches is matched, since a free column would already end an augmenting path. Each matched column brings its partner row along, so only the root row lacks a column. The lower bound climbs toward the optimum with every lift. With $u = (2, 1, 2)$ and $v = (1, -1, 0)$,
 
 $$
 \tilde c = \begin{pmatrix} 1 & 0 & 1\\ 0 & 0 & 4\\ 0 & 1 & 0 \end{pmatrix}.
@@ -539,7 +661,7 @@ $$
 
 **Augment.** The purchased zero at $(2,1)$ extends the search. Row 2 now reaches column 1, column 1's partner row 3 joins, and row 3 owns a zero in column 3, which is free. That is an augmenting path, row 2 to column 1 to row 3 to column 3. Flip it. Row 2 takes column 1, row 3 moves to column 3, row 1 keeps column 2, and the matching is perfect.
 
-**Read off the certificate.** In the original matrix the assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $(2 + 1 + 2) + (1 - 1 + 0) = 5$. Primal equals dual, so by the lemma no assignment can cost less. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are the optimal dual solution, and the equality that just closed is complementary slackness checked by hand. In general, match through zeros until stuck, buy the cheapest escape zero, augment the moment a free column comes into reach, and stop when every row has a partner.
+**Read off the certificate.** In the original matrix the assignment costs $C_{12} + C_{21} + C_{33} = 1 + 2 + 2 = 5$, and the potentials sum to $(2 + 1 + 2) + (1 - 1 + 0) = 5$. Primal equals dual, so by the lemma no assignment can cost less. The permutation matrix of this matching is the optimal vertex of the linear program, the potentials are an optimal dual solution, and the equality that just closed is complementary slackness checked by hand. In general, match through zeros until stuck, buy the cheapest escape zero, augment the moment a free column comes into reach, and stop when every row has a partner.
 
 Each augmentation adds one edge, so at most $N$ augmentations finish the matching. One piece of bookkeeping makes each augmentation cost $O(N^2)$. For every column outside the tree, keep its current slack $\min_{i\in I}\tilde c(i,j)$ and update it in $O(N)$ when a row joins. Each $\delta$ is then read from the slacks rather than found by rescanning the matrix. Every lift either reaches a free column and enables an augmentation, or adds a matched column and its partner row to the tree. Thus at most $N$ lifts occur between augmentations, giving $O(N^3)$ work overall. The Jonker-Volgenant routine called by `scipy` is a faster-constant refinement of the same primal-dual idea.
 
@@ -558,7 +680,7 @@ $$
 \sum_{j=1}^{N} \text{cost}\big(\pi(\sigma(j)),\, j\big) = J(\pi \circ \sigma) \qquad \text{(definition of } J\text{)}.
 $$
 
-Minimize over $\sigma$. As $\sigma$ ranges over $S_N$, the composite $\pi \circ \sigma$ ranges over all of $S_N$ too, because left multiplication by the fixed $\pi$ is a bijection of the group, undone by composing with $\pi^{-1}$, so every $\tau \in S_N$ is hit exactly once, as $\tau = \pi \circ (\pi^{-1} \circ \tau)$. So
+Minimize over $\sigma$. As $\sigma$ ranges over $S_N$, the composite $\pi \circ \sigma$ ranges over all of $S_N$ too. Left multiplication by the fixed $\pi$ is a bijection of the group, undone by composing with $\pi^{-1}$. Every $\tau \in S_N$ is hit exactly once, as $\tau = \pi \circ (\pi^{-1} \circ \tau)$. So
 
 $$
 \min_{\sigma \in S_N} J(\pi \circ \sigma) = \min_{\tau \in S_N} J(\tau),
@@ -572,85 +694,9 @@ The minimum cost is invariant even when several assignments tie. When the optimu
 
 Once the assignment is fixed, it determines which target supplies each query's training signal. §8 shows that changing only the matching cost improves AP by more than two points.
 
-An independent nearest-target choice could assign two queries to one object and leave another unmatched. One-to-one training discourages these duplicates and enables inference without non-maximum suppression.
-
-<figure class="viz">
-<svg class="m2f-match" style="min-width: 560px" viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two copies of the 3 by 3 cost matrix with rows 4 1 3, 2 0 5 and 3 2 2. Taking the cheapest pair first picks costs 0, 2 and 4 for a total of 6. The optimal assignment picks costs 1, 2 and 2 for a total of 5.">
-<defs><style>
-.hm-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
-.hm-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-.hm-num { font-family: var(--font-sans); fill: var(--color-text); font-size: 15px; }
-</style></defs>
-<rect width="700" height="260" rx="6" style="fill: var(--color-bg)"/>
-<text class="hm-lbl" x="214.0" y="38" text-anchor="middle">cheapest pair first</text>
-<text class="hm-sub" x="214.0" y="58" text-anchor="middle" style="fill: var(--viz-green)">target</text>
-<text class="hm-sub" x="170.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">1</text>
-<text class="hm-sub" x="214.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">2</text>
-<text class="hm-sub" x="258.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">3</text>
-<text class="hm-sub" x="136" y="108.0" text-anchor="middle" style="fill: var(--viz-gold-text)">1</text>
-<text class="hm-sub" x="136" y="152.0" text-anchor="middle" style="fill: var(--viz-gold-text)">2</text>
-<text class="hm-sub" x="136" y="196.0" text-anchor="middle" style="fill: var(--viz-gold-text)">3</text>
-<text class="hm-sub" transform="translate(118 148.0) rotate(-90)" text-anchor="middle" style="fill: var(--viz-gold-text)">prediction</text>
-<rect x="148" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="192" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="236" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="148" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="192" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="236" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="148" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="192" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="236" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="194" y="128" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
-<rect x="238" y="172" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
-<rect x="150" y="84" width="40" height="40" style="fill: var(--viz-ember); fill-opacity: 0.12; stroke: var(--viz-ember); stroke-width: 2; stroke-dasharray: 4 3"/>
-<text class="hm-num" x="170.0" y="109.0" text-anchor="middle">4</text>
-<text class="hm-num" x="214.0" y="109.0" text-anchor="middle">1</text>
-<text class="hm-num" x="258.0" y="109.0" text-anchor="middle">3</text>
-<text class="hm-num" x="170.0" y="153.0" text-anchor="middle">2</text>
-<text class="hm-num" x="214.0" y="153.0" text-anchor="middle">0</text>
-<text class="hm-num" x="258.0" y="153.0" text-anchor="middle">5</text>
-<text class="hm-num" x="170.0" y="197.0" text-anchor="middle">3</text>
-<text class="hm-num" x="214.0" y="197.0" text-anchor="middle">2</text>
-<text class="hm-num" x="258.0" y="197.0" text-anchor="middle">2</text>
-<text class="hm-lbl" x="214.0" y="242" text-anchor="middle" style="fill: var(--viz-ember)">J = 0 + 2 + 4 = 6</text>
-<text class="hm-lbl" x="486.0" y="38" text-anchor="middle">optimal assignment</text>
-<text class="hm-sub" x="486.0" y="58" text-anchor="middle" style="fill: var(--viz-green)">target</text>
-<text class="hm-sub" x="442.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">1</text>
-<text class="hm-sub" x="486.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">2</text>
-<text class="hm-sub" x="530.0" y="74" text-anchor="middle" style="fill: var(--viz-green)">3</text>
-<text class="hm-sub" x="408" y="108.0" text-anchor="middle" style="fill: var(--viz-gold-text)">1</text>
-<text class="hm-sub" x="408" y="152.0" text-anchor="middle" style="fill: var(--viz-gold-text)">2</text>
-<text class="hm-sub" x="408" y="196.0" text-anchor="middle" style="fill: var(--viz-gold-text)">3</text>
-<text class="hm-sub" transform="translate(390 148.0) rotate(-90)" text-anchor="middle" style="fill: var(--viz-gold-text)">prediction</text>
-<rect x="420" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="464" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="508" y="82" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="420" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="464" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="508" y="126" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="420" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="464" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="508" y="170" width="44" height="44" style="fill: var(--viz-box); stroke: var(--viz-grid)"/>
-<rect x="466" y="84" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
-<rect x="422" y="128" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
-<rect x="510" y="172" width="40" height="40" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--color-text); stroke-width: 2"/>
-<text class="hm-num" x="442.0" y="109.0" text-anchor="middle">4</text>
-<text class="hm-num" x="486.0" y="109.0" text-anchor="middle">1</text>
-<text class="hm-num" x="530.0" y="109.0" text-anchor="middle">3</text>
-<text class="hm-num" x="442.0" y="153.0" text-anchor="middle">2</text>
-<text class="hm-num" x="486.0" y="153.0" text-anchor="middle">0</text>
-<text class="hm-num" x="530.0" y="153.0" text-anchor="middle">5</text>
-<text class="hm-num" x="442.0" y="197.0" text-anchor="middle">3</text>
-<text class="hm-num" x="486.0" y="197.0" text-anchor="middle">2</text>
-<text class="hm-num" x="530.0" y="197.0" text-anchor="middle">2</text>
-<text class="hm-lbl" x="486.0" y="242" text-anchor="middle" style="fill: var(--color-text)">J = 1 + 2 + 2 = 5</text>
-</svg>
-<figcaption>Fig. 3. Matching is a global choice. The costs are the worked 3 by 3 example in the fold above. Taking the cheapest pair first, cost 0, and then the cheapest remaining pair, cost 2, forces the last pair to cost 4, a total of 6. The optimal assignment pays 1 + 2 + 2 = 5, and the Hungarian algorithm finds it. With more predictions than targets, zero-cost no-object columns make the matrix square, and the predictions placed on them are trained as no-object.</figcaption>
-</figure>
-
 ### 3.2 The training loss
 
-Each supervised output uses classification on all $N$ queries and mask losses only on queries matched to real targets. After matching, let $y_i$ be the real class assigned to a matched query and $\varnothing$ for an unmatched query. The released criterion combines the three terms as
+Each supervised output uses classification on all $N$ queries and mask losses only on queries matched to real targets. After matching, let $y_i$ be the real class assigned to a matched query, or $\varnothing$ for an unmatched one. The released criterion combines the three terms as
 
 $$
 \mathcal{L} = 2\,\mathcal{L}_{\text{cls}} + 5\,\mathcal{L}_{\text{ce}} + 5\,\mathcal{L}_{\text{dice}}.
@@ -678,7 +724,7 @@ $$
 \ell_{\text{ce}}(x) = -\big[g_x \log \sigma(z_x) + (1-g_x)\log\big(1-\sigma(z_x)\big)\big].
 $$
 
-Its gradient through the logit collapses to one clean expression,
+Its gradient with respect to the logit is
 
 $$
 \frac{\partial \ell_{\text{ce}}}{\partial z_x} = \sigma(z_x) - g_x.
@@ -709,7 +755,7 @@ $$
 
 </details>
 
-The gradient lies between $-1$ and $1$, and a confident error still produces a substantial update. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes by the number of matched masks. BCE has no mask-level normalization for foreground area. Under dense evaluation, or uniform sampling in expectation, a large foreground contributes more positive terms for comparable pointwise errors than a small foreground. The uncertainty sampler in §8 can change those proportions by favoring logits near zero.
+The gradient lies between $-1$ and $1$, and a confident error still produces a substantial update. The same expression holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes by the number of matched masks. BCE has no mask-level normalization for foreground area. Under dense evaluation, or uniform sampling in expectation, a large foreground contributes more positive terms than a small one at comparable pointwise errors. The training sampler in §8 can change those proportions by favoring logits near zero.
 
 **Dice.** Mask2Former uses a soft Dice loss that normalizes overlap by predicted and target size [[Milletari et al. 2016](#ref-milletari2016)]. Write $O = \sum_x m_xg_x$ for the overlap and $S = \sum_xm_x + \sum_xg_x$ for the size sum. The released implementation is
 
@@ -717,7 +763,7 @@ $$
 \mathcal{L}_{\text{dice}}(m,g) = 1 - \frac{2O+1}{S+1}.
 $$
 
-The added $1$s smooth the empty-mask case, and Milletari's original uses sums of squares in the denominator. Dice couples all sampled points through one region-level score. Writing the smoothing constant as $\varepsilon = 1$, the gradient at a single point is
+The added $1$s smooth the empty-mask case. Milletari's original uses sums of squares in the denominator. Dice couples all sampled points through one region-level score. Write the smoothing constant as $\varepsilon = 1$. The gradient at a single point is
 
 $$
 \frac{\partial \mathcal{L}_{\text{dice}}}{\partial m_x}
@@ -746,11 +792,11 @@ $$
 
 </details>
 
-When $S>0$, the unsmoothed form gives an exact view of area scaling. Tile $k$ disjoint copies of the same prediction and target pattern. Then $O$ becomes $kO$ and $S$ becomes $kS$, so the Dice value is unchanged. In the derivative above with $\varepsilon=0$, the numerator grows by $k$ while the denominator grows by $k^2$. Each copied point therefore receives $1/k$ of the original derivative. If both masks are empty, the unsmoothed ratio is undefined, which is one reason the implementation adds $1$. This area normalization does not make the BCE component scale-invariant.
+When $S>0$, the unsmoothed form gives an exact view of area scaling. Tile $k$ disjoint copies of the same prediction and target pattern. Then $O$ becomes $kO$ and $S$ becomes $kS$, so the Dice value is unchanged. In the derivative above with $\varepsilon=0$, the numerator grows by a factor of $k$ while the denominator grows by a factor of $k^2$. Each copied point therefore receives $1/k$ of the original derivative. If both masks are empty, the unsmoothed ratio is undefined, which is one reason the implementation adds $1$. This area normalization does not make the BCE component scale-invariant.
 
-Dice pays a price one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 where $g_x = 1$. The chain rule then multiplies the healthy $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient dies through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. BCE therefore supplies a direct logit gradient at every point, while Dice adds region-normalized overlap.
+Dice has a weakness one step further back, in logit space. When the prediction confidently misses the target, $m_x$ is near 0 where $g_x = 1$. The chain rule then multiplies $\partial\mathcal{L}_{\text{dice}}/\partial m_x$ by $\sigma'(z_x) \approx 0$, so the gradient vanishes through the saturated sigmoid. BCE cancels that factor exactly, as its logit gradient $\sigma(z_x) - g_x$ shows. BCE therefore supplies a direct logit gradient at every point, while Dice adds region-normalized overlap.
 
-**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$, which down-weights already-confident predictions so easy background points contribute less. Mask2Former uses plain BCE at weight $5$. One plausible reason is that §8's training sampler spends most of its budget on uncertain locations rather than easy background, reducing the imbalance that focal loss was designed to address. The paper does not isolate this change, so the explanation remains an inference.
+**What happened to focal loss?** MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Focal loss down-weights already-confident predictions, so easy background points contribute less. Mask2Former uses plain BCE at weight $5$. One plausible reason is that §8's training sampler spends most of its budget on uncertain locations rather than easy background, reducing the imbalance that focal loss was designed to address. The paper does not isolate this change.
 
 **The $\varnothing$ down-weighting.** With $N$ queries and $T$ real segments, $N-T$ query slots are trained as no-object. Their ratio to matched slots is $(N-T)/T$. With $N=100$, this ratio is $19$ when $T=5$ and $4$ when $T=20$. Giving no-object entries a relative class weight of $0.1$ prevents the unmatched slots from overwhelming the classification term. Mask2Former inherits this weighting from DETR.
 
@@ -758,7 +804,7 @@ Dice pays a price one step further back, in logit space. When the prediction con
 
 ## 4. The architecture
 
-Mask2Former keeps MaskFormer's three-part structure. A **backbone** produces image features. A **pixel decoder** turns them into a feature pyramid and a stride-4 pixel embedding map $\mathcal{E}_{\text{pixel}}$. A **Transformer decoder** processes $N$ queries against the image features. At any supervised output, let $q_i\in\mathbb{R}^C$ be the LayerNorm-normalized feature of query $i$. It produces a class distribution and a mask.
+Mask2Former keeps MaskFormer's three-part structure, drawn in the [overview figure](#overview) at the top. A **backbone** produces image features. A **pixel decoder** turns them into a feature pyramid and a stride-4 pixel embedding map $\mathcal{E}_{\text{pixel}}$. A **Transformer decoder** processes $N$ queries against the image features. At any supervised output, let $q_i\in\mathbb{R}^C$ be the LayerNorm-normalized feature of query $i$. It produces a class distribution and a mask.
 
 $$
 \hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i + b_{\text{cls}}), \qquad
@@ -766,68 +812,6 @@ m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)
 $$
 
 The class head has $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{cls}}\in\mathbb{R}^{K+1}$, including one output for no-object. It predicts what the query represents. The mask MLP maps $\mathbb{R}^C$ to $\mathbb{R}^C$. Both its output and $\mathcal{E}_{\text{pixel}}(x)$ have width $C$, so their dot product produces one mask logit at pixel $x$. Masks are produced at stride 4 and then upsampled. The paper uses either a ResNet [[He et al. 2016](#ref-he2016)] or Swin [[Liu et al. 2021](#ref-liu2021)] backbone. MaskFormer used a feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] and six standard decoder layers over one stride-32 feature map.
-
-<figure class="viz">
-<svg class="m2f-arch" style="min-width: 560px" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former architecture from image and backbone features to pixel decoder, Transformer decoder, class predictions, and mask predictions.">
-<defs>
-<style>
-.ar-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13.5px; }
-.ar-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-.ar-tag { font-family: var(--font-sans); font-size: 10.5px; }
-.ar-box { fill: var(--viz-box); stroke: var(--viz-grid); stroke-width: 1; }
-.ar-flow { stroke: var(--viz-line); stroke-width: 1.3; fill: none; }
-</style>
-<marker id="ar-a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker>
-<marker id="ar-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker>
-<marker id="ar-as" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-slate)"/></marker>
-</defs>
-<rect width="720" height="260" rx="6" style="fill: var(--color-bg)"/>
-<rect class="ar-box" x="24" y="48" width="58" height="48" rx="4"/>
-<text class="ar-lbl" x="53" y="76" text-anchor="middle">Image</text>
-<line class="ar-flow" x1="82" y1="72" x2="104" y2="72" marker-end="url(#ar-a)"/>
-<rect class="ar-box" x="106" y="44" width="94" height="56" rx="4"/>
-<text class="ar-lbl" x="153" y="68" text-anchor="middle">Backbone</text>
-<text class="ar-sub" x="153" y="85" text-anchor="middle">ResNet / Swin</text>
-<line class="ar-flow" x1="200" y1="72" x2="222" y2="72" marker-end="url(#ar-a)"/>
-<rect class="ar-box" x="224" y="44" width="110" height="56" rx="4"/>
-<text class="ar-lbl" x="279" y="68" text-anchor="middle">Pixel decoder</text>
-<text class="ar-sub" x="279" y="85" text-anchor="middle">MSDeformAttn</text>
-<line class="ar-flow" x1="334" y1="56" x2="422" y2="56" marker-end="url(#ar-a)"/>
-<line class="ar-flow" x1="334" y1="72" x2="422" y2="72" marker-end="url(#ar-a)"/>
-<line class="ar-flow" x1="334" y1="88" x2="422" y2="88" marker-end="url(#ar-a)"/>
-<text class="ar-tag" x="378" y="52" text-anchor="middle" style="fill: var(--color-text-muted)">1/32</text>
-<text class="ar-tag" x="378" y="68" text-anchor="middle" style="fill: var(--color-text-muted)">1/16</text>
-<text class="ar-tag" x="378" y="84" text-anchor="middle" style="fill: var(--color-text-muted)">1/8</text>
-<rect x="424" y="24" width="190" height="112" rx="8" fill="none" stroke-width="1.4" style="stroke: var(--viz-line)"/>
-<text class="ar-lbl" x="519" y="46" text-anchor="middle">Transformer decoder</text>
-<rect class="ar-box" x="436" y="58" width="100" height="60" rx="5"/>
-<text class="ar-tag" x="486" y="76" text-anchor="middle" style="fill: var(--viz-gold-text)">masked attn</text>
-<text class="ar-tag" x="486" y="92" text-anchor="middle" style="fill: var(--color-text)">self-attn</text>
-<text class="ar-tag" x="486" y="108" text-anchor="middle" style="fill: var(--color-text)">FFN</text>
-<text class="ar-lbl" x="576" y="80" text-anchor="middle">&#215; 9</text>
-<text class="ar-sub" x="576" y="96" text-anchor="middle">layers</text>
-<text class="ar-tag" x="576" y="112" text-anchor="middle" style="fill: var(--color-text-muted)">32 &#8594; 16 &#8594; 8</text>
-<text class="ar-tag" x="576" y="126" text-anchor="middle" style="fill: var(--color-text-muted)">repeated &#215;3</text>
-<g style="fill: var(--viz-gold)"><circle cx="392" cy="166" r="4.2"/><circle cx="392" cy="178" r="4.2"/><circle cx="392" cy="190" r="4.2"/></g>
-<text class="ar-tag" x="392" y="210" text-anchor="middle" style="fill: var(--viz-gold-text)">N learned queries</text>
-<path class="ar-flow" d="M 404 178 C 436 178, 452 158, 458 140" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
-<text class="ar-tag" x="669" y="34" text-anchor="middle" style="fill: var(--color-text-muted)">what</text>
-<rect class="ar-box" x="622" y="40" width="94" height="42" rx="4"/>
-<text class="ar-lbl" x="669" y="59" text-anchor="middle">Class head</text>
-<text class="ar-sub" x="669" y="74" text-anchor="middle">softmax over K+1</text>
-<text class="ar-tag" x="669" y="102" text-anchor="middle" style="fill: var(--color-text-muted)">where</text>
-<rect class="ar-box" x="622" y="108" width="94" height="42" rx="4"/>
-<text class="ar-lbl" x="669" y="127" text-anchor="middle">Mask head</text>
-<text class="ar-sub" x="669" y="142" text-anchor="middle">&#963;(MLP(q)&#183;&#8496;<tspan font-size="8" dy="3">pixel</tspan><tspan dy="-3">)</tspan></text>
-<path class="ar-flow" d="M 614 60 C 617 60, 619 60, 622 61" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
-<path class="ar-flow" d="M 614 120 C 617 122, 619 126, 622 128" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
-<path d="M 634 150 C 634 170, 628 178, 608 178 L 546 178 C 528 178, 522 170, 522 146" fill="none" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar-ag)" style="stroke: var(--viz-gold)"/>
-<text class="ar-tag" x="578" y="196" text-anchor="middle" style="fill: var(--viz-gold-text)">mask &#8594; next layer's attention mask</text>
-<path d="M 279 100 L 279 226 L 690 226 L 690 154" fill="none" stroke-width="1.3" marker-end="url(#ar-as)" style="stroke: var(--viz-slate)"/>
-<text class="ar-tag" x="470" y="240" text-anchor="middle" style="fill: var(--viz-slate)">&#8496;<tspan font-size="8" dy="3">pixel</tspan><tspan dy="-3"> per-pixel embeddings &#183; stride 4</tspan></text>
-</svg>
-<figcaption>Fig. 4. Mask2Former's full pipeline. The pixel decoder produces features at strides 32, 16, and 8. The Transformer decoder reads one scale per layer and repeats the cycle three times. Each query produces a class distribution and a mask. The mask is also resized, thresholded at 0.5, and used to restrict the next layer's cross-attention.</figcaption>
-</figure>
 
 ## 5. Masked attention
 
@@ -842,9 +826,9 @@ $$
 \tag{1}
 $$
 
-Here $\mathbf{Q}_l$ comes from the previous full-layer state $\mathbf{X}_{l-1}$, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits LayerNorm, the standard $1/\sqrt d$ scaling, the multi-head split, and the position embeddings. LayerNorm, self-attention, and the feed-forward network then turn this intermediate state into the full output $\mathbf{X}_l$. The paper writes $\mathbf{X}_l$ on the left of its simplified recurrence. The tilde here prevents that sublayer output from being confused with the complete layer output.
+Here $\mathbf{Q}_l$ comes from the previous full-layer state $\mathbf{X}_{l-1}$, while $\mathbf{K}_l$ and $\mathbf{V}_l$ come from the image features. For readability, the equation omits LayerNorm, the standard $1/\sqrt d$ scaling, the multi-head split, and the position embeddings. LayerNorm, self-attention, and the feed-forward network then turn this intermediate state into the full output $\mathbf{X}_l$. The paper writes $\mathbf{X}_l$ on the left of its simplified recurrence.
 
-Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This does not show that global attention cannot localize. It shows that this baseline remains diffuse, even after training.
+Earlier DETR studies linked slow convergence to the time needed for cross-attention to become spatially focused [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Mask2Former tests the same hypothesis. In its converged cross-attention baseline, about 20 percent of the attention mass falls inside the matched ground-truth segment on COCO val. This shows only that the baseline stays diffuse after training, not that global attention cannot localize.
 
 One toy calculation shows the effect of having many background locations. Let $n_f$ foreground locations share logit $\mu_f$, and let $n_b$ background locations share logit $\mu_b$. Their foreground attention mass is
 
@@ -862,7 +846,7 @@ $$
 \frac{1}{1 + 49\,e^{-2}} \approx \frac{1}{1 + 49 \cdot 0.135} = \frac{1}{7.615} \approx 0.13.
 $$
 
-In this toy model, the background wins because it has many more locations. Real attention logits are not two spikes, and sufficiently concentrated global attention can overcome the imbalance. The calculation only explains why explicit localization can make learning easier.
+In this toy model, the background wins because it has many more locations. Real attention logits do not take only two values, and sufficiently concentrated global attention can overcome the imbalance. The calculation only explains why explicit localization can make learning easier.
 
 ### 5.2 The masked update
 
@@ -938,61 +922,55 @@ the softmax of the original logits restricted to $S$. $\blacksquare$
 
 </details>
 
-The paper's R50 ablation on COCO compares four updates. Plain cross-attention reaches 37.8 AP, spatially modulated co-attention (SMCA) [[Gao et al. 2021](#ref-gao2021)] reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
+The paper's ResNet-50 (R50) ablation on COCO compares four updates. Plain cross-attention reaches 37.8 AP, spatially modulated co-attention (SMCA) [[Gao et al. 2021](#ref-gao2021)] reaches 37.9, mask pooling reaches 43.1, and masked attention reaches 43.7. Mask pooling averages the features inside a mask. Masked attention still learns a distribution within the allowed region.
 
 Additive attention masking already existed in Transformer decoders [[Vaswani et al. 2017](#ref-vaswani2017)]. Mask2Former makes the mask spatial, query-specific, and dependent on the previous mask prediction. The prediction restricts the next read, and the next query state produces a new prediction.
 
 <figure class="viz">
-<svg class="m2f-mask" style="min-width: 560px" viewBox="0 0 700 296" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The four attention scores of Fig. 0b with a mask that allows locations 1 and 4. Standard softmax gives weights 0.67, 0.05, 0.01 and 0.27. With the mask, locations 2 and 3 get weight 0 and the allowed weights become 0.71 and 0.29, keeping their ratio of 2.46.">
+<svg class="m2f-mask" style="min-width: 560px" viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The four locations of Fig. 0b with the previous mask keeping locations 1 and 4 and blocking 2 and 3. Without the mask the weights are 0.67, 0.05, 0.01 and 0.27. With the mask they are 0.71, 0, 0 and 0.29: blocked locations get 0 and the other two are rescaled to add up to 1.">
 <defs><style>
-.ma-lbl { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; }
-.ma-sub { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-.ma-num { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
-</style></defs>
-<rect width="700" height="296" rx="6" style="fill: var(--color-bg)"/>
-<text class="ma-lbl" x="70" y="44" text-anchor="middle">gate B</text>
-<text class="ma-sub" x="70" y="58" text-anchor="middle">previous mask</text>
-<text class="ma-lbl" x="160" y="44" text-anchor="middle">score</text>
-<text class="ma-sub" x="160" y="58" text-anchor="middle">from Fig. 0b</text>
-<text class="ma-lbl" x="240" y="44" text-anchor="middle">added &#8499;</text>
-<text class="ma-lbl" x="380" y="44" text-anchor="middle">softmax</text>
-<text class="ma-sub" x="380" y="58" text-anchor="middle">without the mask</text>
-<text class="ma-lbl" x="570" y="44" text-anchor="middle">softmax</text>
-<text class="ma-sub" x="570" y="58" text-anchor="middle">with the mask</text>
-<rect x="50" y="72" width="40" height="20" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--viz-gold)"/>
-<text class="ma-num" x="70" y="86" text-anchor="middle">1</text>
-<text class="ma-num" x="160" y="86" text-anchor="middle">2.0</text>
-<text class="ma-num" x="240" y="86" text-anchor="middle">0</text>
-<rect x="330" y="76" width="93.6" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="429.6" y="86">0.67</text>
-<rect x="520" y="76" width="99.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="625.5" y="86">0.71</text>
-<rect x="50" y="116" width="40" height="20" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/>
-<text class="ma-num" x="70" y="130" text-anchor="middle">0</text>
-<text class="ma-num" x="160" y="130" text-anchor="middle">&#8722;0.6</text>
-<text class="ma-num" x="240" y="130" text-anchor="middle">&#8722;&#8734;</text>
-<rect x="330" y="120" width="7.0" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="343.0" y="130">0.05</text>
-<text class="ma-num" x="520" y="130">0</text>
-<rect x="50" y="160" width="40" height="20" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/>
-<text class="ma-num" x="70" y="174" text-anchor="middle">0</text>
-<text class="ma-num" x="160" y="174" text-anchor="middle">&#8722;2.2</text>
-<text class="ma-num" x="240" y="174" text-anchor="middle">&#8722;&#8734;</text>
-<rect x="330" y="164" width="2.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="338.5" y="174">0.01</text>
-<text class="ma-num" x="520" y="174">0</text>
-<rect x="50" y="204" width="40" height="20" style="fill: var(--viz-gold); fill-opacity: 0.16; stroke: var(--viz-gold)"/>
-<text class="ma-num" x="70" y="218" text-anchor="middle">1</text>
-<text class="ma-num" x="160" y="218" text-anchor="middle">1.1</text>
-<text class="ma-num" x="240" y="218" text-anchor="middle">0</text>
-<rect x="330" y="208" width="38.1" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="374.1" y="218">0.27</text>
-<rect x="520" y="208" width="40.5" height="12" style="fill: var(--viz-gold); fill-opacity: 0.75"/>
-<text class="ma-num" x="566.5" y="218">0.29</text>
-<text class="ma-sub" x="350" y="256" text-anchor="middle">blocked locations get score &#8722;&#8734; and weight 0, and both allowed weights grow by the same factor, about 1.06</text>
-<text class="ma-sub" x="350" y="276" text-anchor="middle">so their ratio stays exp(2.0 &#8722; 1.1) &#8776; 2.46, with or without the mask</text>
+.ma-h { font-family: var(--font-sans); fill: var(--color-text); font-size: 13px; font-weight: 600; }
+.ma-t { font-family: var(--font-sans); fill: var(--color-text); font-size: 12px; }
+.ma-s { font-family: var(--font-sans); fill: var(--color-text-muted); font-size: 11px; }
+.ma-g { font-family: var(--font-sans); fill: var(--viz-gold-text); font-size: 12px; }
+</style><marker id="ma-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker><marker id="ma-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker></defs>
+<rect width="700" height="300" rx="6" style="fill: var(--color-bg)"/>
+<text class="ma-h" x="90" y="40" text-anchor="middle">location</text>
+<text class="ma-s" x="90" y="56" text-anchor="middle">from Fig. 0b</text>
+<text class="ma-h" x="215" y="40" text-anchor="middle">previous mask</text>
+<text class="ma-s" x="215" y="56" text-anchor="middle">keeps 1 and 4</text>
+<text class="ma-h" x="395" y="40" text-anchor="middle">weight without mask</text>
+<text class="ma-s" x="395" y="56" text-anchor="middle">as in Fig. 0b</text>
+<text class="ma-h" x="585" y="40" text-anchor="middle">weight with mask</text>
+<text class="ma-s" x="585" y="56" text-anchor="middle">adds up to 1 again</text>
+<rect x="50" y="75" width="80" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="ma-s" x="90.0" y="90" text-anchor="middle">location 1</text>
+<rect x="175" y="75" width="80" height="22" rx="4" style="fill: var(--viz-gold); fill-opacity: 0.14; stroke: var(--viz-gold)"/><text class="ma-g" x="215.0" y="90" text-anchor="middle">inside</text>
+<rect x="330" y="80" width="93.6" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.22; stroke: var(--viz-gold); stroke-width: 1"/>
+<text class="ma-s" x="429.6" y="90">0.67</text>
+<rect x="520" y="80" width="99.5" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="ma-t" x="625.5" y="90">0.71</text>
+<rect x="24" y="112" width="652" height="36" rx="4" style="fill: var(--viz-grid); fill-opacity: 0.28"/>
+<rect x="50" y="119" width="80" height="22" rx="4" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/><text class="ma-s" x="90.0" y="134" text-anchor="middle">location 2</text>
+<rect x="175" y="119" width="80" height="22" rx="4" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/><text class="ma-s" x="215.0" y="134" text-anchor="middle">outside</text>
+<rect x="330" y="124" width="7.0" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.22; stroke: var(--viz-gold); stroke-width: 1"/>
+<text class="ma-s" x="343.0" y="134">0.05</text>
+<text class="ma-s" x="520" y="134">0, blocked</text>
+<rect x="24" y="156" width="652" height="36" rx="4" style="fill: var(--viz-grid); fill-opacity: 0.28"/>
+<rect x="50" y="163" width="80" height="22" rx="4" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/><text class="ma-s" x="90.0" y="178" text-anchor="middle">location 3</text>
+<rect x="175" y="163" width="80" height="22" rx="4" style="fill: none; stroke: var(--viz-grid); stroke-dasharray: 3 3"/><text class="ma-s" x="215.0" y="178" text-anchor="middle">outside</text>
+<rect x="330" y="168" width="2.5" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.22; stroke: var(--viz-gold); stroke-width: 1"/>
+<text class="ma-s" x="338.5" y="178">0.01</text>
+<text class="ma-s" x="520" y="178">0, blocked</text>
+<rect x="50" y="207" width="80" height="22" rx="4" style="fill: var(--viz-slate); fill-opacity: 0.1; stroke: var(--viz-slate)"/><text class="ma-s" x="90.0" y="222" text-anchor="middle">location 4</text>
+<rect x="175" y="207" width="80" height="22" rx="4" style="fill: var(--viz-gold); fill-opacity: 0.14; stroke: var(--viz-gold)"/><text class="ma-g" x="215.0" y="222" text-anchor="middle">inside</text>
+<rect x="330" y="212" width="38.1" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.22; stroke: var(--viz-gold); stroke-width: 1"/>
+<text class="ma-s" x="374.1" y="222">0.27</text>
+<rect x="520" y="212" width="40.5" height="12" rx="2" style="fill: var(--viz-gold); fill-opacity: 0.8"/>
+<text class="ma-t" x="566.5" y="222">0.29</text>
+<text class="ma-s" x="350" y="266" text-anchor="middle">Blocked locations get score &#8722;&#8734;, so softmax gives them weight 0.</text>
+<text class="ma-s" x="350" y="284" text-anchor="middle">The two kept weights grow by the same factor, so their ratio stays about 2.46 to 1.</text>
 </svg>
-<figcaption>Fig. 5. Masked attention on the four scores of Fig. 0b. The previous mask allows locations 1 and 4. Locations 2 and 3 receive &#8722;&#8734; from &#8499;, so their weights become 0 and softmax renormalizes over the allowed set. Both surviving weights grow by the same factor, so their ratio is unchanged. If a query's mask is empty, the implementation removes the restriction for every head of that query for one layer.</figcaption>
+<figcaption>Fig. 4. Masked attention on the four locations of Fig. 0b. The previous mask keeps locations 1 and 4 and blocks 2 and 3. Blocked locations get weight 0, and the two kept weights are rescaled to sum to 1 with their ratio unchanged. If a query's mask is empty, the implementation removes the restriction for every head of that query for one layer.</figcaption>
 </figure>
 
 ### 5.3 Gradients and empty masks
@@ -1037,17 +1015,17 @@ Without the guard, the row's softmax denominator is zero, which can introduce a 
 
 </details>
 
-### 5.4 Did it work?
+### 5.4 Measured effect
 
 In the supplementary analysis, average attention mass inside the matched foreground rises from about 0.20 to 0.59. One masked-attention layer also outperforms nine standard cross-attention layers on PQ in the reported layer-wise comparison. Removing masked attention costs 5.9 AP, 4.8 PQ, and 1.7 mIoU. This is the largest AP and PQ drop among the paper's component ablations.
 
-## 6. Feeding the decoder
+## 6. Multi-scale features
 
-### 6.1 The cost structure
+### 6.1 Attention cost per scale
 
 Cross-attention cost grows with the number of image tokens. Its main attention operations cost $O(NH_lW_lC)$ for $N$ queries, an $H_l$ by $W_l$ feature map, and channel width $C$. For a 1024 by 1024 input, strides 32, 16, and 8 contain 1,024, 4,096, and 16,384 tokens. The finest map therefore costs about sixteen times more to attend over than the coarsest.
 
-### 6.2 The schedule
+### 6.2 One scale per layer
 
 Mask2Former reads one scale per decoder layer. Layers 1, 2, and 3 use strides 32, 16, and 8, and the cycle repeats twice more. Feeding all three scales to every layer reaches 44.0 AP at 247 GFLOPs. Using only stride 8 reaches the same AP at 239 GFLOPs. The round-robin schedule reaches 43.7 AP at 226 GFLOPs, trading 0.3 AP for lower cost. Removing high-resolution features lowers AP by 2.2.
 
@@ -1072,11 +1050,11 @@ Here $m$, $l$, and $k$ index the $M$ heads, $L$ levels, and $P$ sample points pe
 
 Among conventional pyramid decoders, BiFPN has the highest AP at 43.5 and ties FaPN at 51.8 PQ. FaPN has the highest mIoU at 46.8 [[Tan et al. 2020](#ref-tan2020), [Huang et al. 2021](#ref-huang2021)]. MSDeformAttn is higher on all three at 43.7 AP, 51.9 PQ, and 47.2 mIoU.
 
-## 7. Rewiring the decoder layer
+## 7. Three changes to the decoder layer
 
 Mask2Former changes the decoder layer in three ways without adding FLOPs. Together they improve AP by about 1.4, PQ by 1.1, and mIoU by 0.9. Their effects overlap, so the one-at-a-time ablations in §11 do not add to those totals.
 
-**Masked attention comes first.** The standard order is self-attention, then cross-attention, then the feed-forward network. Mask2Former uses masked attention, then self-attention, then the feed-forward network. Running cross-attention first gives each query image context before the queries interact. Restoring the original order costs 0.5 AP.
+**Masked attention comes first.** The standard order is self-attention, then cross-attention, then the feed-forward network. Mask2Former uses masked attention, then self-attention, then the feed-forward network. Running cross-attention first gives each query image context before the queries interact. Restoring the standard order costs 0.5 AP.
 
 **Query features are learnable and directly supervised.** DETR zero-initializes query features and learns only positional embeddings. Mask2Former makes $\mathbf{X}_0$ learnable and supervises its masks before the decoder runs. The query positional embeddings stay learnable, as in DETR. Every decoder layer adds them to the query features when computing attention, and they appear as `query_pos` in the appendix. Direct supervision also gives the first layer a useful gate.
 
@@ -1144,11 +1122,11 @@ Independent point sets make the covariance term zero. Shared points can make it 
 
 **Training uses uncertain points.** For each matched mask, the PointRend sampler draws $3K_{\text{pt}}$ uniform candidates [[Kirillov et al. 2020](#ref-kirillov2020)]. It keeps the $0.75K_{\text{pt}}$ candidates whose prediction logits are closest to zero, then adds $0.25K_{\text{pt}}$ fresh uniform points. The uncertainty score depends on the prediction, not the ground truth. These points often lie near a predicted boundary, but uncertain interiors can also be selected.
 
-This training sampler is intentionally nonuniform and applies no importance correction. Its selected coordinates are treated as fixed when gradients are computed, so it does not provide an unbiased estimate of the dense loss. Instead, it concentrates the stochastic training signal on uncertain regions.
+This training sampler is intentionally nonuniform and applies no importance correction, so it does not provide an unbiased estimate of the dense loss. It concentrates the stochastic training signal on uncertain regions instead. Its selected coordinates are treated as fixed when gradients are computed.
 
 <figure class="viz">
 <img src="/assets/m2f/point_sampling.webp" width="1572" height="568" loading="lazy" decoding="async" alt="Two copies of the dog photograph with sampled points. Left, uniform points over the whole image. Right, gold points concentrated along the predicted outline of the dog, plus a few uniform points.">
-<figcaption>Fig. 6. The two point rules on the dog prediction of Fig. 2. Left, matching: uniform points, one set shared by every mask in the image. Right, training: of 3K<sub>pt</sub> uniform candidates, the 0.75K<sub>pt</sub> whose logits are closest to zero (gold), plus 0.25K<sub>pt</sub> fresh uniform points (dark). The gold line is the prediction's 0.5 level. Selection reads only the prediction, so the chosen points follow its boundary and its uncertain interior, not the true outline. The figure draws K<sub>pt</sub> = 400 points, and training uses 12,544.</figcaption>
+<figcaption>Fig. 5. The two point rules on the dog prediction of Fig. 2. Left, matching: uniform points, one set shared by every mask in the image. Right, training: of 3K<sub>pt</sub> uniform candidates, the 0.75K<sub>pt</sub> whose logits are closest to zero (gold), plus 0.25K<sub>pt</sub> fresh uniform points (dark). The gold line is the prediction's 0.5 level. Selection reads only the prediction, so the chosen points follow its boundary and its uncertain interior, not the true outline. The figure draws K<sub>pt</sub> = 400 points, and training uses 12,544.</figcaption>
 </figure>
 
 ### 8.3 Point-sampling ablation
@@ -1177,7 +1155,7 @@ The table compares Mask2Former's training recipe with MaskFormer's. Both use the
 | $\lambda_{\text{cls}}$ | 1.0 | 2.0 |
 | decoder | 6 layers, SA→CA→FFN, dropout 0.1, stride 32 only, zero-init queries | 9 layers, MA→SA→FFN, no dropout, strides {32,16,8}×3, learnable supervised queries |
 
-COCO inference resizes the shorter image side to 800 pixels and caps the longer side at 1333. Most models use 100 queries. The largest panoptic and instance models use 200. In the R50 ablation, 100 queries gives the best AP and mIoU, while 200 raises PQ from 51.9 to 52.2. The best setting depends on how many segments an image contains.
+COCO inference resizes the shorter image side to 800 pixels and caps the longer side at 1333. Most models use 100 queries. The largest panoptic and instance models use 200. In the R50 ablation, 100 queries give the best AP and mIoU, while 200 raises PQ from 51.9 to 52.2. The best setting depends on how many segments an image contains.
 
 <details class="proof">
 <summary>Training settings beyond COCO</summary>
@@ -1187,6 +1165,9 @@ COCO inference resizes the shorter image side to 800 pixels and caps the longer 
 </details>
 
 Post-processing follows MaskFormer. Semantic output sums the masks weighted by each class probability, then selects the highest-scoring class at every pixel.
+
+<details class="proof">
+<summary>How panoptic and instance outputs are post-processed</summary>
 
 Panoptic output first keeps queries whose best class is not no-object and whose class probability exceeds $0.8$. Each pixel chooses the kept query with the largest class-probability times mask-probability score. The pixel is written only if the winning query's mask probability is at least $0.5$. For each query, the code divides the number of pixels it wins by the number of pixels in its own thresholded mask and discards the segment when this ratio is below $0.8$. The final segment is the intersection of the winning pixels and that thresholded mask. Stuff segments with the same class are merged. Rejected pixels remain void.
 
@@ -1199,6 +1180,8 @@ s_{i,c} = \hat p_i(c)\,
 $$
 
 The implementation uses $\varepsilon = 10^{-6}$, so an empty foreground scores zero.
+
+</details>
 
 ## 10. Results
 
@@ -1218,9 +1201,9 @@ Large-object AP reaches 71.2 on COCO test-dev, while small-object AP reaches 29.
 
 Boundary AP improves by 2.1 over HTC++, compared with 0.6 overall. The larger Boundary AP gain shows better boundary accuracy, but the comparison does not isolate its cause.
 
-Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput moves the other way. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
+Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, while Swin-L MaskFormer reaches 52.7 at 792 GFLOPs. Throughput is lower. The R50 panoptic model runs at 8.6 frames per second, compared with MaskFormer's 17.6.
 
-The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. A Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$ on Cityscapes, the instance AP on thing classes computed from the panoptic checkpoint. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
+The architecture is also evaluated on Cityscapes, ADE20K, and Mapillary Vistas. On Cityscapes, a Swin-L panoptic checkpoint reaches 66.6 PQ and 43.6 $\text{AP}^{\mathrm{Th}}_{\mathrm{pan}}$, the instance AP on thing classes computed from that checkpoint. The separate Cityscapes instance checkpoint reaches 43.7 AP. Swin-L panoptic checkpoints reach 48.1 PQ on ADE20K and 45.5 PQ on Mapillary Vistas. Each checkpoint is trained for its dataset and task.
 
 ## 11. Ablations and interactions
 
@@ -1233,7 +1216,7 @@ The table reports controlled R50 ablations across all three tasks.
 | remove multi-scale high-res features | −2.2 | −1.7 | −1.1 | finer features matter |
 | replace supervised learnable features with zero-init | −0.8 | −0.7 | **−1.8** | direct supervision of initial queries matters |
 | restore dropout | −0.7 | −0.6 | 0.0 | dropout hurts AP and PQ in this setup |
-| vanilla layer order | −0.5 | −0.3 | −0.9 | masked attention first performs better |
+| standard layer order | −0.5 | −0.3 | −0.9 | masked attention first performs better |
 
 *Measured with point-sampled training loss fixed. The full two-by-two comparison appears in §8.3.
 
@@ -1253,7 +1236,7 @@ The same group extended Mask2Former to video instance segmentation [[Cheng et al
 
 Mask2Former works because its changes form a feedback loop. Matching assigns one target to each query. Deep supervision trains every intermediate mask. Each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable.
 
-The query-to-mask refinement loop, rather than any one benchmark result, is Mask2Former's lasting contribution.
+Mask2Former's lasting contribution is this query-to-mask refinement loop, more than any one benchmark result.
 
 ## Appendix A. Implementation notes
 
@@ -1322,7 +1305,7 @@ They do not learn through the Boolean gate. Per-layer deep supervision trains ev
 <details class="proof">
 <summary>Why do matching and training use different point samplers?</summary>
 
-Sharing one uniform coordinate set makes the matching cost matrix efficient to build. For additive losses, each entry estimates the continuous bilinear-sampling objective. Training instead favors prediction logits near zero and keeps a random fraction for spatial coverage. The uncertain sampler does not use the target mask.
+Sharing one uniform coordinate set makes the matching cost matrix efficient to build. For additive losses, each entry estimates the continuous bilinear-sampling objective. Training instead favors prediction logits near zero and adds fresh uniform points for spatial coverage. The training sampler does not use the target mask.
 
 </details>
 

@@ -70,6 +70,57 @@ The steps depend on each other. Every layer's mask is trained directly, and each
 <path d="M 289 104 L 289 240 L 686 240 L 686 128" style="stroke: var(--viz-slate); stroke-width: 1.3; fill: none" marker-end="url(#ar-ar)"/>
 <text class="ar-s" x="488" y="258" text-anchor="middle" style="fill: var(--viz-slate)">pixel embedding map: a mask is each query compared with every pixel here</text>
 </svg>
+<svg class="m2f-arch-v" viewBox="0 0 340 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mask2Former in one picture. The backbone and pixel decoder turn the image into features at three resolutions and a per-pixel embedding map. N learned queries read those features in a nine-layer Transformer decoder. Each query predicts a class and a mask, and each mask limits where the next layer looks.">
+<defs><style>
+.m2f-arch-v { display: none; }
+@media (max-width: 600px) { .m2f-arch { display: none; } .m2f-arch-v { display: block; } }
+</style><marker id="av-ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-line)"/></marker><marker id="av-ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill: var(--viz-gold)"/></marker></defs>
+<rect width="340" height="440" rx="6" style="fill: var(--color-bg)"/>
+<rect x="75" y="10" width="100" height="34" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="125" y="32" text-anchor="middle">Image</text>
+<line x1="125" y1="44" x2="125" y2="58" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<rect x="45" y="60" width="160" height="54" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="125" y="80" text-anchor="middle">Backbone</text>
+<text class="ar-s" x="125" y="96" text-anchor="middle">finds features</text>
+<text class="ar-s" x="125" y="109" text-anchor="middle">ResNet or Swin</text>
+<line x1="125" y1="114" x2="125" y2="128" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<rect x="45" y="130" width="160" height="54" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="125" y="150" text-anchor="middle">Pixel decoder</text>
+<text class="ar-s" x="125" y="166" text-anchor="middle">3 feature sizes</text>
+<text class="ar-s" x="125" y="179" text-anchor="middle">+ pixel embeddings</text>
+<line x1="90" y1="184" x2="90" y2="222" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<text class="ar-s" x="94" y="207">1/32</text>
+<line x1="125" y1="184" x2="125" y2="222" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<text class="ar-s" x="129" y="207">1/16</text>
+<line x1="160" y1="184" x2="160" y2="222" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<text class="ar-s" x="164" y="207">1/8</text>
+<rect x="20" y="224" width="210" height="78" rx="5" style="fill: var(--viz-box); stroke: var(--color-text); stroke-width: 1.4"/>
+<text class="ar-h" x="125" y="245" text-anchor="middle">Transformer decoder</text>
+<text class="ar-s" x="125" y="262" text-anchor="middle">queries read the features</text>
+<text class="ar-s" x="125" y="277" text-anchor="middle">9 layers: 1/32, 1/16, 1/8</text>
+<text class="ar-s" x="125" y="292" text-anchor="middle">cycled three times</text>
+<circle cx="270" cy="244" r="6" style="fill: var(--viz-gold)"/>
+<circle cx="286" cy="244" r="6" style="fill: var(--viz-gold)"/>
+<circle cx="302" cy="244" r="6" style="fill: var(--viz-gold)"/>
+<path d="M 262 244 L 234 244" style="stroke: var(--viz-gold); stroke-width: 1.4; fill: none" marker-end="url(#av-ag)"/>
+<text class="ar-g" x="286" y="266" text-anchor="middle">N learned queries</text>
+<rect x="20" y="330" width="95" height="42" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="67.5" y="350" text-anchor="middle">Class</text>
+<text class="ar-s" x="67.5" y="365" text-anchor="middle">what it is</text>
+<rect x="135" y="330" width="95" height="42" rx="5" style="fill: var(--viz-box); stroke: var(--viz-line)"/>
+<text class="ar-h" x="182.5" y="350" text-anchor="middle">Mask</text>
+<text class="ar-s" x="182.5" y="365" text-anchor="middle">where it is</text>
+<line x1="67.5" y1="302" x2="67.5" y2="328" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<line x1="182.5" y1="302" x2="182.5" y2="328" style="stroke: var(--viz-line); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<path d="M 230 351 L 246 351 Q 254 351 254 343 L 254 296 Q 254 288 246 288 L 234 288" style="stroke: var(--viz-gold); stroke-width: 1.4; stroke-dasharray: 4 3; fill: none" marker-end="url(#av-ag)"/>
+<text class="ar-g" x="262" y="312">each mask</text>
+<text class="ar-g" x="262" y="326">limits where</text>
+<text class="ar-g" x="262" y="340">the next</text>
+<text class="ar-g" x="262" y="354">layer looks</text>
+<path d="M 45 157 L 10 157 L 10 392 L 182.5 392 L 182.5 375" style="stroke: var(--viz-slate); stroke-width: 1.3; fill: none" marker-end="url(#av-ar)"/>
+<text class="ar-s" x="170" y="412" text-anchor="middle" style="fill: var(--viz-slate)">pixel embedding map: a mask is each</text>
+<text class="ar-s" x="170" y="426" text-anchor="middle" style="fill: var(--viz-slate)">query compared with every pixel here</text>
+</svg>
 <figcaption>Overview. N learned queries read the image's features in nine decoder layers, cycling through three resolutions. Each query predicts a class and a mask, and each mask limits where the next layer looks.</figcaption>
 </figure>
 

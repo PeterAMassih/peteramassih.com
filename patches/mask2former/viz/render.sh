@@ -19,7 +19,6 @@ render() { # module, scene, published name
 render attention.py AttentionLookup attention
 render attention.py MaskedAttention masked-attention
 render layers.py LayerByLayer layers
-render conv.py ConvolutionSlide convolution
 render matching.py GreedyVsBest matching
 render mask_dot.py MaskIsDotProduct mask-dot
 render points.py PointSampling point-sampling

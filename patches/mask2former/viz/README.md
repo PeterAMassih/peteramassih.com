@@ -2,13 +2,12 @@
 
 The animations and the one model-output image in
 `src/content/writing/mask2former.md` are built here. The two remaining
-diagrams (the overview and Fig. 1) are inline SVG in the post and take their
+diagrams (the overview, wide and stacked for phones, and Fig. 1) are inline SVG in the post and take their
 colors from the `--viz-*` palette in `src/styles/tokens.css`.
 
 | figure | script | scene | what it shows |
 |---|---|---|---|
-| 0a | `conv.py` | `ConvolutionSlide` | a 3 by 3 filter sliding over an input with one edge |
-| 0b | `attention.py` | `AttentionLookup` | attention as a soft lookup on four locations of the dog photo |
+| 0 | `attention.py` | `AttentionLookup` | attention as a soft lookup on four locations of the dog photo |
 | 2 | `fig_mask_classification.py` | (image) | the dog query's mask, thresholded and soft |
 | 3 | `mask_dot.py` | `MaskIsDotProduct` | the real pixel embeddings, split by the dog query's mask embedding |
 | 4 | `matching.py` | `GreedyVsBest` | cheapest-first versus the best assignment on a 3 by 3 cost matrix |

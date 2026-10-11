@@ -150,7 +150,7 @@ class MaskedAttention(Scene):
         scores, exps = b.column(SCORES, X_SCORE, digits=1), b.column(e, X_EXP)
         bars = b.bars(w)
         weights, total, out = b.weight_labels(w, bars), b.total(e.sum()), b.output(w)
-        # Drawn, not faded in: the first frame is Fig. 0b's result, the question this figure answers.
+        # Drawn, not faded in: the first frame is Fig. 0's result, the question this figure answers.
         self.add(b.photo, b.spots, b.query, b.ids, b.heads, scores, exps, b.rule, total, bars, weights, out)
         self.wait(1.2)
 

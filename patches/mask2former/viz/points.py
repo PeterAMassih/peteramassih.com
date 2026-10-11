@@ -45,15 +45,17 @@ def panel(logits, x):
                     .filter(ImageFilter.GaussianBlur(0.8))).astype(np.float32)
     size = (px.shape[1], px.shape[0])
     prob = np.asarray(Image.fromarray((1 / (1 + np.exp(-logits))).astype(np.float32)).resize(size, Image.BILINEAR))
-    px[contour_of(prob >= 0.5, 2)] = rgb(P["gold"])
+    px[contour_of(prob >= 0.5, 4)] = rgb(P["gold"])
     return ImageMobject(px.clip(0, 255).astype(np.uint8)).scale_to_fit_width(PANEL_W).move_to([x, PANEL_Y, 0])
 
 
 def dots(pts, photo, color, opacity=1.0):
-    """Points in normalized image coordinates, (0, 0) at the photo's top left."""
+    """Points in normalized image coordinates, (0, 0) at the photo's top left.
+    The radius keeps a point about 3 px wide on a 360 px phone, and the ring in
+    the background color keeps dark points visible on the grey blanket."""
     left, top = photo.get_left()[0], photo.get_top()[1]
-    return VGroup(*(Dot([left + u * photo.width, top - v * photo.height, 0], radius=0.032, color=color,
-                        fill_opacity=opacity, stroke_width=1, stroke_color=P["bg"]) for u, v in pts))
+    return VGroup(*(Dot([left + u * photo.width, top - v * photo.height, 0], radius=0.055, color=color,
+                        fill_opacity=opacity, stroke_width=1.5, stroke_color=P["bg"]) for u, v in pts))
 
 
 def label(*parts):

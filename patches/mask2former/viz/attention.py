@@ -94,8 +94,8 @@ class Board:
                       num(s).move_to([X_EXP, Y_SUM, 0]))
 
     def output(self, weights):
-        sub = "\u2081\u2082\u2083\u2084"
-        terms = " + ".join(f"{w:.2f}v{sub[i]}" for i, w in enumerate(weights) if w > 0)
+        # Full-size indices: subscripts shrink to a few pixels on a phone.
+        terms = " + ".join(f"{w:.2f} v{i + 1}" for i, w in enumerate(weights) if w > 0)
         return label(f"output = {terms}", 30, P["text"], MONO).move_to([0, Y_OUT, 0])
 
 

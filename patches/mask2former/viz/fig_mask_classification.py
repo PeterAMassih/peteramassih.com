@@ -3,14 +3,14 @@
 
 Not a Manim scene. It runs the actual Mask2Former model on one Creative-Commons
 image and composes a static figure that grounds the (class, mask) pair of
-section 2.2: left, the dog query's thresholded mask as a translucent gold
-overlay with a contour; right, the same query's soft mask, the sigmoid of its
-logits at stride 4, with the 0.5 threshold drawn as a dark line. Gold is the
+section 2.2. Right, the dog query's soft mask, the sigmoid of its logits at
+stride 4, with the 0.5 level drawn as a dark line. Left, the same mask
+thresholded at 0.5, as a translucent gold overlay with a contour. Gold is the
 model's prediction, matching the color language of the other figures.
 
 Source image: "Dog-2617516_1920.jpg" from Wikimedia Commons, dedicated to the
 public domain under CC0 1.0 (https://commons.wikimedia.org/wiki/File:Dog-2617516_1920.jpg).
-No attribution is required; the figure caption credits it anyway.
+No attribution is required. The caption notes that the photo is public domain.
 
 Model: facebook/mask2former-swin-large-coco-panoptic (Apache-2.0 weights), run
 at the paper's COCO inference size (shorter side 800, longer side at most 1333)
@@ -22,7 +22,8 @@ Run (from this directory, after the extra deps in README.md are installed):
 
 Outputs public/assets/m2f/mask_classification.webp and prints the dog query's
 class probability for the caption. Deterministic: the model is in eval mode
-with no sampling. fig_point_sampling.py reuses dog_query() below.
+with no sampling. The Manim scenes reuse load_image(), photo_panel() and
+contour_of() below, so every figure shows the same photo the same way.
 """
 
 import urllib.request
@@ -50,25 +51,23 @@ BG_RGB = np.array([255, 255, 255], np.float32)    # ffffff, the page background
 def load_image():
     if not SRC.exists():
         SRC.parent.mkdir(parents=True, exist_ok=True)
-        # Wikimedia 403s the default urllib agent; identify the tool per its policy.
+        # Wikimedia 403s the default urllib agent, so identify the tool per its policy.
         req = urllib.request.Request(SRC_URL, headers={
             "User-Agent": "peteramassih.com-figure-build/1.0 (https://peteramassih.com)"})
         with urllib.request.urlopen(req) as r:
             SRC.write_bytes(r.read())
     img = Image.open(SRC).convert("RGB")
-    scale = 1333 / max(img.size)  # sane figure resolution; the processor resizes again
+    scale = 1333 / max(img.size)  # a sane figure resolution, which the processor resizes again
     return img.resize((round(img.size[0] * scale), round(img.size[1] * scale)), Image.LANCZOS)
 
 
 def dog_query(img):
-    """The query the panoptic output assigns to the dog.
+    """The query that predicts the dog: its class probability and its mask
+    logits, cropped to the image (stride 4 of the model input, padding removed).
 
-    Returns its class probability, its mask logits cropped to the image (stride
-    4 of the model input, padding removed), the panoptic dog mask at image
-    size, and the IoU between the two as a check that both panels show the
-    same prediction. The query is the one with the highest dog probability:
-    other queries can carry a near-identical mask but predict no-object, which
-    is what one-to-one matching trains duplicates to do.
+    It is the query with the highest dog probability. Other queries can carry a
+    near-identical mask but predict no-object, which is what one-to-one
+    matching trains duplicates to do.
     """
     proc = AutoImageProcessor.from_pretrained(
         CKPT, size={"shortest_edge": 800, "longest_edge": 1333})
@@ -77,26 +76,13 @@ def dog_query(img):
     with torch.no_grad():
         out = model(**inputs)
 
-    res = proc.post_process_panoptic_segmentation(out, target_sizes=[img.size[::-1]])[0]
-    seg = res["segmentation"].cpu().numpy()
-    id2label = model.config.id2label
-    dogs = [s for s in res["segments_info"] if id2label[s["label_id"]] == "dog"]
-    if not dogs:
-        raise SystemExit("no dog segment found; the source image or checkpoint changed")
-    dog_label = dogs[0]["label_id"]
-    panoptic = seg == max(dogs, key=lambda s: int((seg == s["id"]).sum()))["id"]
-
-    # Mask logits live on the padded input at stride 4; keep the image part.
+    # Mask logits live on the padded input at stride 4. Keep the image part.
     valid = inputs["pixel_mask"][0].numpy().astype(bool)
     h, w = valid.any(1).sum() // 4, valid.any(0).sum() // 4
-    logits = out.masks_queries_logits[0, :, :h, :w].numpy()
-    probs = torch.softmax(out.class_queries_logits[0], -1)[:, dog_label].numpy()
-
+    dog = next(k for k, v in model.config.id2label.items() if v == "dog")
+    probs = torch.softmax(out.class_queries_logits[0], -1)[:, dog].numpy()
     q = int(np.argmax(probs))
-    small = np.asarray(Image.fromarray(panoptic).resize((w, h), Image.NEAREST))
-    fg = logits[q] > 0
-    iou = (fg & small).sum() / (fg | small).sum()
-    return {"p_dog": float(probs[q]), "iou": float(iou), "logits": logits[q], "panoptic": panoptic}
+    return {"p_dog": float(probs[q]), "logits": out.masks_queries_logits[0, q, :h, :w].numpy()}
 
 
 def photo_panel(img):
@@ -111,22 +97,25 @@ def contour_of(mask, width):
     return mask & ~binary_erosion(mask, iterations=width)
 
 
-def left_panel(img, panoptic):
-    """The thresholded dog mask over the photo: gold fill, gold contour."""
+def soft_mask(logits):
+    """sigmoid(logits) at panel size. Bilinear upsampling shows the values, not the grid."""
+    prob = 1 / (1 + np.exp(-logits))
+    return np.asarray(Image.fromarray(prob.astype(np.float32)).resize(PANEL, Image.BILINEAR))
+
+
+def left_panel(img, soft):
+    """The soft mask thresholded at 0.5, over the photo: gold fill, gold contour."""
     out = photo_panel(img)
-    mask = np.asarray(Image.fromarray(panoptic).resize(PANEL, Image.NEAREST))
+    mask = soft >= 0.5
     out[mask] = out[mask] * 0.58 + GOLD_RGB * 0.42
     out[contour_of(mask, 3)] = GOLD_RGB
     return Image.fromarray(out.clip(0, 255).astype(np.uint8))
 
 
-def right_panel(logits):
-    """The soft mask sigmoid(logits): off-white at 0, gold at 1, with the 0.5
-    level drawn in ink. Bilinear upsampling shows the values, not the grid."""
-    prob = 1 / (1 + np.exp(-logits))
-    up = np.asarray(Image.fromarray(prob.astype(np.float32)).resize(PANEL, Image.BILINEAR))
-    out = BG_RGB * (1 - up[..., None]) + GOLD_RGB * up[..., None]
-    out[contour_of(up >= 0.5, 2)] = INK_RGB
+def right_panel(soft):
+    """The soft mask: off-white at 0, gold at 1, with the 0.5 level drawn in ink."""
+    out = BG_RGB * (1 - soft[..., None]) + GOLD_RGB * soft[..., None]
+    out[contour_of(soft >= 0.5, 2)] = INK_RGB
     return Image.fromarray(out.clip(0, 255).astype(np.uint8))
 
 
@@ -144,8 +133,9 @@ def compose(left, right, name):
 def main():
     img = load_image()
     dog = dog_query(img)
-    compose(left_panel(img, dog["panoptic"]), right_panel(dog["logits"]), "mask_classification.webp")
-    print(f"dog query: p_hat(dog) = {dog['p_dog']:.3f}, IoU with the panoptic dog {dog['iou']:.3f}, "
+    soft = soft_mask(dog["logits"])
+    compose(left_panel(img, soft), right_panel(soft), "mask_classification.webp")
+    print(f"dog query: p_hat(dog) = {dog['p_dog']:.3f}, "
           f"mask logits {dog['logits'].shape[1]}x{dog['logits'].shape[0]} at stride 4")
 
 

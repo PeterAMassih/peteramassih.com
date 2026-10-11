@@ -65,7 +65,10 @@ const jsonLd = {
   </main>
 </BaseLayout>
 
-<script>import '../../scripts/scrollable.js';</script>
+<script>
+  import '../../scripts/scrollable.js';
+  import '../../scripts/videos.js';
+</script>
 
 <style>
   /* Prose, the notation table, and math stay at the readable measure and stay
@@ -79,6 +82,7 @@ const jsonLd = {
   .body :global(ol),
   .body :global(blockquote),
   .body :global(table),
+  .body :global(details.proof),
   .body :global(.katex-display) {
     max-width: var(--content-width);
     margin-inline: auto;
@@ -146,12 +150,19 @@ const jsonLd = {
   .body :global(:is(th, td)[align='right']) { text-align: right; }
   .body :global(figure.viz) { margin: var(--space-8) 0; overflow-x: auto; }
   .body :global(figure.viz img),
-  .body :global(figure.viz svg) {
+  .body :global(figure.viz svg),
+  .body :global(figure.viz video) {
     width: 100%;
     height: auto;
     border: 1px solid var(--color-border);
     border-radius: 4px;
   }
+  /* Without a control bar, the pointer is the hint that a click pauses.
+     tabindex marks the videos the script made clickable. */
+  .body :global(figure.viz video[tabindex]:not([controls])) { cursor: pointer; }
+  /* The figure scrolls sideways on narrow screens, which clips anything
+     drawn outside it, so the focus ring is drawn inside the video. */
+  .body :global(figure.viz video:focus-visible) { outline-offset: -2px; }
   .body :global(figure.viz figcaption) {
     margin-top: var(--space-2);
     font-size: var(--text-sm);

@@ -6,7 +6,7 @@ tags: [computer-vision, segmentation, transformers, paper-dissection]
 math: true
 ---
 
-**In short.** Image segmentation labels every pixel of an image. It comes in three versions, semantic, instance and panoptic, described in §1. By late 2021, models built to handle all three, called universal, did well on two of them. On the third, which separates individual objects, they still lost to specialized systems. MaskFormer, the direct predecessor of Mask2Former, trailed the best of those systems by over 9 AP, the standard score for that version. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] kept MaskFormer's idea, one mask and one class per learned query, and rebuilt its decoder and its training recipe. It closed the gap, at 50.1 AP against 49.5 for the specialized Swin-HTC++, and reported the best results to date on the other two versions (§10).
+**In short.** Image segmentation labels every pixel of an image. There are three versions of the task, semantic, instance and panoptic (§1). By late 2021, universal models, built to handle all three, did well on semantic and panoptic segmentation. But on instance segmentation, which separates individual objects, they still lost to specialized systems. MaskFormer, Mask2Former's direct predecessor, trailed the best of them by over 9 AP, the standard instance score. Mask2Former [[Cheng et al. 2022](#ref-cheng2022)] kept MaskFormer's core idea, one mask and one class per learned query, and rebuilt its decoder and its training recipe. It closed the gap, at 50.1 AP against 49.5 for the specialized Swin-HTC++, and reported the best results to date on the other two versions (§8).
 
 **How it works, in five steps.**
 
@@ -14,7 +14,7 @@ math: true
 2. A query makes its mask by taking the dot product of its vector with the vector of every pixel. A high value means the pixel belongs to the query's region (§3).
 3. In training, each real object is paired with exactly one query, which learns to predict it. A pair's cost measures how badly the query's class and mask fit the object, and the pairing with the lowest total cost wins. Unpaired queries learn to predict "no object" (§4).
 4. Nine decoder layers refine the queries. In each layer, a query reads image features only inside the mask it predicted at the previous layer, so the background can no longer drown out its object. This is masked attention, the paper's main idea (§5).
-5. The layers take turns reading coarse and fine feature maps (§6). The mask losses are computed on 12,544 sampled points instead of every pixel, which cuts training memory from 18 GB to 6 GB per image (§8).
+5. Two more ideas make this affordable. The layers take turns reading coarse and fine feature maps, and the mask losses are computed on 12,544 sampled points instead of every pixel, which cuts training memory from 18 GB to 6 GB per image (§6).
 
 Steps 1 to 3 come from MaskFormer, and steps 4 and 5 are new. Together they form a loop: every layer's mask is trained against the true mask, and each trained mask decides where the next layer looks.
 
@@ -127,23 +127,52 @@ Steps 1 to 3 come from MaskFormer, and steps 4 and 5 are new. Together they form
 **How to read this.**
 
 - **In five minutes:** the five steps and the picture above, then [Fig. 2](#fig-2), [Fig. 3](#fig-3), [Fig. 4](#fig-4), [Fig. 5](#fig-5) and [Fig. 6](#fig-6), which show the steps in order.
-- **If you know DETR and the segmentation metrics:** start at §3. Mask2Former's own changes are §5 to §8, and §11 measures what each one is worth.
+- **If you know DETR and the segmentation metrics:** start at §3. Mask2Former's own changes are §5 to §7, and §7 ends with what each one is worth.
 - **If any of this is new:** start at §0, which builds every idea the rest uses. If attention and losses are familiar, start at §1.
 
-Proofs and longer derivations are folded, and the main text never depends on them.
+Proofs and longer derivations are folded, and the main text never depends on them. In the figures, gold marks what the model predicts, green marks ground truth, and slate marks image features.
 
 <details class="proof">
 <summary>Contents</summary>
 
-- **Background.** [0. The background you need](#0-the-background-you-need) · [Notation](#notation) · [1. Three ways to segment an image](#1-three-ways-to-segment-an-image) · [2. Mask classification](#2-mask-classification-predict-regions-not-pixels)
+- **Background.** [0. The background you need](#0-the-background-you-need) · [1. Three ways to segment an image](#1-three-ways-to-segment-an-image) · [2. Mask classification](#2-mask-classification-predict-regions-not-pixels)
 - **The model and its training.** [3. How a query becomes a mask](#3-how-a-query-becomes-a-mask) · [4. Training: one query per object](#4-training-one-query-per-object)
-- **What Mask2Former changes.** [5. Masked attention](#5-masked-attention-each-query-reads-only-its-own-region) · [6. Multi-scale features](#6-multi-scale-features-one-resolution-per-layer) · [7. Three changes to the decoder layer](#7-three-changes-to-the-decoder-layer) · [8. Point sampling](#8-point-sampling-mask-losses-on-12544-points)
-- **Training and results.** [9. Training recipe](#9-training-recipe) · [10. Results](#10-results) · [11. Ablations](#11-ablations-what-each-part-is-worth) · [12. Limitations](#12-limitations)
-- **Wrap-up.** [13. Later work](#13-later-work) · [14. Conclusion](#14-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [References](#references) · [Citation](#citation)
+- **What Mask2Former changes.** [5. Masked attention](#5-masked-attention-each-query-reads-only-its-own-region) · [6. Making it affordable](#6-making-it-affordable) · [7. Smaller changes](#7-smaller-changes-and-what-each-part-is-worth)
+- **Results.** [8. Results and limitations](#8-results-and-limitations) · [9. Conclusion](#9-conclusion) · [Appendix A](#appendix-a-implementation-notes) · [References](#references) · [Citation](#citation)
+
+</details>
+
+<details class="proof">
+<summary>All symbols, for reference</summary>
+
+| symbol | meaning |
+|---|---|
+| $I \in \mathbb{R}^{3\times H\times W}$ | input image. $H_l \times W_l$ is the size of the feature map used at decoder layer $l$ |
+| $\Omega$ | the pixel grid, the set of pixel locations of the map under discussion. $\lvert\Omega\rvert$ is its size |
+| $C$ | shared feature dimension of queries and image features (256 in the reference implementation) |
+| $N$ | number of object queries (100 by default, 200 for the Swin-L panoptic and instance models) |
+| $K$, $\varnothing$ | number of classes, and the "no-object" class appended to them. This $K$ is unrelated to §0's key matrix |
+| $(m_i, c_i)$ | prediction $i$, with a soft mask $m_i \in [0,1]^{H\times W}$ and class $c_i \in \{1,\dots,K\}\cup\{\varnothing\}$ |
+| $\hat p_i(c)$ | predicted probability that query $i$ has class $c$, from $\hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i + b_{\text{cls}})$ with one output per class plus no-object |
+| $q_i \in \mathbb{R}^C$ | the normalized feature of query $i$ that the class and mask heads read (§3) |
+| $\pi$ | an assignment of predictions to targets, a permutation in $S_N$ (§4) |
+| $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
+| $\widetilde{\mathbf{X}}_l$ | intermediate residual state immediately after adding the cross-attention output in layer $l$, before LayerNorm and the remaining sublayers |
+| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{Q}_l \in \mathbb{R}^{N\times C}$ comes from the queries, and $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
+| $Z_l$ | mask logits predicted at output $l$, one logit map per query |
+| $B_l(i,x)$ | binary gate for query $i$ at location $x$, obtained by resizing $Z_l$, applying the sigmoid, and thresholding at $0.5$ |
+| $\mathcal{M}_{l}(i,x)$ | additive attention mask built from $B_l(i,x)$. It is $0$ on allowed locations and $-\infty$ elsewhere |
+| $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
+| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which maps real scores into $(0,1)$ |
+| $\mathbb{1}[\cdot]$ | the indicator, with $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
+| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | Binary cross-entropy (BCE), Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
+| $K_{\text{pt}}$ | number of sampled points for mask losses, $12{,}544 = 112^2$ |
 
 </details>
 
 ## 0. The background you need
+
+Mask2Former is built from a few standard ideas, one per paragraph below. Skip any you already know.
 
 **Feature maps.** A neural network called a backbone turns the image into a smaller grid, where each cell holds a vector that summarizes a patch of the image. That grid is a feature map, and its stride is the shrink factor. At stride 32, a 1024 by 1024 image becomes a 32 by 32 grid, so each cell stands for a 32 by 32 patch. Small objects lose detail at that scale, which is why Mask2Former also reads finer maps (§6).
 
@@ -170,6 +199,9 @@ The only way to give an option a weight of exactly 0 is a score of $-\infty$, be
 <figcaption>Fig. 0. Attention is a soft lookup: compare the query with each key, turn the scores into weights with softmax, then mix the values. The scores are made up for the example, and §5 reuses them.</figcaption>
 </figure>
 
+<details class="proof">
+<summary>The matrix form, for many queries at once</summary>
+
 For many queries at once, stack the $N$ queries as the rows of a matrix $Q$, and the keys and values of the $n$ locations as the rows of $K$ and $V$. Every row holds $d$ numbers. Then
 
 $$
@@ -177,6 +209,8 @@ $$
 $$
 
 where each row of $QK^\top$ holds one query's scores, softmax turns each row into weights, and multiplying by $V$ mixes the values. Dividing by $\sqrt d$ keeps the scores from growing with the vector length $d$. In practice the model runs several lookups in parallel, called heads, each with its own learned projections.
+
+</details>
 
 **Transformer decoder layers.** A decoder layer updates every query's vector $x$ three times, each time adding the result to $x$, which is called a residual connection. Leaving out normalization and projections, Mask2Former's layer runs
 
@@ -189,38 +223,6 @@ $$
 The first update is cross-attention, where the query reads the image. The second is self-attention, where the queries read each other, so they can coordinate, for example to avoid describing the same object twice. The third is a small feed-forward network (FFN) applied to each query on its own. Mask2Former stacks nine such layers.
 
 **Losses and gradients.** A loss $\mathcal{L}$ is one number that measures how wrong the output is. Training nudges every weight against the gradient $\nabla_w \mathcal{L}$, the direction in weight space that raises the loss fastest. Mask2Former's loss is defined in §4.
-
-## Notation
-
-In the figures, gold marks what the model predicts (queries and masks), green marks ground truth, and slate marks image features.
-
-<details class="proof">
-<summary>All symbols, for reference</summary>
-
-| symbol | meaning |
-|---|---|
-| $I \in \mathbb{R}^{3\times H\times W}$ | input image. $H_l \times W_l$ is the size of the feature map used at decoder layer $l$ |
-| $\Omega$ | the pixel grid, the set of pixel locations of the map under discussion. $\lvert\Omega\rvert$ is its size |
-| $C$ | shared feature dimension of queries and image features (256 in the reference implementation) |
-| $N$ | number of object queries (100 by default, 200 for the Swin-L panoptic and instance models) |
-| $K$, $\varnothing$ | number of classes, and the "no-object" class appended to them. This $K$ is unrelated to §0's key matrix |
-| $(m_i, c_i)$ | prediction $i$, with a soft mask $m_i \in [0,1]^{H\times W}$ and class $c_i \in \{1,\dots,K\}\cup\{\varnothing\}$ |
-| $\hat p_i(c)$ | predicted probability that query $i$ has class $c$ |
-| $q_i \in \mathbb{R}^C$ | the normalized feature of query $i$ that the class and mask heads read (§3) |
-| $\pi$ | an assignment of predictions to targets, a permutation in $S_N$ (§4) |
-| $\mathbf{X}_l \in \mathbb{R}^{N\times C}$ | query features after decoder layer $l$. $\mathbf{X}_0$ are the learnable input query features |
-| $\widetilde{\mathbf{X}}_l$ | intermediate residual state immediately after adding the cross-attention output in layer $l$, before LayerNorm and the remaining sublayers |
-| $\mathbf{Q}_l, \mathbf{K}_l, \mathbf{V}_l$ | attention projections. $\mathbf{Q}_l \in \mathbb{R}^{N\times C}$ comes from the queries, and $\mathbf{K}_l,\mathbf{V}_l \in \mathbb{R}^{H_lW_l\times C}$ come from image features |
-| $Z_l$ | mask logits predicted at output $l$, one logit map per query |
-| $B_l(i,x)$ | binary gate for query $i$ at location $x$, obtained by resizing $Z_l$, applying the sigmoid, and thresholding at $0.5$ |
-| $\mathcal{M}_{l}(i,x)$ | additive attention mask built from $B_l(i,x)$. It is $0$ on allowed locations and $-\infty$ elsewhere |
-| $\mathcal{E}_{\text{pixel}}$ | per-pixel embeddings from the pixel decoder, at stride 4 |
-| $\sigma(\cdot)$ | the logistic sigmoid $\sigma(z) = 1/(1+e^{-z})$, which maps real scores into $(0,1)$ |
-| $\mathbb{1}[\cdot]$ | the indicator, with $\mathbb{1}[P] = 1$ when condition $P$ holds and $0$ otherwise |
-| $\lambda_{\text{ce}}, \lambda_{\text{dice}}, \lambda_{\text{cls}}$ | Binary cross-entropy (BCE), Dice, and class-loss weights. Their values are $5$, $5$, and $2$. The no-object class receives an additional $0.1$ multiplier |
-| $K_{\text{pt}}$ | number of sampled points for mask losses, $12{,}544 = 112^2$ |
-
-</details>
 
 ## 1. Three ways to segment an image
 
@@ -359,15 +361,11 @@ Above the $0.5$ threshold, matching is therefore unambiguous. Greedy matching, w
 
 A model can produce a segmentation in two ways. It can label every pixel, or it can predict a set of regions and label each region. Mask2Former does the second.
 
-### 2.1 Per-pixel classification
+**Labeling pixels.** A per-pixel classifier asks the same question at every pixel: which class is this? The fully convolutional network (FCN) [[Long et al. 2015](#ref-long2015)] made this the standard approach to semantic segmentation. It is trained with cross-entropy at every pixel, the negative log of the probability it gives the correct class.
 
-A per-pixel classifier asks the same question at every pixel: which class is this? The fully convolutional network (FCN) [[Long et al. 2015](#ref-long2015)] made this the standard approach to semantic segmentation. It is trained with cross-entropy at every pixel, the negative log of the probability it gives the correct class.
+The catch is object identity. A per-pixel classifier has no variable for which object a pixel belongs to, so it cannot separate two touching cars. Instance systems added extra machinery for that: region proposals, anchor boxes, grouping rules, or non-maximum suppression (NMS), a step that deletes overlapping duplicate detections.
 
-The limit is identity. A per-pixel classifier has no variable for which object a pixel belongs to, so it cannot separate two touching cars. Instance systems added extra machinery for that: region proposals, anchor boxes, grouping rules, or non-maximum suppression (NMS), a step that deletes overlapping duplicate detections.
-
-### 2.2 Mask classification
-
-Mask classification predicts regions instead. The model keeps $N$ learned query vectors. Each query predicts one mask, which says where its segment is, and one class, which says what the segment is:
+**Predicting regions.** Mask classification predicts regions instead. The model keeps $N$ learned query vectors. Each query predicts one mask, which says where its segment is, and one class, which says what the segment is:
 
 $$
 \{(m_i, c_i)\}_{i=1}^{N}, \qquad m_i \in [0,1]^{H\times W},\quad c_i \in \{1,\dots,K\}\cup\{\varnothing\},
@@ -401,14 +399,13 @@ Mask2Former keeps MaskFormer's three parts, drawn in the [overview figure](#over
 2. A **pixel decoder** refines them into feature maps at three resolutions, 1/32, 1/16 and 1/8 of the input. It also produces a pixel embedding map $\mathcal{E}_{\text{pixel}}$ at 1/4 resolution, with one vector of $C = 256$ numbers per location.
 3. A **Transformer decoder** updates the $N$ query vectors in nine layers, each reading one of the three feature maps (§5, §6).
 
-After every decoder layer, two small prediction heads read each query. Write $q_i\in\mathbb{R}^C$ for the feature of query $i$ after a final LayerNorm, a standard normalization layer. The class head is a linear layer with a softmax. The mask head is a small multilayer perceptron (MLP) followed by a dot product with every pixel embedding:
+After every decoder layer, two small heads read each query's vector $q_i$. The class head is a linear layer with a softmax, which gives one probability per class plus one for no-object. The mask head is a small multilayer perceptron (MLP) that turns the query into a mask embedding, a vector the same length as each pixel embedding. The mask is the sigmoid of their dot product at every pixel $x$:
 
 $$
-\hat p_i = \operatorname{softmax}(W_{\text{cls}}\, q_i + b_{\text{cls}}), \qquad
 m_i(x) = \sigma\big(\operatorname{MLP}(q_i)^\top\, \mathcal{E}_{\text{pixel}}(x)\big),
 $$
 
-where $W_{\text{cls}}\in\mathbb{R}^{(K+1)\times C}$ and $b_{\text{cls}}\in\mathbb{R}^{K+1}$ give one score per class plus one for no-object, and $\sigma$ is the sigmoid $1/(1+e^{-z})$, which turns a score into a probability. The MLP maps $\mathbb{R}^C$ to $\mathbb{R}^C$, so its output, the query's mask embedding, has the same width as each pixel embedding $\mathcal{E}_{\text{pixel}}(x)$. Their dot product is one number per pixel, the mask logit. A pixel whose embedding points the same way as the query's mask embedding gets a high probability. Every part, from the backbone to the heads, is trained together on the loss of §4, so the pixels of an object learn embeddings that line up with its query. Fig. 3 shows this on the real model.
+where $\sigma(z) = 1/(1+e^{-z})$ turns the dot product, called the mask logit, into a probability. A pixel whose embedding points the same way as the query's mask embedding gets a high probability. Every part, from the backbone to the heads, is trained together on the loss of §4, so the pixels of an object learn embeddings that line up with its query. Fig. 3 shows this on the real model.
 
 <figure class="viz" id="fig-3">
 <video data-base="/assets/m2f/mask-dot" width="1600" height="1000" muted playsinline preload="none" aria-label="Animation. Left, the dog photo with a grid of 260 sample cells. Each cell flies into a plot on the right as one dot. The horizontal axis is the direction of the dog query's mask embedding, and a dashed vertical line marks where the dot product is zero, where the sigmoid equals 0.5. The 59 dots right of the line turn gold, and so do their cells on the photo, which form a blocky outline of the dog. The formula reads mask = sigmoid(query dot pixel) greater than 0.5. The blocky mask then gives way to the full-resolution mask over all 60,800 cells."></video>
@@ -440,11 +437,11 @@ The implementation uses $\varepsilon = 10^{-6}$, so an empty foreground scores z
 
 ## 4. Training: one query per object
 
-Training has to decide which query should predict which object, and nothing in the output says so. The $N$ predictions form a set. Query 7 is not meant to predict object 7, and shuffling the queries only reorders the same predictions. So the loss works in two steps: matching pairs each real object with one query, and the loss then scores each pair. Mask2Former inherits this from DETR and MaskFormer. Readers who know DETR's matching can skip to the last paragraph of §4.2, on deep supervision.
+Training has to decide which query should predict which object, and nothing in the output says so. The $N$ predictions form a set. Query 7 is not meant to predict object 7, and shuffling the queries only reorders the same predictions. So the loss works in two steps: matching pairs each real object with one query, and the loss then scores each pair. Mask2Former inherits this from DETR and MaskFormer. If you know DETR's matching, skip to the last paragraph of §4.2, on deep supervision.
 
 ### 4.1 Matching predictions to objects
 
-Pairing each prediction with the target it fits best does not work: two queries can pick the same object, and another object is left with none. Matching instead pairs each target with exactly one prediction, choosing the pairing with the lowest total cost, and trains every unmatched prediction to say no-object. Because each object teaches exactly one query, a second query on the same object is unmatched and learns to say no-object. Duplicates are discouraged, and inference needs no non-maximum suppression.
+Letting each prediction pick the target it fits best does not work: two queries can pick the same object and leave another with none. Matching instead gives each target exactly one prediction, choosing the pairing with the lowest total cost. Every prediction left over learns to say no-object. That includes a second query on an object that is already taken, so the model learns not to predict duplicates, and inference needs no non-maximum suppression.
 
 Try a small case first. Fig. 4 holds the costs of pairing three predictions with three targets. Before it plays, find the cheapest way to give each target its own prediction.
 
@@ -453,7 +450,7 @@ Try a small case first. Fig. 4 holds the costs of pairing three predictions with
 <figcaption>Fig. 4. Matching is a global choice. Each entry is the cost of giving a target (column) to a prediction (row), lower when the prediction's class and mask fit the target better. Taking the cheapest pair first locks in the 0 and the 2 and is left with a 4, for a total of 6. The best assignment accepts one slightly worse pair and pays 5 in total. The Hungarian algorithm finds it.</figcaption>
 </figure>
 
-**The cost.** In the model, the cost of pairing prediction $i$ with target $j$ has three parts. A class term rewards a prediction that already gives the target's class $c^{\text{gt}}_j$ a high probability. Two mask terms, binary cross-entropy (BCE), which scores each pixel on its own, and Dice, which scores the overlap of the whole region (§4.2), measure how far the predicted mask $m_i$ is from the target mask $m^{\text{gt}}_j$:
+**The cost.** In the model, the cost of pairing prediction $i$ with target $j$ has three parts. A class term rewards a prediction that already gives the target's class $c^{\text{gt}}_j$ a high probability. Two mask terms measure how far the predicted mask $m_i$ is from the target mask $m^{\text{gt}}_j$: binary cross-entropy (BCE), which scores each pixel on its own, and Dice, which scores the overlap of the whole region (both in §4.2). In full,
 
 $$
 \text{cost}(i,j) = \mathbb{1}\!\left[c^{\text{gt}}_j \ne \varnothing\right]\Big(\!-\lambda_{\text{cls}}\,\hat p_{i}(c^{\text{gt}}_j) + \lambda_{\text{ce}}\,\mathcal{L}_{\text{ce}}\big(m_{i}, m^{\text{gt}}_j\big) + \lambda_{\text{dice}}\,\mathcal{L}_{\text{dice}}\big(m_{i}, m^{\text{gt}}_j\big)\Big),
@@ -461,7 +458,7 @@ $$
 
 where the indicator $\mathbb{1}[\cdot]$ is 1 when its condition holds and 0 otherwise, so pairing a query with no object costs nothing. The weights $\lambda_{\text{cls}}$, $\lambda_{\text{ce}}$ and $\lambda_{\text{dice}}$ are 2, 5 and 5, and the minus sign makes a confident correct class lower the cost.
 
-**The assignment.** Trying every way to pair queries with objects is hopeless at $N = 100$. The Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)] finds the cheapest pairing directly, in $O(N^3)$ time in its refined form, and in code it is one call to `scipy.optimize.linear_sum_assignment`. The two folds below show why its answer is optimal and run it by hand on the matrix of Fig. 4.
+**The assignment.** With 100 queries there are far too many pairings to try them all. The Hungarian algorithm [[Kuhn 1955](#ref-kuhn1955), [Munkres 1957](#ref-munkres1957)] finds the cheapest one directly, in $O(N^3)$ time in its refined form. In code it is one call to `scipy.optimize.linear_sum_assignment`. The two folds below show why its answer is optimal and run it by hand on the matrix of Fig. 4.
 
 <details class="proof">
 <summary>The dual certificate for optimality</summary>
@@ -566,13 +563,13 @@ Each augmentation adds one edge, so at most $N$ augmentations finish the matchin
 
 ### 4.2 The training loss
 
-Each output is trained with three terms: a class loss on all $N$ queries, and two mask losses on the queries matched to real objects. The released criterion weights them as
+Each output is trained with three terms: a class loss on all $N$ queries, and two mask losses on the queries matched to real objects. The loss weights them as
 
 $$
 \mathcal{L} = 2\,\mathcal{L}_{\text{cls}} + 5\,\mathcal{L}_{\text{ce}} + 5\,\mathcal{L}_{\text{dice}}.
 $$
 
-The class loss $\mathcal{L}_{\text{cls}}$ is cross-entropy, with no-object targets weighted 0.1, because most queries are unmatched: with 100 queries and 5 objects, 95 learn no-object. BCE, $\mathcal{L}_{\text{ce}}$, scores each mask point on its own and keeps pushing a point that is confidently wrong. Dice, $\mathcal{L}_{\text{dice}}$ [[Milletari et al. 2016](#ref-milletari2016)], scores the overlap of the whole region, from 0 for a perfect match to almost 1 for none, so a small object counts as much as a large one at the same fraction of overlap. Its push on a confidently wrong point fades, which is why BCE is kept beside it. Both are evaluated at sampled points (§8).
+The class loss $\mathcal{L}_{\text{cls}}$ is cross-entropy, with no-object targets weighted 0.1, because most queries are unmatched: with 100 queries and 5 objects, 95 learn no-object. BCE, $\mathcal{L}_{\text{ce}}$, scores each mask point on its own and keeps pushing a point that is confidently wrong. Dice, $\mathcal{L}_{\text{dice}}$ [[Milletari et al. 2016](#ref-milletari2016)], scores the overlap of the whole region, from 0 for a perfect match to almost 1 for none, so a small object counts as much as a large one at the same fraction of overlap. Its push on a confidently wrong point fades, which is why BCE is kept beside it. Both are evaluated at sampled points (§6.2).
 
 <details class="proof">
 <summary>The loss formulas, their gradients, and what BCE adds to Dice</summary>
@@ -615,7 +612,7 @@ $$
 
 where the added 1s keep the ratio defined when both masks are empty.
 
-**BCE in the released code.** The same gradient holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes by the number of matched masks. BCE has no mask-level normalization for foreground area. Under dense evaluation, or uniform sampling in expectation, a large foreground contributes more positive terms than a small one at comparable pointwise errors. The training sampler in §8 can change those proportions by favoring logits near zero.
+**BCE in the released code.** The same gradient holds for bilinearly sampled targets $g_x \in [0,1]$. The released loss averages BCE over sampled points and normalizes by the number of matched masks. BCE has no mask-level normalization for foreground area. Under dense evaluation, or uniform sampling in expectation, a large foreground contributes more positive terms than a small one at comparable pointwise errors. The training sampler in §6.2 can change those proportions by favoring logits near zero.
 
 **Dice's gradient.** Milletari's original Dice uses sums of squares in the denominator. Dice couples all sampled points through one region-level score. Write the smoothing constant as $\varepsilon = 1$. The gradient at a single point is
 
@@ -650,15 +647,15 @@ $$
 <details class="proof">
 <summary>Why not focal loss, as in MaskFormer?</summary>
 
-MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Focal loss down-weights already-confident predictions, so easy background points contribute less. Mask2Former uses plain BCE at weight $5$. One plausible reason is that §8's training sampler spends most of its budget on uncertain locations rather than easy background, reducing the imbalance that focal loss was designed to address. The paper does not isolate this change.
+MaskFormer used focal loss [[Lin et al. 2017](#ref-lin2017)] with weight $20$. Focal loss down-weights already-confident predictions, so easy background points contribute less. Mask2Former uses plain BCE at weight $5$. One plausible reason is that the training sampler of §6.2 spends most of its budget on uncertain locations rather than easy background, reducing the imbalance that focal loss was designed to address. The paper does not isolate this change.
 
 </details>
 
-**Deep supervision.** All ten outputs of §3 are trained with this loss, through the same shared heads. The released criterion recomputes the Hungarian matching for each output, so every intermediate prediction trains toward its own assignment. This is more than an optimization aid. The thresholded intermediate masks become attention masks in §5, so these losses are part of the model's feedback loop.
+**Deep supervision.** All ten outputs of §3 are trained with this loss, through the same shared heads. The matching is recomputed for each output, so every intermediate prediction trains toward its own assignment. This matters more than usual here: the intermediate masks become the attention masks of §5, so these losses also steer where each layer looks.
 
 ## 5. Masked attention: each query reads only its own region
 
-In a standard decoder layer, every query reads the whole image through cross-attention. A query meant to describe the dog still spends attention on every patch of blanket. Global attention can learn where an object is, but the authors argue, as earlier DETR studies found [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)], that learning this is slow. Masked attention removes the problem by construction: each query reads only inside the mask it predicted at the previous layer.
+In a standard decoder layer, every query reads the whole image through cross-attention. A query meant to describe the dog still spends attention on every patch of blanket. Global attention can learn where an object is, but the authors argue that learning this is slow, as earlier DETR studies had found [[Gao et al. 2021](#ref-gao2021), [Sun et al. 2021](#ref-sun2021)]. Masked attention removes the problem by construction: each query reads only inside the mask it predicted at the previous layer.
 
 ### 5.1 Why global attention spreads thin
 
@@ -681,7 +678,24 @@ Masked attention keeps the attention step of Fig. 0 and adds one term to the sco
 
 The gain is small here because locations 2 and 3 held little weight. In the toy image of §5.1, where the background held 87 percent of the attention, a gate that keeps only the object lifts the object's share from 0.13 to 1.
 
-In symbols, write the standard cross-attention step of layer $l$ as
+In symbols, masked attention adds a mask $\mathcal{M}$ to the scores before the softmax. For query $i$, with the softmax taken over image locations $x$,
+
+$$
+\text{weight}_i(x) = \operatorname{softmax}_x\!\big(\text{score}_i(x) + \mathcal{M}_i(x)\big),
+\qquad
+\mathcal{M}_i(x) =
+\begin{cases}
+0 & \text{inside query } i\text{'s previous mask},\\
+-\infty & \text{outside it}.
+\end{cases}
+$$
+
+The previous mask is the one the query predicted at the layer before, resized to the feature map this layer reads and thresholded at probability 0.5. The first layer uses the mask predicted from the learned starting queries (§7). Self-attention, the next step in the layer, still carries information between queries, so a query that reads only its own region can still learn from the others.
+
+<details class="proof">
+<summary>The paper's equations</summary>
+
+The paper writes the standard cross-attention step of layer $l$ as
 
 $$
 \widetilde{\mathbf{X}}_l = \operatorname{softmax}\!\big(\mathbf{Q}_l \mathbf{K}_l^{\top}\big)\,\mathbf{V}_l + \mathbf{X}_{l-1},
@@ -711,9 +725,11 @@ B_{l-1}(i,x)
 \tag{3}
 $$
 
-where $Z_{l-1}$ holds the previous output's mask logits, one map per query. Each query's logits are bilinearly resized to the resolution of the map that layer $l$ reads, then passed through the sigmoid $\sigma$ and thresholded at $0.5$. The result is the gate $B_{l-1}$, which is 1 where the query may look. The first layer uses $Z_0$, predicted directly from the learnable queries (§7). Self-attention, the next step in the layer, still carries information between queries, so a query that reads only its own region can still learn from the others.
+where $Z_{l-1}$ holds the previous output's mask logits, one map per query. Each query's logits are bilinearly resized to the resolution of the map that layer $l$ reads, then passed through the sigmoid $\sigma$ and thresholded at $0.5$. The result is the gate $B_{l-1}$, which is 1 where the query may look. The first layer uses $Z_0$, predicted directly from the learnable queries (§7).
 
-The paper's ablations swap out one part at a time. With a ResNet-50 (R50) backbone on COCO, plain cross-attention reaches 37.8 AP and masked attention 43.7. Mask pooling, which simply averages the features inside the mask, already reaches 43.1, so on COCO most of the gain comes from restricting where a query reads. Masked attention adds a learned weighting inside the region.
+</details>
+
+Does it help? The paper swaps out one part at a time to find out. With a ResNet-50 (R50) backbone on COCO, plain cross-attention reaches 37.8 AP and masked attention 43.7. Even mask pooling, which simply averages the features inside the mask, reaches 43.1. So on COCO, most of the gain comes from limiting where a query reads, and masked attention adds a learned weighting inside the region.
 
 The gate is a hard threshold, so no gradient passes through it. The intermediate masks learn from deep supervision instead (§4.2), which compares each intermediate prediction directly with the target mask.
 
@@ -733,7 +749,7 @@ Without the guard, the row's softmax denominator is zero, which can introduce a 
 
 ### 5.3 The effect, measured and seen
 
-In the paper's analysis, the share of attention that falls inside each query's matched ground-truth segment rises from about 0.20 with standard cross-attention to 0.59 with masked attention. It stays below 1 partly because the gate is the previous predicted mask, at a coarse resolution, not the true one.
+The paper also measures how much of each query's attention lands inside its own object, the true segment it was matched to. With standard cross-attention the share is about 0.20. With masked attention it is 0.59. It stays below 1 partly because the gate is the previous predicted mask, at a coarse resolution, not the true one.
 
 Fig. 6 shows the mechanism in the released Swin-L checkpoint. The query's class settles early: it says dog with probability 0.98 after layer 2, and at least 0.998 from layer 3 on.
 
@@ -742,9 +758,11 @@ Fig. 6 shows the mechanism in the released Swin-L checkpoint. The query's class 
 <figcaption>Fig. 6. Each layer reads only inside the previous layer's mask. Each cell shows where the dog query reads in one of the nine decoder layers: rows are layers 1 to 3, 4 to 6 and 7 to 9, and columns the 1/32, 1/16 and 1/8 maps. The outline is the previous layer's mask. Dark gold is the smallest area that holds half of the query's attention, and light gold 90 percent.</figcaption>
 </figure>
 
-## 6. Multi-scale features: one resolution per layer
+## 6. Making it affordable
 
-Masked attention is the main idea. The next three sections make the model cheaper and stronger.
+Masked attention is the main idea. Two more ideas make it affordable: each layer reads only one feature resolution, and the mask losses are computed on sampled points instead of every pixel.
+
+### 6.1 One resolution per layer
 
 Small objects need fine feature maps, but attention over a fine map is expensive. Its cost grows with the number of locations. For a 1024 by 1024 input, the 1/32, 1/16 and 1/8 maps hold 1,024, 4,096 and 16,384 locations, so the finest map costs about sixteen times more than the coarsest.
 
@@ -752,25 +770,11 @@ Mask2Former reads one scale per layer. Layers 1, 2 and 3 read the 1/32, 1/16 and
 
 The pixel decoder builds these maps by letting every location mix in information from all three scales. It uses multi-scale deformable attention (MSDeformAttn) from Deformable DETR [[Zhu et al. 2021](#ref-zhu2021)], in which each location reads a few learned sample points per scale rather than every location.
 
-## 7. Three changes to the decoder layer
+### 6.2 Mask losses on 12,544 points
 
-Mask2Former changes the decoder layer in three ways without adding FLOPs. Together they improve AP by about 1.4, PQ by 1.1, and mIoU by 0.9. Their effects overlap, so the one-at-a-time ablations in §11 do not add to those totals.
+For every output it trains, MaskFormer compared whole masks pixel by pixel twice: once for every prediction-target pair to build the matching costs, and again for the matched pairs to compute the loss. That limited training to one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates these terms at only $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points per mask.
 
-**Masked attention comes first.** DETR's layer starts with self-attention. Mask2Former's starts with masked attention, so each query has image context before the queries interact.
-
-**Query features are learnable and directly supervised.** DETR starts every query's features at zero and tells the queries apart only by a learned vector per query, its positional embedding, added before every attention step. Mask2Former keeps that embedding but also learns the starting features $\mathbf{X}_0$, and supervises their masks before the decoder runs, which gives the first layer a useful gate. Learning $\mathbf{X}_0$ raises mIoU, and supervising it raises AP and PQ. The paper compares these first predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
-
-**Dropout is removed.** Dropout randomly zeroes activations during training. Taking it out of the decoder improves AP and PQ.
-
-## 8. Point sampling: mask losses on 12,544 points
-
-### 8.1 Why dense mask losses cost so much memory
-
-At every supervised output, MaskFormer compared whole masks pixel by pixel twice: for every prediction-target pair to build the matching costs, then for the matched pairs to compute the loss. This limited training to one image per 32 GB GPU. Following PointRend [[Kirillov et al. 2020](#ref-kirillov2020)], Mask2Former evaluates these terms at only $K_{\text{pt}} = 12{,}544 = 112^2$ sampled points per mask.
-
-### 8.2 Two sampling rules for two jobs
-
-**Matching uses shared uniform points.** One set of normalized coordinates is sampled uniformly and reused for every prediction and target mask in the image. Reuse makes the cost matrix cheaper to build.
+**Matching uses shared uniform points.** One set of random points, spread uniformly, is shared by every prediction and target mask in the image, which makes the cost matrix cheaper to build.
 
 **Training uses uncertain points.** For each matched mask, the PointRend sampler draws $3K_{\text{pt}} = 37{,}632$ uniform candidates [[Kirillov et al. 2020](#ref-kirillov2020)]. It keeps the 9,408 where the prediction is least sure, the logits closest to zero, then adds 3,136 fresh uniform points. The uncertainty score depends on the prediction, not the ground truth. It is also relative: the sampler always keeps the least-sure quarter of its candidates, so where the unsure band is thin, it also takes points that are only somewhat unsure. Fig. 7 runs both rules on the dog prediction.
 
@@ -782,11 +786,11 @@ At every supervised output, MaskFormer compared whole masks pixel by pixel twice
 <details class="proof">
 <summary>Is a point-sampled loss unbiased?</summary>
 
-For a loss that adds up over points, such as BCE, the average over uniform random points is unbiased: averaged over many draws, it equals the full average. Dice is a ratio, so for Dice the evidence is the measured result in §8.3. The training points are not an unbiased sample of the dense loss. They deliberately spend the training signal where the prediction is unsure.
+For a loss that adds up over points, such as BCE, the average over uniform random points is unbiased: averaged over many draws, it equals the full average. Dice is a ratio, so for Dice the evidence is the measured result below. The training points are not an unbiased sample of the dense loss. They deliberately spend the training signal where the prediction is unsure.
 
 </details>
 
-### 8.3 Point-sampling ablation
+Does sampling hurt accuracy? The paper tried each use on its own:
 
 | matching on | training loss on | AP (COCO) | mIoU (ADE20K) | training memory per image (GB) |
 |---|---|---:|---:|---:|
@@ -795,11 +799,19 @@ For a loss that adds up over points, such as BCE, the average over uniform rando
 | points | masks | 43.1 | **47.3** | 18 |
 | points | points (default) | **43.7** | 47.2 | **6** |
 
-In the paper's R50 ablation, rows 1 and 2 show that training on points instead of whole masks cuts memory per image from 18 GB to 6 GB at equal accuracy. Rows 1 and 3 show that matching on points adds 2.1 AP.
+Rows 1 and 2 show that training on points instead of whole masks cuts memory per image from 18 GB to 6 GB at equal accuracy. Rows 1 and 3 show that matching on points adds 2.1 AP.
 
-## 9. Training recipe
+## 7. Smaller changes, and what each part is worth
 
-Mask2Former also changes the training recipe. On COCO it trains for 50 epochs (passes over the training data) at batch 16, where MaskFormer used 300 at batch 64, with large-scale jittering (random rescaling between 0.1 and 2 times) and the loss weights of §4.2. The full comparison is folded below.
+Three smaller changes to the decoder layer cost no extra computation. Together they improve AP by about 1.4, PQ by 1.1, and mIoU by 0.9.
+
+**Masked attention comes first.** DETR's layer starts with self-attention. Mask2Former's starts with masked attention, so each query has image context before the queries interact.
+
+**Query features are learnable and directly supervised.** DETR starts every query's features at zero and tells the queries apart only by a learned vector per query, its positional embedding, added before every attention step. Mask2Former keeps that embedding but also learns the starting features $\mathbf{X}_0$, and supervises their masks before the decoder runs, which gives the first layer a useful gate. Learning $\mathbf{X}_0$ raises mIoU, and supervising it raises AP and PQ. The paper compares these first predictions to region proposals [[Ren et al. 2015](#ref-ren2015)] that the decoder refines.
+
+**Dropout is removed.** Dropout randomly zeroes activations during training. Taking it out of the decoder improves AP and PQ.
+
+**A new training recipe.** On COCO, Mask2Former trains for 50 epochs (passes over the training data) at batch 16, where MaskFormer used 300 at batch 64, with large-scale jittering (random rescaling between 0.1 and 2 times) and the loss weights of §4.2. The full comparison is folded below.
 
 <details class="proof">
 <summary>The two training recipes, side by side</summary>
@@ -818,7 +830,26 @@ Both use the AdamW optimizer [[Loshchilov & Hutter 2019](#ref-loshchilov2019)]. 
 
 </details>
 
-## 10. Results
+**What each part is worth.** The paper takes each part out of the full model, one at a time, and measures the drop. All of these runs use the R50 backbone.
+
+| change (removed or varied) | ΔAP (COCO) | ΔPQ (COCO) | ΔmIoU (ADE20K) |
+|---|---:|---:|---:|
+| remove masked attention | **−5.9** | **−4.8** | −1.7 |
+| replace point matching with dense masks* | −2.7 | −1.1 | −1.3 |
+| remove multi-scale high-res features | −2.2 | −1.7 | −1.1 |
+| replace supervised learnable features with zero-init | −0.8 | −0.7 | **−1.8** |
+| restore dropout | −0.7 | −0.6 | 0.0 |
+| standard layer order | −0.5 | −0.3 | −0.9 |
+
+*Measured with point-sampled training loss fixed. The full two-by-two comparison is in §6.2.
+
+The effects overlap, so the rows do not add up. Taken out one at a time, the three layer changes cost 2.0 AP in total, but together they are worth 1.4.
+
+The paper also builds Mask2Former from MaskFormer one step at a time on COCO. Retraining MaskFormer with Mask2Former's recipe raises AP from 34.0 to 37.8. Replacing the decoder raises it to 41.5. Replacing MaskFormer's feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] with MSDeformAttn reaches 43.7. The steps interact, so these gains depend on the order and are not fixed shares of the total.
+
+## 8. Results and limitations
+
+### 8.1 Results
 
 The paper's largest models use a Swin-L backbone. The COCO models also use 200 queries and train for 100 epochs, twice the default.
 
@@ -834,24 +865,7 @@ With a ResNet-50 backbone, Mask2Former reaches 51.9 PQ after 50 epochs, where Ma
 
 The gain is not just scale. Swin-T Mask2Former reaches 53.2 PQ at 232 GFLOPs, above Swin-L MaskFormer's 52.7 at 792 GFLOPs.
 
-## 11. Ablations: what each part is worth
-
-The table reports controlled R50 ablations across all three tasks.
-
-| change (removed or varied) | ΔAP (COCO) | ΔPQ (COCO) | ΔmIoU (ADE20K) |
-|---|---:|---:|---:|
-| remove masked attention | **−5.9** | **−4.8** | −1.7 |
-| replace point matching with dense masks* | −2.7 | −1.1 | −1.3 |
-| remove multi-scale high-res features | −2.2 | −1.7 | −1.1 |
-| replace supervised learnable features with zero-init | −0.8 | −0.7 | **−1.8** |
-| restore dropout | −0.7 | −0.6 | 0.0 |
-| standard layer order | −0.5 | −0.3 | −0.9 |
-
-*Measured with point-sampled training loss fixed. The full two-by-two comparison appears in §8.3.
-
-The paper also builds Mask2Former from MaskFormer one step at a time on COCO. Retraining MaskFormer with Mask2Former's recipe raises AP from 34.0 to 37.8. Replacing the decoder raises it to 41.5. Replacing MaskFormer's feature pyramid network (FPN) pixel decoder [[Lin et al. 2017b](#ref-lin2017fpn)] with MSDeformAttn reaches 43.7. These increments are not independent causal shares. The components interact, and a different substitution order could produce different gains.
-
-## 12. Limitations
+### 8.2 Limitations
 
 **Universal means one architecture, not one checkpoint.** A model trained on panoptic labels usually does slightly worse than the same model trained for one task: 41.7 against 43.7 AP on COCO instances, and 46.1 against 47.2 mIoU on ADE20K. Panoptic training does not yet replace task-specific training.
 
@@ -859,15 +873,11 @@ The paper also builds Mask2Former from MaskFormer one step at a time on COCO. Re
 
 **It is slower, and the query count depends on the task.** Mask2Former runs at 8.6 frames per second against MaskFormer's 17.6 for the ResNet-50 panoptic models. In the paper's tests, 100 queries work best for instance and semantic segmentation, while 200 help panoptic segmentation slightly.
 
-## 13. Later work
-
-Later models keep the query-to-mask structure: Mask2Former for video [[Cheng et al. 2021b](#ref-cheng2021vis)], **OneFormer** [[Jain et al. 2023](#ref-jain2023)], which trains one model for all three tasks, and **Mask DINO** [[Li et al. 2023](#ref-li2023)], which adds DETR-style detection.
-
-## 14. Conclusion
+## 9. Conclusion
 
 Mask2Former works because its changes form a feedback loop. Matching assigns one target to each query. Deep supervision trains every intermediate mask. Each mask restricts the next cross-attention step, and point sampling makes this repeated supervision affordable.
 
-Mask2Former's lasting contribution is this query-to-mask refinement loop, more than any one benchmark result.
+Later models build on the same design: Mask2Former for video [[Cheng et al. 2021b](#ref-cheng2021vis)], **OneFormer** [[Jain et al. 2023](#ref-jain2023)], which trains one model for all three tasks, and **Mask DINO** [[Li et al. 2023](#ref-li2023)], which adds DETR-style detection. Mask2Former's lasting contribution is this query-to-mask refinement loop, more than any one benchmark result.
 
 ## Appendix A. Implementation notes
 

@@ -1,39 +1,17 @@
-// v5 room checks: isolation, per-room rules, quiet room, name whitelist.
-// Node 22+. Usage: node rooms-test.mjs [host]
-const HOST = process.argv[2] ?? "127.0.0.1:8787";
-const SECURE = !HOST.includes("127.0.0.1") && !HOST.includes("localhost");
-const URL_WS = `${SECURE ? "wss" : "ws"}://${HOST}`;
+// Room checks: isolation, per-room rules, quiet room, name whitelist,
+// identity and position memory. Node 22+. Usage: node rooms-test.mjs [host]
+import { connect, init, ok, done, sleep } from "./lib.mjs";
 
-let passed = 0;
-function ok(cond, label) {
-  if (!cond) { console.error(`FAIL: ${label}`); process.exit(1); }
-  passed++;
-  console.log(`ok: ${label}`);
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function connect(roomName, extra = "") {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${URL_WS}/?room=${roomName}${extra}`);
-    const all = [];
-    ws.onmessage = (e) => all.push(JSON.parse(e.data));
-    ws.onopen = () => resolve({ ws, all, send: (o) => ws.send(JSON.stringify(o)) });
-    ws.onerror = () => reject(new Error(`${roomName}: connect failed`));
-    setTimeout(() => reject(new Error(`${roomName}: connect timeout`)), 3000);
-  });
-}
-const init = (c) => c.all.find((m) => m.type === "init");
-
-// 1. Rooms are isolated worlds: chat in the arena never reaches the plaza.
+// 1. Rooms are isolated worlds: an emote in the arena never reaches the plaza.
 const P = await connect("plaza");
 const A = await connect("arena");
 await sleep(300);
 ok(init(P).room === "plaza", "plaza client landed in plaza");
 ok(init(A).room === "arena", "arena client landed in arena");
 ok(!init(P).players.some((pl) => pl.id === init(A).id), "plaza roster does not contain the arena player");
-A.send({ type: "chat", text: "arena secret" });
+A.send({ type: "emote", kind: "wave" });
 await sleep(300);
-ok(!P.all.some((m) => m.type === "chat"), "arena chat never reached the plaza");
+ok(!P.all.some((m) => m.type === "emote"), "arena emote never reached the plaza");
 
 // 2. Per-room rules arrive in init.
 ok(init(P).gravity === 1 && init(P).brawl === true, "plaza: normal gravity, brawl on");
@@ -53,22 +31,22 @@ await sleep(300);
 ok(!L2.all.some((m) => m.type === "swung" || m.type === "hit"), "no swing, no hit in the library");
 ok(init(L1).brawl === false, "library init says brawl off");
 
-// 4. Unknown room names fall back to the plaza (no arbitrary objects minted).
+// 4. Unknown room names fall back to the plaza (no arbitrary objects minted),
+//    including names that are properties of every plain object.
 const X = await connect("basement");
+const Y = await connect("constructor");
 await sleep(300);
 ok(init(X).room === "plaza", `unknown room name lands in the plaza (got ${init(X).room})`);
+ok(init(Y).room === "plaza", `inherited property name lands in the plaza (got ${init(Y).room})`);
 
-// 5. Identity travels: name and color on the handshake are honored,
-//    junk colors fall back to a palette pick.
-const I = await connect("plaza", "&name=traveler&color=%232fa98a");
+// 5. Color travels on the handshake; junk colors fall back to a palette pick.
+const I = await connect("plaza", "&color=%232fa98a");
 await sleep(300);
 const selfI = init(I).players.find((p) => p.id === init(I).id);
-ok(selfI.name === "traveler", "handshake name honored across a join");
 ok(selfI.color === "#2fa98a", "handshake color honored across a join");
-const J = await connect("plaza", "&name=x&color=hotpink");
+const J = await connect("plaza", "&color=hotpink");
 await sleep(300);
 const selfJ = init(J).players.find((p) => p.id === init(J).id);
-ok(/^guest_\d{3}$/.test(selfJ.name), "invalid handshake name falls back to a guest name");
 ok(selfJ.color.startsWith("#") && selfJ.color !== "hotpink", "unknown color falls back to the palette");
 
 // 6. Per-room knockback arrives in init.
@@ -89,6 +67,5 @@ const selfV = init(V2).players.find((p) => p.id === init(V2).id);
 ok(selfV.x === 222 && selfV.y === 200, `returning visitor resumed at (${selfV.x}, ${selfV.y})`);
 V2.ws.close();
 
-for (const c of [P, A, M, L1, L2, X, I, J]) c.ws.close();
-console.log(`\nALL ${passed} CHECKS PASSED`);
-process.exit(0);
+for (const c of [P, A, M, L1, L2, X, Y, I, J]) c.ws.close();
+done();

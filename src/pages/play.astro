@@ -1,6 +1,6 @@
 ---
 // src/pages/play.astro
-// A tiny shared world — every square is a live visitor. v0: walk, see others.
+// A tiny shared world: every sprite is a live visitor, across four rooms.
 // Game logic in src/scripts/play.js; the server lives in game/ (Durable Object).
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
@@ -95,7 +95,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     color: var(--color-text-subtle);
   }
   .touch { display: none; }
+  .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .hint-touch { display: none; }
   @media (pointer: coarse) {
+    .hint-keys { display: none; }
+    .hint-touch { display: block; }
     .touch {
       display: flex;
       flex-direction: column;
@@ -127,12 +131,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     /* Downscaling below 1:1 with nearest-neighbor decimates text strokes;
        smooth scaling reads far better on small screens. */
     .canvas { image-rendering: auto; }
-  }
-  .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
-  .hint-touch { display: none; }
-  @media (pointer: coarse) {
-    .hint-keys { display: none; }
-    .hint-touch { display: block; }
   }
   .about { margin-top: var(--space-4); }
   .about summary {

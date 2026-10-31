@@ -1,32 +1,11 @@
-// v7 crown checks: spawn, pickup by walking, drop on hit, re-pickup,
+// Crown checks: spawn, pickup by walking, drop on hit, re-pickup,
 // drop on disconnect, and absence outside the arena. Node 22+.
-const HOST = process.argv[2] ?? "127.0.0.1:8787";
-const SECURE = !HOST.includes("127.0.0.1") && !HOST.includes("localhost");
-const URL_WS = `${SECURE ? "wss" : "ws"}://${HOST}`;
+import { connect, init, ok, done, sleep } from "./lib.mjs";
 
-let passed = 0;
-function ok(cond, label) {
-  if (!cond) { console.error(`FAIL: ${label}`); process.exit(1); }
-  passed++;
-  console.log(`ok: ${label}`);
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function connect(roomName, extra = "") {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${URL_WS}/?room=${roomName}${extra}`);
-    const all = [];
-    ws.onmessage = (e) => all.push(JSON.parse(e.data));
-    ws.onopen = () => resolve({ ws, all, send: (o) => ws.send(JSON.stringify(o)) });
-    ws.onerror = () => reject(new Error("connect failed"));
-    setTimeout(() => reject(new Error("connect timeout")), 3000);
-  });
-}
-const init = (c) => c.all.find((m) => m.type === "init");
 const lastCrown = (c) => [...c.all].reverse().find((m) => m.type === "crown")?.crown;
 
 // 1. The arena spawns a crown on the hill; the plaza has none.
-const A = await connect("arena", "&vid=eeee1111-2222-4333-8444-555566667777&name=king");
+const A = await connect("arena", "&vid=eeee1111-2222-4333-8444-555566667777");
 const B = await connect("arena");
 const P = await connect("plaza");
 await sleep(300);
@@ -53,7 +32,10 @@ const dropped = lastCrown(A);
 ok(dropped && dropped.wearer === null, "the hit knocked the crown off");
 const reign = A.all.find((m) => m.type === "reign" && m.id === idA);
 ok(reign && reign.ms >= 1200, `the reign was measured (${reign?.ms}ms)`);
-ok(reign.top.some((r) => r.name === "king"), "king is on the reigns board");
+// The board persists between runs, so the invariant is: longest first, and
+// never shorter at the top than the reign we just witnessed.
+ok(reign.top[0]?.ms >= reign.ms && reign.top.every((r, i, a) => !i || a[i - 1].ms >= r.ms),
+  "the reigns board is recorded, longest first");
 const expectedX = Math.min(Math.max(c0.x - 36, 20), 620); // server clamps the same way
 ok(dropped.y === 312 && Math.abs(dropped.x - expectedX) < 1,
   `it fell to the floor beside the fight (x=${dropped.x})`);
@@ -74,5 +56,4 @@ ok(abandoned && abandoned.wearer === null &&
 
 A.ws.close();
 P.ws.close();
-console.log(`\nALL ${passed} CHECKS PASSED`);
-process.exit(0);
+done();

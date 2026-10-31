@@ -11,6 +11,7 @@ const SEND_HZ = 10; // position updates to the server, per second
 // the server just relays positions. Remote jumps arrive as positions and glide
 // through the same interpolation as walking.
 const GROUND_Y = 320; // top of the floor
+const FLOOR = GROUND_Y - SIZE / 2; // sprite center when standing on it
 const GRAVITY = 1400; // px/s^2
 const JUMP_V = 520; // initial upward speed; ~96px apex, ~0.74s of air
 
@@ -114,7 +115,7 @@ if (!vid) {
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
 // sprites ease rx/ry toward x/y so 10 Hz updates read as walking, not teleports.
-const players = new Map(); // id -> { x, y, rx, ry, color, name }
+const players = new Map(); // id -> { x, y, rx, ry, color }
 const bubbles = new Map(); // id -> { text, until }
 const effects = []; // running emotes: { id, kind, start }
 const held = new Set(); // movement keys currently down
@@ -124,8 +125,8 @@ let dropQueued = false; // down pressed: fall through the platform you stand on
 let dropUntil = 0; // while set, platforms do not catch you
 let crown = null; // { wearer, x, y } — only rooms that have one send it
 let crownWornAt = null; // local clock for the reign readout, from the server's held ms
-let raceTop = []; // best runs ever, from the server: { name, ms }
-let reignTop = []; // longest crown reigns ever: { name, ms }
+let raceTop = []; // best runs ever, from the server: { ms }
+let reignTop = []; // longest crown reigns ever: { ms }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
@@ -137,14 +138,15 @@ let last = 0; // previous frame timestamp
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Whether a sprite centered at x is over a platform, with 8px of grace at each end.
+const over = (x, pl) => x > pl.x - 8 && x < pl.x + pl.w + 8;
+
 // True when the sprite has support underneath: the floor, or a platform top
 // it is exactly standing on (unless it is deliberately dropping through).
-function standingOn(self, plats, floor, dropping) {
-  if (self.y >= floor) return true;
+function standingOn(self, plats, dropping) {
+  if (self.y >= FLOOR) return true;
   if (dropping) return false;
-  return plats.some((pl) =>
-    Math.abs(self.y - (pl.y - SIZE / 2)) < 0.6 &&
-    self.x > pl.x - 8 && self.x < pl.x + pl.w + 8);
+  return plats.some((pl) => Math.abs(self.y - (pl.y - SIZE / 2)) < 0.6 && over(self.x, pl));
 }
 
 // --- sound ---
@@ -199,97 +201,50 @@ function sfx(kind) {
 // with drawImage, so per-frame cost is one blit per player.
 const SPRITE_PX = 2; // screen pixels per sprite pixel: 12x16 art drawn 24x32
 const SPRITE_INK = { h: '#4a3320', s: '#f2c48a', e: '#1d1f24', p: '#2e3b57', b: '#3a2f28' };
+const IDLE = [
+  '....hhhh....',
+  '...hhhhhh...',
+  '...hssssh...',
+  '...sesses...',
+  '...ssssss...',
+  '....ssss....',
+  '...tttttt...',
+  '..tttttttt..',
+  '..stttttts..',
+  '..tttttttt..',
+  '...tttttt...',
+  '...pppppp...',
+  '...pp..pp...',
+  '...pp..pp...',
+  '...bb..bb...',
+  '...bb..bb...',
+];
+// The other poses only move the arms or legs: each is idle with the rows
+// that differ, keyed by row index.
+const pose = (rows) => IDLE.map((row, y) => rows[y] ?? row);
 const FRAMES = {
-  idle: [
-    '....hhhh....',
-    '...hhhhhh...',
-    '...hssssh...',
-    '...sesses...',
-    '...ssssss...',
-    '....ssss....',
-    '...tttttt...',
-    '..tttttttt..',
-    '..stttttts..',
-    '..tttttttt..',
-    '...tttttt...',
-    '...pppppp...',
-    '...pp..pp...',
-    '...pp..pp...',
-    '...bb..bb...',
-    '...bb..bb...',
-  ],
-  walk0: [
-    '....hhhh....',
-    '...hhhhhh...',
-    '...hssssh...',
-    '...sesses...',
-    '...ssssss...',
-    '....ssss....',
-    '...tttttt...',
-    '..tttttttt..',
-    '..stttttts..',
-    '..tttttttt..',
-    '...tttttt...',
-    '...pppppp...',
-    '....pppp....',
-    '....pppp....',
-    '....bbbb....',
-    '...bb..bb...',
-  ],
-  walk1: [
-    '....hhhh....',
-    '...hhhhhh...',
-    '...hssssh...',
-    '...sesses...',
-    '...ssssss...',
-    '....ssss....',
-    '...tttttt...',
-    '..tttttttt..',
-    '..stttttts..',
-    '..tttttttt..',
-    '...tttttt...',
-    '...pppppp...',
-    '..pp....pp..',
-    '..pp....pp..',
-    '.bb......bb.',
-    '............',
-  ],
-  jump: [
-    '....hhhh....',
-    '...hhhhhh...',
-    '...hssssh...',
-    '...sesses...',
-    '...ssssss...',
-    '....ssss....',
-    '...tttttt...',
-    '.stttttttts.',
-    '..tttttttt..',
-    '..tttttttt..',
-    '...tttttt...',
-    '...pppppp...',
-    '...pp..pp...',
-    '..bb....bb..',
-    '............',
-    '............',
-  ],
-  punch: [
-    '....hhhh....',
-    '...hhhhhh...',
-    '...hssssh...',
-    '...sesses...',
-    '...ssssss...',
-    '....ssss....',
-    '...tttttt...',
-    '..tttttttt..',
-    '..tttttttss.',
-    '..tttttttt..',
-    '...tttttt...',
-    '...pppppp...',
-    '...pp..pp...',
-    '...pp..pp...',
-    '...bb..bb...',
-    '...bb..bb...',
-  ],
+  idle: IDLE,
+  walk0: pose({
+    12: '....pppp....',
+    13: '....pppp....',
+    14: '....bbbb....',
+  }),
+  walk1: pose({
+    12: '..pp....pp..',
+    13: '..pp....pp..',
+    14: '.bb......bb.',
+    15: '............',
+  }),
+  jump: pose({
+    7: '.stttttttts.',
+    8: '..tttttttt..',
+    13: '..bb....bb..',
+    14: '............',
+    15: '............',
+  }),
+  punch: pose({
+    8: '..tttttttss.',
+  }),
 };
 const SPR_W = 12 * SPRITE_PX;
 const SPR_H = 16 * SPRITE_PX;
@@ -320,15 +275,15 @@ function sprite(color, frame) {
 
 let socket = null;
 
+function send(msg) {
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+}
+
 function connect(enterFrom) {
-  // Identity rides along on the handshake, so a door crossing (or a return
-  // visit) keeps the same name and color instead of rerolling the sprite.
-  let url = `${SOCKET_BASE}/?room=${room}&vid=${vid}`;
-  const storedName = localStorage.getItem('play-name');
-  const storedColor = localStorage.getItem('play-color');
-  if (storedName) url += `&name=${encodeURIComponent(storedName)}`;
-  if (storedColor) url += `&color=${encodeURIComponent(storedColor)}`;
-  socket = new WebSocket(url);
+  // Color rides along on the handshake, so a door crossing (or a return
+  // visit) keeps the same sprite instead of rerolling it.
+  const color = localStorage.getItem('play-color');
+  socket = new WebSocket(`${SOCKET_BASE}/?room=${room}&vid=${vid}${color ? `&color=${encodeURIComponent(color)}` : ''}`);
 
   socket.addEventListener('open', (e) => {
     if (e.target !== socket) return;
@@ -383,12 +338,8 @@ function onMessage(msg, enterFrom) {
       self.rx = self.x;
       dirty = true;
     }
-    // Adopt whatever the server settled on as this visitor's lasting identity:
-    // the first assigned color sticks, and a guest name becomes your name.
-    if (self) {
-      localStorage.setItem('play-color', self.color);
-      if (!localStorage.getItem('play-name')) localStorage.setItem('play-name', self.name);
-    }
+    // The first color the server assigns becomes this visitor's for good.
+    if (self) localStorage.setItem('play-color', self.color);
   } else if (msg.type === 'joined') {
     const p = msg.player;
     players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
@@ -401,7 +352,7 @@ function onMessage(msg, enterFrom) {
     if (msg.phase === 'start' && msg.id === me) {
       myRunStart = performance.now();
     } else if (msg.phase === 'finish') {
-      raceTop = msg.top ?? raceTop;
+      raceTop = msg.top;
       const secs = `${(msg.ms / 1000).toFixed(2)}s`;
       bubbles.set(msg.id, { text: secs, until: performance.now() + BUBBLE_MS });
       if (msg.id === me) { myRunStart = null; sfx('crown'); }
@@ -413,7 +364,7 @@ function onMessage(msg, enterFrom) {
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
   } else if (msg.type === 'reign') {
-    reignTop = msg.top ?? reignTop;
+    reignTop = msg.top;
     bubbles.set(msg.id, {
       text: `reigned ${(msg.ms / 1000).toFixed(1)}s`,
       until: performance.now() + BUBBLE_MS,
@@ -471,13 +422,10 @@ setInterval(() => {
   if (document.hidden && me) {
     const self = players.get(me);
     if (self) {
-      const floor = GROUND_Y - SIZE / 2;
-      let support = floor;
-      for (const pl of ROOMS[room].platforms ?? []) {
+      let support = FLOOR;
+      for (const pl of ROOMS[room].platforms) {
         const top = pl.y - SIZE / 2;
-        if (top >= self.y && top < support && self.x > pl.x - 8 && self.x < pl.x + pl.w + 8) {
-          support = top;
-        }
+        if (top >= self.y && top < support && over(self.x, pl)) support = top;
       }
       if (self.y < support) {
         self.y = Math.min(self.y + 60, support);
@@ -487,10 +435,10 @@ setInterval(() => {
       }
     }
   }
-  if (!dirty || socket.readyState !== WebSocket.OPEN) return;
+  // dirty survives a closed socket, so the position goes out once it reopens.
   const self = players.get(me);
-  if (!self) return;
-  socket.send(JSON.stringify({ type: 'move', x: self.x, y: self.y }));
+  if (!dirty || !self || socket.readyState !== WebSocket.OPEN) return;
+  send({ type: 'move', x: self.x, y: self.y });
   dirty = false;
 }, 1000 / SEND_HZ);
 
@@ -506,14 +454,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (key === 'm' && !e.repeat) {
-    muted = !muted;
-    localStorage.setItem('play-muted', muted ? '1' : '0');
+    toggleMute();
     return;
   }
   if ((key === 'e' || key === 'q') && !e.repeat) {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'emote', kind: key === 'e' ? 'wave' : 'heart' }));
-    }
+    send({ type: 'emote', kind: key === 'e' ? 'wave' : 'heart' });
     return;
   }
   if (key === 'z' && !e.repeat) {
@@ -545,7 +490,7 @@ function sendPunch() {
   const now = performance.now();
   const self = me && players.get(me);
   if (!self || now < stunUntil || now - lastPunch < PUNCH_COOLDOWN_MS) return;
-  if (socket.readyState !== WebSocket.OPEN) return;
+  if (socket.readyState !== WebSocket.OPEN) return; // no shush or swing into a dead room
   if (!roomBrawl) {
     // The quiet room shushes you instead of pretending nothing happened.
     bubbles.set(me, { text: 'shh…', until: now + 1200 });
@@ -555,7 +500,7 @@ function sendPunch() {
   lastPunch = now;
   // Show your own swing immediately; the server echo confirms it for others.
   self.punchUntil = now + PUNCH_SHOW_MS;
-  socket.send(JSON.stringify({ type: 'punch', facing: self.facing ?? 1 }));
+  send({ type: 'punch', facing: self.facing });
 }
 
 // A tab switch or the phone keyboard can eat keyup events, leaving a key
@@ -572,6 +517,11 @@ document.addEventListener('visibilitychange', () => {
 const touchActs = new Map(); // pointerId -> act
 const muteBtn = touchPad.querySelector('[data-act="mute"]');
 muteBtn.textContent = muted ? 'unmute' : 'mute';
+function toggleMute() {
+  muted = !muted;
+  localStorage.setItem('play-muted', muted ? '1' : '0');
+  muteBtn.textContent = muted ? 'unmute' : 'mute';
+}
 touchPad.addEventListener('pointerdown', (e) => {
   const act = e.target.dataset.act;
   if (!act) return;
@@ -580,15 +530,8 @@ touchPad.addEventListener('pointerdown', (e) => {
   if (act === 'left' || act === 'right') { held.add(act); touchActs.set(e.pointerId, act); }
   else if (act === 'jump') jumpQueued = true;
   else if (act === 'punch') sendPunch();
-  else if (act === 'wave' || act === 'heart') {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'emote', kind: act }));
-    }
-  } else if (act === 'mute') {
-    muted = !muted;
-    localStorage.setItem('play-muted', muted ? '1' : '0');
-    muteBtn.textContent = muted ? 'unmute' : 'mute';
-  }
+  else if (act === 'wave' || act === 'heart') send({ type: 'emote', kind: act });
+  else if (act === 'mute') toggleMute();
   // Last, since it can throw on an already-gone pointer: keep receiving the
   // up event even when the finger slides off the button.
   e.target.setPointerCapture(e.pointerId);
@@ -608,11 +551,10 @@ function frame(now) {
 
   const self = me && players.get(me);
   if (self) {
-    const floor = GROUND_Y - SIZE / 2; // sprite center when standing
-    const plats = ROOMS[room].platforms ?? [];
+    const plats = ROOMS[room].platforms;
     const nowMs = performance.now();
     const dropping = nowMs < dropUntil;
-    const grounded = standingOn(self, plats, floor, dropping);
+    const grounded = standingOn(self, plats, dropping);
     const stunned = nowMs < stunUntil;
 
     const dx = stunned ? 0 : (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
@@ -638,7 +580,7 @@ function frame(now) {
     }
     if (dropQueued) {
       // Standing on a platform (not the floor): step off through it.
-      if (grounded && self.y < floor - 1) { dropUntil = nowMs + 180; vy = Math.max(vy, 40); }
+      if (grounded && self.y < FLOOR - 1) { dropUntil = nowMs + 180; vy = Math.max(vy, 40); }
       dropQueued = false;
     }
     if (!grounded || vy < 0) {
@@ -649,7 +591,7 @@ function frame(now) {
       if (vy > 0 && !dropping) {
         for (const pl of plats) {
           const top = pl.y - SIZE / 2;
-          if (prevY <= top && ny >= top && self.x > pl.x - 8 && self.x < pl.x + pl.w + 8) {
+          if (prevY <= top && ny >= top && over(self.x, pl)) {
             ny = top;
             vy = 0;
             break;
@@ -657,7 +599,7 @@ function frame(now) {
         }
       }
       self.y = ny;
-      if (self.y >= floor) { self.y = floor; vy = 0; } // landed
+      if (self.y >= FLOOR) { self.y = FLOOR; vy = 0; } // landed
       dirty = true;
     }
 
@@ -672,7 +614,7 @@ function frame(now) {
     // Doors: reach the edge of the world and you are somewhere else — but
     // doors are on the ground. Brushing the wall mid-jump (easy on the moon)
     // must not teleport anyone.
-    if (!switching && self.y > GROUND_Y - SIZE / 2 - 40) {
+    if (!switching && self.y > FLOOR - 40) {
       const doors = ROOMS[room].doors;
       if (doors.left && self.x <= DOOR_TRIGGER) switchRoom(doors.left, 'right');
       else if (doors.right && self.x >= WORLD.w - DOOR_TRIGGER) switchRoom(doors.right, 'left');
@@ -732,7 +674,7 @@ function draw() {
   ctx.stroke();
 
   // Platforms: one-way ledges, lit along their walkable top.
-  for (const pl of look.platforms ?? []) {
+  for (const pl of look.platforms) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
     ctx.fillRect(pl.x, pl.y, pl.w, 8);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
@@ -750,33 +692,15 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // The arena's hall of fame: the longest reigns, ever. Times only, since
-  // names can be typed by visitors and nothing a visitor types is drawn.
-  if (crown && reignTop.length) {
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.fillText('longest reigns', 64, 66);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
-    reignTop.forEach((r, i) => {
-      ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(1)}s`, 64, 82 + i * 15);
-    });
-  }
+  // The arena's hall of fame: the longest reigns, ever. Times only: nothing
+  // a visitor types is drawn.
+  if (crown && reignTop.length) drawBoard('longest reigns', reignTop, 64, 66, 1);
 
   // The race: two flags, the all-time board, and your live readout.
   if (look.race) {
     drawFlag(look.race.sx, GROUND_Y, '#6cae44');
     drawFlag(look.race.fx, look.race.fy + SIZE / 2, '#ffd23f');
-    if (raceTop.length) {
-      ctx.font = '11px ui-monospace, monospace';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-      ctx.fillText('the moon run', 508, 200);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
-      raceTop.forEach((r, i) => {
-        ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(2)}s`, 508, 216 + i * 15);
-      });
-    }
+    if (raceTop.length) drawBoard('the moon run', raceTop, 508, 200, 2);
     if (myRunStart !== null) {
       ctx.font = '14px ui-monospace, monospace';
       ctx.textAlign = 'center';
@@ -792,7 +716,7 @@ function draw() {
 
   for (const [id, p] of players) {
     const feetY = p.ry + SIZE / 2;
-    const airborne = p.ry < GROUND_Y - SIZE / 2 - 1;
+    const airborne = p.ry < FLOOR - 1;
     const hurt = now < (p.hurtUntil ?? 0);
     const frame = now < (p.punchUntil ?? 0) ? 'punch'
       : airborne ? 'jump'
@@ -885,6 +809,16 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('connection lost: reload to rejoin', WORLD.w / 2, WORLD.h / 2);
   }
+}
+
+// An all-time board: a title, then one numbered time per row.
+function drawBoard(title, rows, x, y, digits) {
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.fillText(title, x, y);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
+  rows.forEach((r, i) => ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(digits)}s`, x, y + 16 + i * 15));
 }
 
 function drawFlag(x, baseY, color) {

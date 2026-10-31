@@ -1,35 +1,15 @@
 // Brawl checks: swing broadcast, hit resolution, facing, range, immunity.
 // Node 22+. Usage: node punch-test.mjs [host]
-const HOST = process.argv[2] ?? "127.0.0.1:8787";
-const SECURE = !HOST.includes("127.0.0.1") && !HOST.includes("localhost");
-const URL_WS = `${SECURE ? "wss" : "ws"}://${HOST}`;
+import { connect, init, ok, done, sleep } from "./lib.mjs";
 
-let passed = 0;
-function ok(cond, label) {
-  if (!cond) { console.error(`FAIL: ${label}`); process.exit(1); }
-  passed++;
-  console.log(`ok: ${label}`);
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function connect(name) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(URL_WS);
-    const all = [];
-    ws.onmessage = (e) => all.push(JSON.parse(e.data));
-    ws.onopen = () => resolve({ ws, all, send: (o) => ws.send(JSON.stringify(o)) });
-    ws.onerror = () => reject(new Error(`${name}: connect failed`));
-    setTimeout(() => reject(new Error(`${name}: connect timeout`)), 3000);
-  });
-}
 const hits = (c) => c.all.filter((m) => m.type === "hit");
 const swings = (c) => c.all.filter((m) => m.type === "swung");
 
-const A = await connect("A");
-const B = await connect("B");
+const A = await connect();
+const B = await connect();
 await sleep(300);
-const idA = A.all.find((m) => m.type === "init").id;
-const idB = B.all.find((m) => m.type === "init").id;
+const idA = init(A).id;
+const idB = init(B).id;
 
 // Stand adjacent: B is 20px to A's right.
 A.send({ type: "move", x: 100, y: 312 });
@@ -80,5 +60,4 @@ ok(hits(B).length === 3, "punch lands on a fully overlapping target");
 
 A.ws.close();
 B.ws.close();
-console.log(`\nALL ${passed} CHECKS PASSED`);
-process.exit(0);
+done();

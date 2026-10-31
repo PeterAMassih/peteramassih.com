@@ -1,9 +1,9 @@
 # play — a tiny multiplayer world on the free tier
 
 The game at [peteramassih.com/play](https://peteramassih.com/play). Every
-character is a live visitor. Four rooms, four games: hang out on the plaza,
-fight for the crown in the arena, write on the library wall, race the clock
-on the moon. The whole thing runs on Cloudflare's free tier and costs
+character is a live visitor. Four rooms: hang out on the plaza, fight for
+the crown in the arena, keep the peace in the library (no punching), race
+the clock on the moon. The whole thing runs on Cloudflare's free tier and costs
 nothing while nobody plays — which is most of the time, and the design
 treats that as a feature.
 
@@ -14,12 +14,12 @@ Browser  /play  (canvas client: rendering, input, physics, prediction)
    |  one WebSocket per player
    v
 Worker  game/src/index.ts  (upgrade, origin check, room whitelist)
-   |  idFromName(room)
+   |  getByName(room)
    v
 Room  game/src/room.ts  (one Durable Object per room: the authority)
    |- in-memory Map      live players (rebuilt after hibernation)
    |- socket attachments the durable copy of each player
-   '- SQLite             marks, race times, reigns, positions, crown
+   '- SQLite             race times, reigns, positions, crown
 ```
 
 One `Room` class, four named instances. The Worker maps `?room=` onto a
@@ -49,15 +49,12 @@ Client to room:
 | type | payload | notes |
 |---|---|---|
 | `move` | `x, y` | 10 Hz max while moving, clamped and rate-limited server-side |
-| `chat` | `text` | 120 chars, 4 per 5s, never stored |
-| `emote` | `kind` | `wave` or `heart`, looser budget |
-| `name` | `name` | `[\w-]{2,16}`, also accepted on the handshake URL |
+| `emote` | `kind` | `wave` or `heart`, 10 per 5s |
 | `punch` | `facing` | server resolves the hit from its own positions |
-| `mark` | `text` | 40 chars, library only, one per visitor |
 
 Room to clients: `init` (you, the roster, room rules, boards, crown),
-`joined`, `moved`, `named`, `chat`, `emote`, `swung`, `hit`, `crown`,
-`reign`, `race`, `marked`, `left`.
+`joined`, `moved`, `emote`, `swung`, `hit`, `crown`, `reign`, `race`,
+`left`.
 
 The hit broadcast carries attacker, target, and direction; the *target's
 own client* applies the knockback impulse. One movement authority per
@@ -67,10 +64,8 @@ sprite, no exceptions.
 
 | data | where | retention |
 |---|---|---|
-| chat | nowhere | seconds of RAM, then gone |
-| your name and color | your browser (localStorage) + handshake | yours to keep |
+| your color | your browser (localStorage) + handshake | yours to keep |
 | last position per room | room storage, keyed by anonymous visitor id | 30 days, then swept |
-| library marks | `marks` table | forever, one per visitor, 500 cap |
 | moon run times | `races` table | forever, your best only, 200 cap |
 | crown reigns | `reigns` table | forever, your longest only, 200 cap |
 | the crown itself | room storage | survives hibernation |
@@ -98,17 +93,18 @@ budget. Every message type is rate-limited; the room caps at 32 players.
 
 ## Tests
 
-Eight suites, ~90 checks, run against a real server (local or production):
+Six suites, ~60 checks, run against a real server (local or production):
 
 ```
-npx wrangler dev -c game/wrangler.jsonc          # terminal 1
-node game/tests/smoke-test.mjs                   # terminal 2, repeat per suite
-node game/tests/crown-test.mjs [host]            # host arg targets production
+npx wrangler dev -c game/wrangler.jsonc                    # terminal 1
+node --test --test-concurrency=1 'game/tests/*-test.mjs'   # terminal 2: every suite
+node game/tests/crown-test.mjs [host]                      # one suite; a host targets production
 ```
 
-They exercise the protocol over real WebSockets: clamping, rate limits,
-hit resolution, immunity, room isolation, mark upsert, server-side race
-timing, reign recording. The boards persist between runs, so assertions
+`GAME_HOST=<host>` points the whole run at production. The suites share
+rooms, so they run one at a time. They exercise the protocol over real
+WebSockets: clamping, rate limits, hit resolution, immunity, room
+isolation, server-side race timing, reign recording. The boards persist between runs, so assertions
 are written against invariants, not fresh-state assumptions.
 
 ## Dev and deploy
@@ -126,7 +122,7 @@ when the protocol grows.
 
 ## Reading order
 
-1. `game/src/index.ts` — the front door, 50 lines.
+1. `game/src/index.ts` — the front door, under 40 lines.
 2. `game/src/room.ts` — the whole server. Read `fetch` (a join), then
    `webSocketMessage` (the protocol), then `drop` (a leave). Everything
    else is a helper.

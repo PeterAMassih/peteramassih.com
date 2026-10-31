@@ -2,7 +2,8 @@
 
 The game at [peteramassih.com/play](https://peteramassih.com/play). Every
 character is a live visitor. Four rooms: hang out on the plaza, fight for
-the crown in the arena, keep the peace in the library (no punching), race
+the crown in the arena, keep the peace and guess the word in the library
+(no punching), race
 the clock on the moon. The whole thing runs on Cloudflare's free tier and costs
 nothing while nobody plays — which is most of the time, and the design
 treats that as a feature.
@@ -51,10 +52,16 @@ Client to room:
 | `move` | `x, y` | 10 Hz max while moving, clamped and rate-limited server-side |
 | `emote` | `kind` | `wave` or `heart`, 10 per 5s |
 | `punch` | `facing` | server resolves the hit from its own positions |
+| `guess` | `letter` | library only, one of `a`–`z`, 20 per 5s |
 
-Room to clients: `init` (you, the roster, room rules, boards, crown),
-`joined`, `moved`, `emote`, `swung`, `hit`, `crown`, `reign`, `race`,
-`left`.
+Room to clients: `init` (you, the roster, room rules, boards, crown, the
+library's word), `joined`, `moved`, `emote`, `swung`, `hit`, `crown`,
+`reign`, `race`, `hang`, `left`.
+
+Nothing a visitor writes reaches another visitor. Names come from two fixed
+word lists, picked by a hash of the visitor id, so they are stable across
+visits and never typed. A hangman guess is one letter from the page's
+buttons, and wrong letters go out sorted so their order spells nothing.
 
 The hit broadcast carries attacker, target, and direction; the *target's
 own client* applies the knockback impulse. One movement authority per
@@ -69,9 +76,12 @@ sprite, no exceptions.
 | moon run times | `races` table | forever, your best only, 200 cap |
 | crown reigns | `reigns` table | forever, your longest only, 200 cap |
 | the crown itself | room storage | survives hibernation |
+| the library's word | room storage (`hang`) | until solved or lost |
 
 The visitor id is a random UUID the browser generates once and presents on
-connect. It is never broadcast to other players.
+connect. It is never broadcast to other players. Boards and rosters carry
+the name derived from it instead. Rows written before Oct 2026 also hold a
+typed `name` column, which nothing reads.
 
 ## Hibernation, honestly
 
@@ -93,7 +103,7 @@ budget. Every message type is rate-limited; the room caps at 32 players.
 
 ## Tests
 
-Six suites, ~60 checks, run against a real server (local or production):
+Eight suites, 77 checks, run against a real server (local or production):
 
 ```
 npx wrangler dev -c game/wrangler.jsonc                    # terminal 1
@@ -104,7 +114,8 @@ node game/tests/crown-test.mjs [host]                      # one suite; a host t
 `GAME_HOST=<host>` points the whole run at production. The suites share
 rooms, so they run one at a time. They exercise the protocol over real
 WebSockets: clamping, rate limits, hit resolution, immunity, room
-isolation, server-side race timing, reign recording. The boards persist between runs, so assertions
+isolation, server-side race timing, reign recording, hangman input, derived
+names. The boards persist between runs, so assertions
 are written against invariants, not fresh-state assumptions.
 
 ## Dev and deploy

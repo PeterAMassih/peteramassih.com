@@ -3,6 +3,10 @@
 // A tiny shared world: every sprite is a live visitor, across four rooms.
 // Game logic in src/scripts/play.js; the server lives in game/ (Durable Object).
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+// The hangman guesses. Buttons rather than typing, so nothing a visitor
+// writes reaches anyone else.
+const LETTERS = [...'abcdefghijklmnopqrstuvwxyz'];
 ---
 
 <BaseLayout title="Play — Peter Massih" description="Pixel world, one of the toys on Peter Massih's site." noindex>
@@ -15,9 +19,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <p class="meta" aria-live="polite">
       <span id="play-room">…</span> ·
-      status: <span id="play-status">connecting…</span> ·
-      online: <span id="play-count">–</span>
+      <span id="play-status">connecting…</span> ·
+      <span id="play-count">–</span> online
     </p>
+
+    {/* Shown only in the library, by play.js, while its word is in play. */}
+    <div id="play-letters" class="letters" role="group" aria-label="Guess a letter" hidden>
+      {LETTERS.map((l) => <button type="button" data-letter={l}>{l}</button>)}
+    </div>
 
     {/* Shown only on coarse-pointer (touch) devices, via the media query below. */}
     <div id="play-touch" class="touch">
@@ -38,10 +47,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
     </div>
 
-    <p class="hint hint-keys muted">
-      Arrows walk, Space jumps, Z punches, E waves, Q sends a heart,
-      M mutes. Doors at the edges lead to other rooms.
-    </p>
+    <div class="hint hint-keys">
+      <dl class="keys">
+        <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>walk</dd></div>
+        <div><dt><kbd>Space</kbd></dt><dd>jump</dd></div>
+        <div><dt><kbd>Z</kbd></dt><dd>punch</dd></div>
+        <div><dt><kbd>E</kbd></dt><dd>wave</dd></div>
+        <div><dt><kbd>Q</kbd></dt><dd>heart</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>mute</dd></div>
+      </dl>
+      <p class="muted">Doors at the edges lead to other rooms.</p>
+    </div>
     <p class="hint hint-touch muted">
       Walk, jump, and punch with the buttons. Doors at the edges lead to
       other rooms.
@@ -51,14 +67,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <summary>what is this?</summary>
       <p>
         A tiny multiplayer world. Every character here is a real visitor
-        on this page right now. Walk over and wave, or throw a punch.
+        on this page right now, under a name picked for them from a short
+        list. Walk over and wave, or throw a punch.
         Nobody gets hurt. They bounce back and blink briefly, and can't be
         hit again until the blinking stops.
       </p>
       <p>
         Four rooms, doors at the edges. The plaza is for hanging out. The
         arena has a crown. Steal it, hold it, and the longest reigns go on
-        the wall. The library is quiet: no punching. The moon has low
+        the wall. The library is quiet: no punching. It also keeps a
+        hangman word going. Pick letters below the world to guess it
+        together. The moon has low
         gravity and a timed run from the green flag to the gold flag. Best
         times go on the board.
       </p>
@@ -94,8 +113,45 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
   }
+  .letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    /* Two even rows of 13 on wide screens; phones wrap to fit. */
+    max-width: calc(13 * 28px + 12 * var(--space-1));
+    margin-top: var(--space-3);
+  }
+  .letters[hidden] { display: none; }
+  .letters button {
+    min-width: 28px;
+    min-height: 28px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    transition: color var(--transition);
+  }
+  .letters button:hover { color: var(--color-text); }
+  .letters button:disabled { opacity: 0.35; cursor: default; }
   .touch { display: none; }
   .hint { margin-top: var(--space-3); font-size: var(--text-sm); }
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+    color: var(--color-text-muted);
+  }
+  .keys div { display: flex; align-items: baseline; gap: var(--space-2); }
+  kbd {
+    padding: 0 var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+  }
   .hint-touch { display: none; }
   @media (pointer: coarse) {
     .hint-keys { display: none; }

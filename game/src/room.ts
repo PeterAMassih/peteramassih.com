@@ -13,11 +13,11 @@ const WORLD = { w: 640, h: 360 };
 // live client-side.
 export const ROOM_RULES: Record<
 	string,
-	{ gravity: number; brawl: boolean; kb: number; crown: boolean; race?: { sx: number; sy: number; fx: number; fy: number } }
+	{ gravity: number; brawl: boolean; kb: number; crown: boolean; hangman?: boolean; race?: { sx: number; sy: number; fx: number; fy: number } }
 > = {
 	plaza: { gravity: 1, brawl: true, kb: 1, crown: false },
 	arena: { gravity: 1, brawl: true, kb: 1.6, crown: true }, // king of the hill
-	library: { gravity: 1, brawl: false, kb: 1, crown: false },
+	library: { gravity: 1, brawl: false, kb: 1, crown: false, hangman: true },
 	moon: {
 		gravity: 0.35, brawl: true, kb: 1, crown: false,
 		// The moon run: floor flag to the top rock. The server does the timing —
@@ -56,6 +56,49 @@ interface Crown {
 
 const REIGN_MIN_MS = 1000; // shorter than this is a fumble, not a reign
 
+// The library's hangman. A guess is one letter, picked from buttons, never
+// typed text, and the puzzle persists across hibernation: a half-solved word
+// waits for the next stranger. Words from this world.
+const HANG_WORDS = [
+	"pixel", "crown", "plaza", "arena", "gravity", "socket", "worker", "durable",
+	"object", "tensor", "gradient", "neuron", "library", "hibernate", "sprite",
+	"canvas", "emote", "guestbook", "record", "reign", "punch", "bubble",
+	"platform", "visitor", "moon", "kernel", "matrix", "entropy", "lambda",
+	"vector", "cache", "quantize", "diffusion", "token", "epoch", "layer",
+];
+const HANG_LIVES = 8;
+
+interface Hang {
+	word: string;
+	found: string; // letters guessed right
+	wrongL: string; // letters guessed wrong, in guess order
+	misses: number;
+	// Rounds stored before names came from the fixed list carry a typed
+	// `name` here instead of `by`; it is never read.
+	last: { by?: string; won: boolean } | null;
+}
+
+// Nobody types a name: a stable hash of the visitor id picks one word from
+// each list, so you keep your name across visits and rooms, and no visitor
+// can put words of their own in front of another. Every pairing was read
+// through once to be sure it is harmless.
+const ADJECTIVES = [
+	"amber", "azure", "calm", "coral", "cozy", "gentle", "indigo", "jade",
+	"lilac", "mint", "plum", "quiet", "sage", "sunny", "swift", "teal",
+];
+const ANIMALS = [
+	"crane", "finch", "fox", "gecko", "hare", "heron", "koala", "lemur",
+	"lynx", "otter", "owl", "panda", "puffin", "robin", "seal", "wren",
+];
+
+// FNV-1a: tiny, stable across runtimes, and spreads similar UUIDs apart.
+export function nameOf(key: string): string {
+	let h = 2166136261;
+	for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+	h >>>= 0;
+	return `${ADJECTIVES[h % ADJECTIVES.length]} ${ANIMALS[(h >>> 4) % ANIMALS.length]}`;
+}
+
 // Positions expire: ignored after 30 days, swept opportunistically.
 const POS_TTL_MS = 30 * 24 * 3600 * 1000;
 const SWEEP_EVERY_MS = 24 * 3600 * 1000;
@@ -82,6 +125,7 @@ const BURST = {
 	move: 80,
 	emote: 10, // spamming hearts is part of the fun
 	punch: 20, // paired with the client's 260ms cooldown
+	guess: 20, // guessing is bursty in co-op
 };
 
 // The brawl. A punch hits the nearest player in front within reach, knocked
@@ -99,6 +143,7 @@ const MAX_PLAYERS = 32;
 
 interface Player {
 	id: string;
+	name: string;
 	x: number;
 	y: number;
 	color: string;
@@ -118,6 +163,7 @@ export class Room extends DurableObject<Env> {
 	// hibernation can rebuild everything from the sockets the runtime kept open.
 	private conns = new Map<WebSocket, Conn>();
 	private crown: Crown | null = null;
+	private hang: Hang | null = null;
 	// Active runs, playerId -> started-at. In-memory only: a run is seconds
 	// long, and one lost to a mid-run hibernation is no loss at all.
 	private runs = new Map<string, number>();
@@ -133,6 +179,7 @@ export class Room extends DurableObject<Env> {
 		for (const ws of ctx.getWebSockets()) this.conns.set(ws, ws.deserializeAttachment() as Conn);
 		ctx.blockConcurrencyWhile(async () => {
 			this.crown = ((await ctx.storage.get("crown")) as Crown | undefined) ?? null;
+			this.hang = ((await ctx.storage.get("hang")) as Hang | undefined) ?? null;
 			// A wearer who vanished while the room slept forfeits: back to the spawn.
 			if (this.crown?.wearer && ![...this.conns.values()].some((c) => c.p.id === this.crown?.wearer)) {
 				this.crown = { wearer: null, ...CROWN_SPAWN };
@@ -163,8 +210,53 @@ export class Room extends DurableObject<Env> {
 		);
 	}
 
+	// Names are derived from the row's visitor id at read time. The old typed
+	// names still sit in a `name` column on these tables and are never read,
+	// and the vid itself never leaves the room.
 	private top(board: keyof typeof BOARDS) {
-		return this.ctx.storage.sql.exec(`SELECT ms FROM ${board} ORDER BY ms ${BOARDS[board]} LIMIT ?`, BOARD_TOP).toArray();
+		return this.ctx.storage.sql
+			.exec<{ vid: string; ms: number }>(`SELECT vid, ms FROM ${board} ORDER BY ms ${BOARDS[board]} LIMIT ?`, BOARD_TOP)
+			.toArray()
+			.map((r) => ({ name: nameOf(r.vid), ms: r.ms }));
+	}
+
+	private newWord(not: string): string {
+		let w = not;
+		while (w === not) w = HANG_WORDS[Math.floor(Math.random() * HANG_WORDS.length)];
+		return w;
+	}
+
+	// What clients see: the mask, never the word. Wrong letters go out sorted,
+	// so the order of guesses cannot be used to spell something.
+	private hangView() {
+		const h = this.hang;
+		if (!h) return null;
+		return {
+			masked: [...h.word].map((c) => (h.found.includes(c) ? c : "_")).join(""),
+			wrongL: [...h.wrongL].sort().join(""),
+			misses: h.misses,
+			lives: HANG_LIVES,
+			last: h.last?.by ? { name: h.last.by, won: h.last.won } : null,
+		};
+	}
+
+	private guess(player: Player, letter: string): void {
+		const h = this.hang;
+		if (!h || h.found.includes(letter) || h.wrongL.includes(letter)) return; // already tried
+		if (h.word.includes(letter)) h.found += letter;
+		else {
+			h.wrongL += letter;
+			h.misses++;
+		}
+		const solved = [...h.word].every((c) => h.found.includes(c));
+		const failed = h.misses >= HANG_LIVES;
+		let event = "guess";
+		if (solved || failed) {
+			event = solved ? "solve" : "fail";
+			this.hang = { word: this.newWord(h.word), found: "", wrongL: "", misses: 0, last: { by: player.name, won: solved } };
+		}
+		void this.ctx.storage.put("hang", this.hang);
+		this.broadcast({ type: "hang", event, by: player.id, guess: letter, state: this.hangView() });
 	}
 
 	// Close out the current wearer's reign: record it if it is their longest,
@@ -200,14 +292,24 @@ export class Room extends DurableObject<Env> {
 			this.crown = { wearer: null, ...CROWN_SPAWN };
 			void this.ctx.storage.put("crown", this.crown);
 		}
+		if (this.rules.hangman && !this.hang) {
+			this.hang = { word: this.newWord(""), found: "", wrongL: "", misses: 0, last: null };
+			void this.ctx.storage.put("hang", this.hang);
+		}
 		const url = new URL(request.url);
 		const [client, server] = Object.values(new WebSocketPair());
 
+		const vid = url.searchParams.get("vid");
+		const validVid = vid && /^[0-9a-f-]{8,40}$/i.test(vid) ? vid : null;
+
 		// The client passes its remembered color so walking through a door
 		// does not reroll the sprite. Unknown colors fall back to a fresh pick.
+		// A visitor without an id still gets a name, just not a lasting one.
 		const wantColor = url.searchParams.get("color");
+		const id = crypto.randomUUID();
 		const player: Player = {
-			id: crypto.randomUUID(),
+			id,
+			name: nameOf(validVid ?? id),
 			x: 40 + Math.floor(Math.random() * (WORLD.w - 80)),
 			// Spawn strictly above the client's floor line (y=312) so nobody
 			// stands sunk into the ground until their first jump.
@@ -220,8 +322,6 @@ export class Room extends DurableObject<Env> {
 		// This room remembers you: a returning visitor id resumes at the spot
 		// it left from. One storage read per join, one write per leave — the
 		// whole persistence bill for a visit is two operations.
-		const vid = url.searchParams.get("vid");
-		const validVid = vid && /^[0-9a-f-]{8,40}$/i.test(vid) ? vid : null;
 		if (validVid) {
 			const saved = (await this.ctx.storage.get(`pos:${validVid}`)) as
 				| { x: number; y: number; t?: number }
@@ -253,6 +353,7 @@ export class Room extends DurableObject<Env> {
 				crownHeld: this.crown?.since ? Date.now() - this.crown.since : null,
 				reignTop: this.rules.crown ? this.top("reigns") : [],
 				raceTop: this.rules.race ? this.top("races") : [],
+				hang: this.hangView(),
 				players: [...this.conns.values()].map((c) => c.p),
 			}),
 		);
@@ -266,7 +367,7 @@ export class Room extends DurableObject<Env> {
 		if (!conn || typeof raw !== "string") return;
 		const player = conn.p;
 
-		let msg: { type?: unknown; x?: unknown; y?: unknown; kind?: unknown; facing?: unknown };
+		let msg: { type?: unknown; x?: unknown; y?: unknown; kind?: unknown; facing?: unknown; letter?: unknown };
 		try {
 			// Valid JSON can still be null, which has no fields to read.
 			msg = JSON.parse(raw) ?? {};
@@ -320,6 +421,10 @@ export class Room extends DurableObject<Env> {
 			if (!EMOTES.includes(msg.kind as (typeof EMOTES)[number])) return;
 			if (!this.underLimit(ws, "emote")) return;
 			this.broadcast({ type: "emote", id: player.id, kind: msg.kind });
+		} else if (msg.type === "guess") {
+			if (!this.hang || typeof msg.letter !== "string" || !/^[a-z]$/.test(msg.letter)) return;
+			if (!this.underLimit(ws, "guess")) return;
+			this.guess(player, msg.letter);
 		} else if (msg.type === "punch") {
 			if (!this.rules.brawl) return; // the quiet room stays quiet
 			const dir = msg.facing === -1 ? -1 : 1;

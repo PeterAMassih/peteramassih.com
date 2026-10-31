@@ -98,6 +98,7 @@ const statusEl = document.getElementById('play-status');
 const roomEl = document.getElementById('play-room');
 const countEl = document.getElementById('play-count');
 const touchPad = document.getElementById('play-touch');
+const lettersEl = document.getElementById('play-letters');
 
 let room = ROOMS[location.hash.slice(1)] ? location.hash.slice(1) : 'plaza';
 let gravityScale = 1; // from the server's init: the moon is a different place
@@ -115,7 +116,7 @@ if (!vid) {
 let me = null; // my id, assigned by the server in init
 // x/y are the network truth; rx/ry are where the sprite is drawn. Remote
 // sprites ease rx/ry toward x/y so 10 Hz updates read as walking, not teleports.
-const players = new Map(); // id -> { x, y, rx, ry, color }
+const players = new Map(); // id -> { x, y, rx, ry, color, name }
 const bubbles = new Map(); // id -> { text, until }
 const effects = []; // running emotes: { id, kind, start }
 const held = new Set(); // movement keys currently down
@@ -125,8 +126,9 @@ let dropQueued = false; // down pressed: fall through the platform you stand on
 let dropUntil = 0; // while set, platforms do not catch you
 let crown = null; // { wearer, x, y } — only rooms that have one send it
 let crownWornAt = null; // local clock for the reign readout, from the server's held ms
-let raceTop = []; // best runs ever, from the server: { ms }
-let reignTop = []; // longest crown reigns ever: { ms }
+let raceTop = []; // best runs ever, from the server: { name, ms }
+let reignTop = []; // longest crown reigns ever: { name, ms }
+let hang = null; // the library's word: { masked, wrongL, misses, lives, last }
 let myRunStart = null; // client clock for the live readout; the server keeps the real time
 let kbVx = 0; // horizontal knockback speed while stunned
 let stunUntil = 0; // while stunned, input is ignored — you are tumbling
@@ -291,7 +293,7 @@ function connect(enterFrom) {
   });
   socket.addEventListener('close', (e) => {
     if (e.target !== socket) return;
-    statusEl.textContent = 'disconnected: refresh to rejoin';
+    statusEl.textContent = 'disconnected';
   });
   socket.addEventListener('message', (e) => {
     if (e.target !== socket) return;
@@ -325,9 +327,12 @@ function onMessage(msg, enterFrom) {
     crownWornAt = msg.crownHeld != null ? performance.now() - msg.crownHeld : null;
     raceTop = msg.raceTop ?? [];
     reignTop = msg.reignTop ?? [];
+    hang = msg.hang;
+    showLetters();
     myRunStart = null;
     // Only the client's own labels: a room key can arrive from a crafted
-    // join URL, and nothing a visitor types is drawn.
+    // join URL, and nothing a visitor types is drawn. Names come from the
+    // server's fixed word lists.
     roomEl.textContent = ROOMS[msg.room]?.label ?? '';
     players.clear();
     for (const p of msg.players) players.set(p.id, { ...p, rx: p.x, ry: p.y, facing: 1, moving: false });
@@ -363,6 +368,13 @@ function onMessage(msg, enterFrom) {
     crownWornAt = msg.held != null ? performance.now() - msg.held : null;
     if (crown?.wearer && !wore) sfx('crown');
     else if (!crown?.wearer && wore) sfx('uncrown');
+  } else if (msg.type === 'hang') {
+    hang = msg.state;
+    showLetters();
+    // The guess floats over the guesser's head; the board shows the result.
+    bubbles.set(msg.by, { text: msg.guess, until: performance.now() + 1800 });
+    if (msg.event === 'solve') sfx('crown');
+    else if (msg.event === 'fail') sfx('uncrown');
   } else if (msg.type === 'reign') {
     reignTop = msg.top;
     bubbles.set(msg.id, {
@@ -543,6 +555,24 @@ const releaseTouch = (e) => {
 touchPad.addEventListener('pointerup', releaseTouch);
 touchPad.addEventListener('pointercancel', releaseTouch);
 
+// The library's letter row: the only way to guess, so nobody types a word
+// the room would read. Letter keys stay game controls (Z, E, Q, M).
+function showLetters() {
+  lettersEl.hidden = !hang;
+  if (!hang) return;
+  for (const b of lettersEl.children) {
+    b.disabled = hang.masked.includes(b.dataset.letter) || hang.wrongL.includes(b.dataset.letter);
+  }
+}
+lettersEl.addEventListener('click', (e) => {
+  const letter = e.target.dataset.letter;
+  if (!letter) return;
+  send({ type: 'guess', letter });
+  // A mouse or tap click hands the keyboard back to the game; a keyboard
+  // press (detail 0) keeps focus so tabbing through letters still works.
+  if (e.detail) e.target.blur();
+});
+
 // --- simulation + render ---
 
 function frame(now) {
@@ -657,6 +687,9 @@ function draw() {
     for (const [sx, sy] of STARS) ctx.fillRect(sx, sy, 2, 2);
   }
 
+  // The library's hangman, top right.
+  if (hang) drawHangman(hang);
+
   // Faint grid so motion is legible against the flat backdrop.
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
   ctx.beginPath();
@@ -692,8 +725,7 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // The arena's hall of fame: the longest reigns, ever. Times only: nothing
-  // a visitor types is drawn.
+  // The arena's hall of fame: who held the crown longest, ever.
   if (crown && reignTop.length) drawBoard('longest reigns', reignTop, 64, 66, 1);
 
   // The race: two flags, the all-time board, and your live readout.
@@ -757,8 +789,8 @@ function draw() {
     if (crown?.wearer === id) {
       drawCrown(p.rx, feetY - SPR_H - 1);
       if (crownWornAt !== null) {
-        // The current reign, counting up for everyone to covet, on our own
-        // clock so skew cannot lie.
+        // The current reign, counting up for everyone to covet. Above the
+        // name, not through it, and on our own clock so skew cannot lie.
         ctx.font = '10px ui-monospace, monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffd23f';
@@ -767,17 +799,12 @@ function draw() {
       }
     }
 
-    // Your own sprite gets a small caret overhead: the name tag that used to
-    // mark it is gone, and sprites otherwise differ only by tint.
-    if (id === me) {
-      const tip = feetY - SPR_H - (crown?.wearer === id ? 29 : 3);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.beginPath();
-      ctx.moveTo(p.rx - 4, tip - 5);
-      ctx.lineTo(p.rx + 4, tip - 5);
-      ctx.lineTo(p.rx, tip);
-      ctx.fill();
-    }
+    // Your own name reads brighter; that is how you find yourself.
+    // 12px, not 10: the canvas downscales to ~0.54x on phones.
+    ctx.font = '12px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = id === me ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.55)';
+    ctx.fillText(p.name, p.rx, feetY - SPR_H - 6);
 
     const bubble = bubbles.get(id);
     if (bubble) {
@@ -811,14 +838,56 @@ function draw() {
   }
 }
 
-// An all-time board: a title, then one numbered time per row.
+// An all-time board: a title, then one numbered name and time per row.
 function drawBoard(title, rows, x, y, digits) {
   ctx.font = '11px ui-monospace, monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
   ctx.fillText(title, x, y);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
-  rows.forEach((r, i) => ctx.fillText(`${i + 1}. ${(r.ms / 1000).toFixed(digits)}s`, x, y + 16 + i * 15));
+  rows.forEach((r, i) => ctx.fillText(`${i + 1}. ${r.name} ${(r.ms / 1000).toFixed(digits)}s`, x, y + 16 + i * 15));
+}
+
+function drawHangman(h) {
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.fillText('pick a letter below', 470, 62);
+
+  // The word, one slot at a time.
+  ctx.font = '14px ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(232, 216, 178, 0.85)';
+  [...h.masked].forEach((c, i) => ctx.fillText(c, 470 + i * 13, 92));
+
+  if (h.wrongL) {
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(212, 83, 126, 0.7)';
+    ctx.fillText([...h.wrongL].join(' '), 470, 112);
+  }
+  if (h.last) {
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    const verdict = h.last.won ? 'solved by' : 'fumbled by';
+    const text = `last word ${verdict} ${h.last.name}`;
+    // The longest names run past the right edge from x=470: shift left instead.
+    ctx.fillText(text, Math.min(470, WORLD.w - ctx.measureText(text).width - 4), 130);
+  }
+
+  // The gallows assembles one miss at a time; the little pixel person last.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const m = h.misses;
+  if (m > 0) { ctx.moveTo(596, 118); ctx.lineTo(632, 118); } // base
+  if (m > 1) { ctx.moveTo(604, 118); ctx.lineTo(604, 58); } // pole
+  if (m > 2) { ctx.moveTo(604, 58); ctx.lineTo(624, 58); } // beam
+  if (m > 3) { ctx.moveTo(624, 58); ctx.lineTo(624, 66); } // rope
+  if (m > 5) { ctx.moveTo(624, 78); ctx.lineTo(624, 94); } // body
+  if (m > 6) { ctx.moveTo(616, 84); ctx.lineTo(632, 84); } // arms
+  if (m > 7) { ctx.moveTo(624, 94); ctx.lineTo(618, 104); ctx.moveTo(624, 94); ctx.lineTo(630, 104); } // legs
+  ctx.stroke();
+  if (m > 4) { ctx.beginPath(); ctx.arc(624, 72, 6, 0, Math.PI * 2); ctx.stroke(); } // head
+  ctx.lineWidth = 1;
 }
 
 function drawFlag(x, baseY, color) {
@@ -852,7 +921,10 @@ function drawDoor(x, target) {
   ctx.font = '11px ui-monospace, monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.fillText(target, x + 11, GROUND_Y - h - 6);
+  // Centered over the door, but a door sits at the world's edge: keep the
+  // label's full width on the canvas.
+  const half = ctx.measureText(target).width / 2;
+  ctx.fillText(target, clamp(x + 11, half + 4, WORLD.w - half - 4), GROUND_Y - h - 6);
 }
 
 function drawBurst(x, y, t) {

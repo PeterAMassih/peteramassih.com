@@ -18,18 +18,19 @@ export const ME = 'P. A. Massih';
 
 export const pubs: Pub[] = [
   {
-    authors: ['P. A. Massih', 'E. Cosatto'],
-    title: 'Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics',
+    authors: ['P. A. Massih', 'E. Cosatto', 'M. R. Min'],
+    title: 'SQuID: A Benchmark for Quantitative Spatial Reasoning on Satellite Imagery',
     status: 'Preprint, arXiv:2601.13401, 2026',
-    summary: 'SQuID, a benchmark of 2,000 quantitative questions on satellite images with tolerance ranges calibrated from human annotations. A code-generation baseline reaches 42.0% vs 28.1% for the best zero-shot VLM.',
-    page: '/publications/qvlm/',
+    summary: 'SQuID, a benchmark of 2,000 quantitative questions on satellite images with tolerance ranges informed by human annotations. The best zero-shot end-to-end VLM reaches 28.1%, and the QASR baseline reaches 42.0%.',
+    page: '/publications/squid/',
     links: [
       { label: 'arXiv', href: 'https://arxiv.org/abs/2601.13401' },
       { label: 'Dataset', href: 'https://huggingface.co/datasets/PeterAM4/SQuID' },
+      { label: 'Code', href: 'https://github.com/PeterAMassih/SQuID' },
     ],
     bibtex: `@misc{massih2026squid,
-  title         = {Reasoning with Pixel-level Precision: QVLM Architecture and SQuID Dataset for Quantitative Geospatial Analytics},
-  author        = {Massih, Peter A. and Cosatto, Eric},
+  title         = {{SQuID}: A Benchmark for Quantitative Spatial Reasoning on Satellite Imagery},
+  author        = {Massih, Peter A. and Cosatto, Eric and Min, Martin Renqiang},
   year          = {2026},
   eprint        = {2601.13401},
   archivePrefix = {arXiv}

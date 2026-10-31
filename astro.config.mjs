@@ -12,6 +12,8 @@ export default defineConfig({
   site: 'https://peteramassih.com',
   // /play/ is noindex, so the sitemap leaves it out.
   integrations: [sitemap({ filter: (page) => !page.endsWith('/play/') })],
+  // The paper page moved when arXiv v2 renamed QVLM to QASR; old links still land.
+  redirects: { '/publications/qvlm': '/publications/squid/' },
   // Astro 7's default 'jsx' whitespace mode drops the spaces between inline
   // elements, such as the separators in "CV · Email"; keep the old behavior.
   compressHTML: true,

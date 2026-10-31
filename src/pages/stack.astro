@@ -29,15 +29,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <script>import '../scripts/stack.js';</script>
 
 <style>
-  main {
-    max-width: var(--content-width);
-    margin: var(--space-16) auto var(--space-16);
-    padding: 0 var(--space-4);
-    text-align: center;
-  }
+  main { margin-top: var(--space-16); text-align: center; }
   h1 { margin-bottom: var(--space-8); }
   .canvas {
-    display: block;
     width: 100%;
     max-width: 300px;
     aspect-ratio: 1 / 2;
@@ -65,12 +59,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
   .controls button {
     min-height: 24px;
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
     color: var(--color-text-muted);
-    cursor: pointer;
     transition: color var(--transition);
   }
   .controls button:hover { color: var(--color-text); }

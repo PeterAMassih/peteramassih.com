@@ -152,8 +152,7 @@ function worldToPix(x, y) {
 
 // 6-digit hex only, like "#1a1a1a". Tokens passed here must stay in that form.
 function hexToRgb(hex) {
-  const v = hex.replace('#', '');
-  return [parseInt(v.slice(0,2), 16), parseInt(v.slice(2,4), 16), parseInt(v.slice(4,6), 16)];
+  return hex.slice(1).match(/../g).map((h) => parseInt(h, 16));
 }
 
 function readColors() {
@@ -225,18 +224,13 @@ function draw() {
   // GPU-accelerated blit. Respects the dpr transform so it fills the whole canvas.
   ctx.drawImage(heatmapCanvas, 0, 0, w, h);
 
-  if (state.path.length > 1) {
-    ctx.strokeStyle = colors.accent;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    const [px0, py0] = worldToPix(state.path[0][0], state.path[0][1]);
-    ctx.moveTo(px0, py0);
-    for (let i = 1; i < state.path.length; i++) {
-      const [pxi, pyi] = worldToPix(state.path[i][0], state.path[i][1]);
-      ctx.lineTo(pxi, pyi);
-    }
-    ctx.stroke();
-  }
+  // On an empty path lineTo acts as moveTo, so the first point starts the line
+  // and a path of zero or one points draws nothing.
+  ctx.strokeStyle = colors.accent;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (const [x, y] of state.path) ctx.lineTo(...worldToPix(x, y));
+  ctx.stroke();
   if (state.active) {
     const [px, py] = worldToPix(state.x, state.y);
     ctx.fillStyle = colors.accent;
@@ -310,9 +304,6 @@ function init() {
       btn.classList.add('active');
       document.querySelectorAll('[data-opt-formula]').forEach((el) => {
         el.hidden = el.dataset.optFormula !== optimizer;
-      });
-      document.querySelectorAll('[data-opt-gloss]').forEach((el) => {
-        el.hidden = !el.dataset.optGloss.split(' ').includes(optimizer);
       });
     });
   });

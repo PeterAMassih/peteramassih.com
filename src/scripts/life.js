@@ -70,7 +70,7 @@ function step() {
           if (!dr && !dc) continue;
           n += grid[(r + dr + rows) % rows][(c + dc + cols) % cols];
         }
-      next[r][c] = grid[r][c] ? (n === 2 || n === 3 ? 1 : 0) : (n === 3 ? 1 : 0);
+      next[r][c] = n === 3 || (n === 2 && grid[r][c]);
     }
   }
   grid = next;
@@ -83,8 +83,8 @@ function place(pattern, startR, startC) {
       if (pattern[r][c]) grid[(startR + r) % rows][(startC + c) % cols] = 1;
 }
 
-// Colors are read from CSS custom properties each frame so theme switches
-// apply without a listener.
+// Colors are read from CSS custom properties on every draw, so a redraw is
+// all a theme switch needs.
 function draw() {
   const css = getComputedStyle(document.documentElement);
   ctx.fillStyle = css.getPropertyValue('--color-code-bg').trim();
@@ -167,11 +167,15 @@ function init() {
     const old = grid;
     fit();
     grid = empty();
-    for (let r = 0; r < Math.min(old.length, rows); r++)
-      for (let c = 0; c < Math.min(old[r].length, cols); c++)
-        grid[r][c] = old[r][c];
+    for (let r = 0; r < Math.min(old.length, rows); r++) grid[r].set(old[r].subarray(0, cols));
     draw();
   });
+
+  // A paused board never redraws on its own, so repaint when the theme flips.
+  new MutationObserver(draw).observe(document.documentElement, {
+    attributes: true, attributeFilter: ['data-theme'],
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 }
 
 init();

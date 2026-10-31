@@ -49,7 +49,7 @@ export async function POST({ request }) {
   const ip = request.headers.get('cf-connecting-ip');
   if (ip) {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip));
-    const hash = [...new Uint8Array(digest.slice(0, 12))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const hash = new Uint8Array(digest, 0, 12).toHex();
     const guard = `ip:${slug}:${hash}`;
     if (await env.LIKES.get(guard)) {
       const likes = parseInt((await env.LIKES.get(slug)) || '0', 10);

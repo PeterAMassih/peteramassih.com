@@ -51,8 +51,6 @@ const PIECES = {
   ],
 };
 
-const PIECE_NAMES = Object.keys(PIECES);
-
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 
@@ -105,11 +103,12 @@ function merge(board, shape, row, col) {
 /* ── State ───────────────────────────────────────────────────────────────── */
 
 let board, bag, current;
-let score, lines, level, dropInterval, dropCounter;
+let score, lines, level, dropCounter;
 let paused, gameOver;
 let clearing = null;        // { rows: number[], elapsed: number, duration: number }
 let lockTimer = 0;
 let highScore = 0;
+let savedHigh = 0;          // the record the server already holds
 let lastTime = 0;
 
 // Held-key state for DAS / soft drop auto-repeat.
@@ -125,7 +124,6 @@ function reset() {
   score = 0;
   lines = 0;
   level = 1;
-  dropInterval = 1000;
   dropCounter = 0;
   paused = false;
   gameOver = false;
@@ -140,7 +138,7 @@ function reset() {
 // droughts of any piece.
 function nextName() {
   if (bag.length === 0) {
-    bag = PIECE_NAMES.slice();
+    bag = Object.keys(PIECES);
     for (let i = bag.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [bag[i], bag[j]] = [bag[j], bag[i]];
@@ -157,8 +155,11 @@ function spawn() {
   current = { name: nextName(), rotation: 0, row: 0, col: 3 };
   lockTimer = 0;
   if (collides(board, shapeOf(current), current.row, current.col)) {
+    // No live piece, so a held soft drop stops locking and replaying the sound.
+    current = null;
     gameOver = true;
-    if (score > highScore) { highScore = score; saveHighScore(); }
+    highScore = Math.max(highScore, score);
+    saveHighScore();
     updateMeta();
     stopMusic();
     sfxGameOver();
@@ -166,32 +167,28 @@ function spawn() {
 }
 
 // Global high score lives in a Cloudflare KV namespace behind the Worker's
-// /api/high-score endpoint. Both calls tolerate network failure: if the
-// endpoint is unreachable the game still plays and the high just shows 0.
-// Failures log a console.warn; success is silent.
+// /api/high-score endpoint. If it is unreachable the game still plays and the
+// high just shows 0.
 
 function loadHighScore() {
   fetch(HIGH_SCORE_URL)
     .then((r) => r.json())
     .then((data) => {
+      savedHigh = data.score;
       if (data.score > highScore) {
         highScore = data.score;
         updateMeta();
       }
-    })
-    .catch((err) => console.warn('[stack] high-score GET failed:', err.message));
+    });
 }
 
+// Runs when a run ends (game over, restart, tab hidden), not on every line
+// clear: each write spends the KV free tier's small daily write budget.
+// keepalive lets the request outlive a closing tab.
 function saveHighScore() {
-  fetch(HIGH_SCORE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ score: highScore }),
-  })
-    .then((r) => {
-      if (!r.ok) throw new Error(`POST ${r.status} ${r.statusText}`);
-    })
-    .catch((err) => console.warn('[stack] high-score POST failed:', err.message));
+  if (score <= savedHigh) return;
+  savedHigh = score;
+  fetch(HIGH_SCORE_URL, { method: 'POST', body: JSON.stringify({ score }), keepalive: true });
 }
 
 
@@ -200,9 +197,7 @@ function saveHighScore() {
 // Gives players room to slide and rotate against the floor without
 // insta-locking.
 function maybeResetLock() {
-  if (current && collides(board, shapeOf(current), current.row + 1, current.col)) {
-    lockTimer = 0;
-  }
+  if (collides(board, shapeOf(current), current.row + 1, current.col)) lockTimer = 0;
 }
 
 function move(dx) {
@@ -242,8 +237,7 @@ function softDrop() {
 
 function hardDrop() {
   if (!current || clearing) return;
-  let d = 0;
-  while (!collides(board, shapeOf(current), current.row + d + 1, current.col)) d++;
+  const d = ghostDrop();
   current.row += d;
   score += d * 2;
   lock();
@@ -251,7 +245,6 @@ function hardDrop() {
 
 // Full rows start the line-clear flash (scoring happens when it finishes).
 function lock() {
-  if (!current) return;
   merge(board, shapeOf(current), current.row, current.col);
   sfxLock();
 
@@ -270,7 +263,6 @@ function lock() {
 }
 
 function completeLineClear() {
-  if (!clearing) return;
   const cleared = clearing.rows.length;
   // Splice the full rows out first, highest index down so earlier removals
   // don't shift the indices still to come. Only then drop in the replacement
@@ -282,12 +274,8 @@ function completeLineClear() {
   for (let i = 0; i < cleared; i++) board.unshift(Array(COLS).fill(0));
   lines += cleared;
   score += SCORE[cleared] * level;
-  if (score > highScore) { highScore = score; saveHighScore(); }
-  const newLevel = Math.floor(lines / 10) + 1;
-  if (newLevel !== level) {
-    level = newLevel;
-    dropInterval = Math.max(80, 1000 - (level - 1) * 80);
-  }
+  highScore = Math.max(highScore, score);
+  level = Math.floor(lines / 10) + 1;
   updateMeta();
   clearing = null;
   spawn();
@@ -357,7 +345,8 @@ function render() {
     ctx.globalAlpha = 1;
   }
 
-  if (current && !gameOver && !clearing) {
+  // current is null while a line clears and after game over.
+  if (current) {
     const d = ghostDrop();
     ctx.fillStyle = color('--color-border');
     for (const [dr, dc] of shapeOf(current)) {
@@ -397,18 +386,20 @@ function overlay(title, sub) {
 function tick(now) {
   const dt = now - lastTime;
   lastTime = now;
-  if (paused || gameOver) { render(); requestAnimationFrame(tick); return; }
+  if (!paused && !gameOver) update(now, dt);
+  render();
+  requestAnimationFrame(tick);
+}
 
+function update(now, dt) {
   if (clearing) {
     clearing.elapsed += dt;
     if (clearing.elapsed >= clearing.duration) completeLineClear();
-    render();
-    requestAnimationFrame(tick);
     return;
   }
 
   // DAS auto-shift for held left/right.
-  if (current && dasDir !== 0 && now - dasSince >= DAS_DELAY) {
+  if (dasDir !== 0 && now - dasSince >= DAS_DELAY) {
     while (now - lastDasShift >= DAS_REPEAT) {
       move(dasDir);
       lastDasShift += DAS_REPEAT;
@@ -416,7 +407,7 @@ function tick(now) {
   }
 
   // Soft-drop auto-repeat for held down.
-  if (current && softDropHeld) {
+  if (softDropHeld) {
     while (now - lastSoftDrop >= SOFT_REPEAT) {
       softDrop();
       lastSoftDrop += SOFT_REPEAT;
@@ -424,10 +415,11 @@ function tick(now) {
     }
   }
 
-  if (!current || clearing) { render(); requestAnimationFrame(tick); return; }
+  if (!current || clearing) return;
 
   // Gravity + lock delay. On the floor the piece doesn't fall but starts the
-  // lock countdown; off the floor it falls on the regular drop interval.
+  // lock countdown; off the floor it falls on the level's drop interval,
+  // 1000 ms at level 1 and 80 ms faster per level, down to 80 ms.
   const onFloor = collides(board, shapeOf(current), current.row + 1, current.col);
   if (onFloor) {
     lockTimer += dt;
@@ -435,14 +427,11 @@ function tick(now) {
   } else {
     lockTimer = 0;
     dropCounter += dt;
-    if (dropCounter >= dropInterval) {
+    if (dropCounter >= Math.max(80, 1000 - (level - 1) * 80)) {
       current.row++;
       dropCounter = 0;
     }
   }
-
-  render();
-  requestAnimationFrame(tick);
 }
 
 
@@ -554,11 +543,9 @@ function handleTouchEnd(e) {
   // touchLastX/Y only advance when a discrete-step threshold is crossed, so
   // they don't reflect the real finger position on release. Read it from the
   // event itself — that's where an upward-only swipe shows up.
-  const t = (e.changedTouches && e.changedTouches[0]) || null;
-  const endX = t ? t.clientX : touchLastX;
-  const endY = t ? t.clientY : touchLastY;
-  const totalDx = endX - touchStartX;
-  const totalDy = endY - touchStartY;
+  const t = e.changedTouches[0];
+  const totalDx = t.clientX - touchStartX;
+  const totalDy = t.clientY - touchStartY;
 
   if (!touchMoved && Math.abs(totalDx) < TAP_SLOP && Math.abs(totalDy) < TAP_SLOP) {
     rotate();
@@ -570,7 +557,7 @@ function handleTouchEnd(e) {
 
 /* ── Controls + meta ─────────────────────────────────────────────────────── */
 
-let scoreEl, highEl, linesEl, levelEl, toggleBtn, restartBtn, soundBtn;
+let scoreEl, highEl, linesEl, levelEl, toggleBtn, soundBtn;
 
 function updateMeta() {
   scoreEl.textContent = String(score);
@@ -595,10 +582,11 @@ function togglePause() {
 }
 
 function resetAndStart() {
+  saveHighScore();
   reset();
   toggleBtn.textContent = 'pause';
   updateMeta();
-  if (soundOn) { melodyIndex = 0; bassIndex = 0; startMusic(); }
+  if (soundOn) { for (const v of VOICES) v.index = 0; startMusic(); }
 }
 
 
@@ -624,26 +612,13 @@ const B_HIGH = [
   ['D5',4],['E5',4],          ['C5',4],['A4',4],
   ['A4',4],[null,4],
 ];
-const A_LOW = [
-  ['E4',4],['B3',2],['C4',2], ['D4',4],['C4',2],['B3',2],
-  ['A3',4],['A3',2],['C4',2], ['E4',4],['D4',2],['C4',2],
-  ['B3',6],['C4',2],          ['D4',4],['E4',4],
-  ['C4',4],['A3',4],          ['A3',4],[null,4],
-];
-const B_LOW = [
-  ['D4',4],['F4',2],['A4',2], ['G4',2],['F4',2],['E4',6],['C4',2],
-  ['E4',4],['D4',2],['C4',2], ['B3',6],['C4',2],
-  ['D4',4],['E4',4],          ['C4',4],['A3',4],
-  ['A3',4],[null,4],
-];
+// Shifts every note k octaves: octave([['E5',4]], -1) is [['E4',4]].
+const octave = (seq, k) => seq.map(([n, d]) => [n && n.slice(0, -1) + (+n.slice(-1) + k), d]);
+const A_LOW = octave(A_HIGH, -1);
+const B_LOW = octave(B_HIGH, -1);
 // Climactic statement of A one octave above A_HIGH — the "ff" peak that
 // concert arrangements use as the dynamic high point before recapitulation.
-const A_VHIGH = [
-  ['E6',4],['B5',2],['C6',2], ['D6',4],['C6',2],['B5',2],
-  ['A5',4],['A5',2],['C6',2], ['E6',4],['D6',2],['C6',2],
-  ['B5',6],['C6',2],          ['D6',4],['E6',4],
-  ['C6',4],['A5',4],          ['A5',4],[null,4],
-];
+const A_VHIGH = octave(A_HIGH, 1);
 // Verse / verse / bridge / verse in the home register, mirrored an octave
 // below, then a climactic octave-up statement, a full recapitulation, and a
 // single A-statement coda: 884 sixteenths, about 92 seconds at 144 BPM, the
@@ -676,87 +651,54 @@ const KOROBEINIKI_BASS = (() => {
   ];
 })();
 
-const BPM = 144;
-
-let audioCtx = null;
-let soundOn = false;
-let nextNoteTime = 0;
-let nextBassTime = 0;
-let melodyIndex = 0;
-let bassIndex = 0;
-let schedulerInterval = null;
-
-function sixteenthSeconds() { return 60 / BPM / 4; }
-
-function initAudio() {
-  if (audioCtx) return;
-  // Bracket access on the legacy Safari prefix to keep TS strict-mode quiet
-  // without a JSDoc cast.
-  const Ctor = window.AudioContext || window['webkitAudioContext'];
-  audioCtx = new Ctor();
-}
-
-// Short attack, brief sustain, fast decay. Keeps notes crisp and prevents
-// click artifacts from raw gate signals.
-function envelope(gain, startTime, durSeconds, peak) {
-  gain.gain.setValueAtTime(0.0001, startTime);
-  gain.gain.exponentialRampToValueAtTime(peak, startTime + 0.005);
-  gain.gain.setValueAtTime(peak, startTime + durSeconds * 0.6);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durSeconds);
-}
-
-function playMelodyNote(freq, startTime, durSeconds) {
-  if (freq == null) return;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = freq;
-  envelope(gain, startTime, durSeconds, 0.05);
-  osc.connect(gain).connect(audioCtx.destination);
-  osc.start(startTime);
-  osc.stop(startTime + durSeconds + 0.02);
-}
+const SIXTEENTH = 60 / 144 / 4; // seconds, at 144 BPM
 
 // Triangle wave is warmer at low frequencies than square. Keeps the bass
 // from competing with the melody for harmonic space.
-function playBassNote(freq, startTime, durSeconds) {
-  if (freq == null) return;
+const VOICES = [
+  { seq: KOROBEINIKI, type: 'square', peak: 0.05, index: 0, next: 0 },
+  { seq: KOROBEINIKI_BASS, type: 'triangle', peak: 0.06, index: 0, next: 0 },
+];
+
+let audioCtx = null;
+let soundOn = false;
+let schedulerInterval = null;
+
+// Short attack, brief sustain, fast decay. Keeps notes crisp and prevents
+// click artifacts from raw gate signals.
+function tone(type, freq, t, dur, peak) {
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.type = 'triangle';
+  osc.type = type;
   osc.frequency.value = freq;
-  envelope(gain, startTime, durSeconds, 0.06);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+  gain.gain.setValueAtTime(peak, t + dur * 0.6);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   osc.connect(gain).connect(audioCtx.destination);
-  osc.start(startTime);
-  osc.stop(startTime + durSeconds + 0.02);
+  osc.start(t);
+  osc.stop(t + dur + 0.02);
 }
 
 // Schedules a sliding 250ms window of upcoming notes. More reliable than
 // queueing the whole loop, and survives pause/resume cleanly.
 function scheduler() {
-  while (nextNoteTime < audioCtx.currentTime + 0.25) {
-    const [note, dur] = KOROBEINIKI[melodyIndex];
-    const seconds = dur * sixteenthSeconds();
-    if (note) playMelodyNote(FREQ[note], nextNoteTime, seconds);
-    nextNoteTime += seconds;
-    melodyIndex = (melodyIndex + 1) % KOROBEINIKI.length;
-  }
-  while (nextBassTime < audioCtx.currentTime + 0.25) {
-    const [note, dur] = KOROBEINIKI_BASS[bassIndex];
-    const seconds = dur * sixteenthSeconds();
-    if (note) playBassNote(FREQ[note], nextBassTime, seconds);
-    nextBassTime += seconds;
-    bassIndex = (bassIndex + 1) % KOROBEINIKI_BASS.length;
+  for (const v of VOICES) {
+    while (v.next < audioCtx.currentTime + 0.25) {
+      const [note, dur] = v.seq[v.index];
+      if (note) tone(v.type, FREQ[note], v.next, dur * SIXTEENTH, v.peak);
+      v.next += dur * SIXTEENTH;
+      v.index = (v.index + 1) % v.seq.length;
+    }
   }
 }
 
 function startMusic() {
-  initAudio();
+  audioCtx ??= new AudioContext();
   if (audioCtx.state === 'suspended') audioCtx.resume();
   if (schedulerInterval) return;
   const start = audioCtx.currentTime + 0.05;
-  nextNoteTime = start;
-  nextBassTime = start;
+  for (const v of VOICES) v.next = start;
   scheduler();
   schedulerInterval = setInterval(scheduler, 50);
 }
@@ -799,47 +741,21 @@ function toggleSound() {
 
 function sfxLock() {
   if (!audioCtx || !soundOn) return;
-  const t = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = 110;
-  envelope(gain, t, 0.06, 0.04);
-  osc.connect(gain).connect(audioCtx.destination);
-  osc.start(t);
-  osc.stop(t + 0.08);
+  tone('square', 110, audioCtx.currentTime, 0.06, 0.04);
 }
 
 function sfxLineClear(count) {
   if (!audioCtx || !soundOn) return;
-  const steps = [659.25, 880.00, 1318.51, 1760.00].slice(0, Math.min(4, count + 1));
-  const peak = count >= 4 ? 0.07 : 0.05;
   const t = audioCtx.currentTime;
-  steps.forEach((freq, i) => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = freq;
-    envelope(gain, t + i * 0.05, 0.12, peak);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(t + i * 0.05);
-    osc.stop(t + i * 0.05 + 0.15);
-  });
+  const peak = count >= 4 ? 0.07 : 0.05;
+  [659.25, 880.00, 1318.51, 1760.00].slice(0, count + 1)
+    .forEach((freq, i) => tone('square', freq, t + i * 0.05, 0.12, peak));
 }
 
 function sfxGameOver() {
   if (!audioCtx || !soundOn) return;
   const t = audioCtx.currentTime;
-  [440, 349.23, 277.18, 220].forEach((freq, i) => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = freq;
-    envelope(gain, t + i * 0.15, 0.16, 0.05);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(t + i * 0.15);
-    osc.stop(t + i * 0.15 + 0.2);
-  });
+  [440, 349.23, 277.18, 220].forEach((freq, i) => tone('square', freq, t + i * 0.15, 0.16, 0.05));
 }
 
 
@@ -859,7 +775,6 @@ function init() {
   linesEl = document.getElementById('lines');
   levelEl = document.getElementById('level');
   toggleBtn = document.getElementById('toggle');
-  restartBtn = document.getElementById('restart');
   soundBtn = document.getElementById('sound');
 
   loadHighScore();
@@ -869,7 +784,7 @@ function init() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) togglePause();
 
   bindButton(toggleBtn, togglePause);
-  bindButton(restartBtn, resetAndStart);
+  bindButton(document.getElementById('restart'), resetAndStart);
   bindButton(soundBtn, toggleSound);
   window.addEventListener('keydown', handleKey);
   window.addEventListener('keyup', handleKeyUp);
@@ -879,9 +794,11 @@ function init() {
   canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
   // Pause music + drop held-key state when the tab is hidden so it doesn't keep
-  // playing in the background and the game doesn't snap on resume.
+  // playing in the background and the game doesn't snap on resume. Hidden is
+  // also the last reliable moment to save a record before the tab closes.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      saveHighScore();
       stopMusic();
       dasDir = 0;
       softDropHeld = false;

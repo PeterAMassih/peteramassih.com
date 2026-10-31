@@ -104,31 +104,31 @@ const symGradL = k('\\nabla L');
     <p class="opt-note muted" data-opt-formula="gd">Here <span set:html={symGradL}></span> is the exact gradient computed above, so this is plain gradient descent. Replace it with a noisy minibatch estimate and the same rule becomes stochastic gradient descent (SGD).</p>
 
     <dl class="glossary">
-      <div data-opt-gloss="gd momentum adam">
+      <div>
         <dt set:html={k('\\theta')}></dt><dd>parameter (ball position), updated each step</dd>
       </div>
-      <div data-opt-gloss="gd momentum adam">
+      <div>
         <dt set:html={k('\\eta')}></dt><dd>learning rate (constant, selected above)</dd>
       </div>
-      <div data-opt-gloss="gd momentum adam">
+      <div>
         <dt set:html={symGradL}></dt><dd>gradient of L, computed each step</dd>
       </div>
-      <div data-opt-gloss="momentum" hidden>
+      <div data-opt-formula="momentum" hidden>
         <dt set:html={k('\\beta')}></dt><dd>exponential decay for past gradients (constant, β = 0.9)</dd>
       </div>
-      <div data-opt-gloss="momentum" hidden>
+      <div data-opt-formula="momentum" hidden>
         <dt set:html={k('v')}></dt><dd>velocity, accumulated from past gradients, updated each step</dd>
       </div>
-      <div data-opt-gloss="adam" hidden>
+      <div data-opt-formula="adam" hidden>
         <dt set:html={k('\\beta_1,\\ \\beta_2')}></dt><dd>decay factors (constants, β₁ = 0.9, β₂ = 0.999)</dd>
       </div>
-      <div data-opt-gloss="adam" hidden>
+      <div data-opt-formula="adam" hidden>
         <dt set:html={k('m,\\ v')}></dt><dd>running first and second moments of ∇L, updated each step</dd>
       </div>
-      <div data-opt-gloss="adam" hidden>
+      <div data-opt-formula="adam" hidden>
         <dt set:html={k('\\hat m,\\ \\hat v')}></dt><dd>bias-corrected versions of m and v, computed each step</dd>
       </div>
-      <div data-opt-gloss="adam" hidden>
+      <div data-opt-formula="adam" hidden>
         <dt set:html={k('\\epsilon')}></dt><dd>numerical stability constant (ε = 10⁻⁸)</dd>
       </div>
     </dl>

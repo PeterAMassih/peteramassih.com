@@ -5,7 +5,7 @@
 // virtual module.
 //
 // GET  /api/high-score                 → { score }
-// POST /api/high-score { score: int }  → { score, updated }
+// POST /api/high-score { score: int }  → { score } (the record after the write)
 
 import { env } from 'cloudflare:workers';
 
@@ -45,9 +45,6 @@ export async function POST({ request }) {
   // race; for a single global high score the if-check ensures we never go
   // backwards, which is the only invariant that matters here.
   const current = parseInt((await env.SESSION.get(KEY)) || '0', 10);
-  if (score > current) {
-    await env.SESSION.put(KEY, String(score));
-    return Response.json({ score, updated: true });
-  }
-  return Response.json({ score: current, updated: false });
+  if (score > current) await env.SESSION.put(KEY, String(score));
+  return Response.json({ score: Math.max(score, current) });
 }

@@ -12,13 +12,13 @@ frame that holds the whole result, which render.sh also saves as the poster.
 
 import numpy as np
 from manim import (DOWN, LEFT, RIGHT, Circle, Create, FadeIn, FadeOut, GrowFromEdge, ImageMobject,
-                   LaggedStart, Line, Rectangle, RoundedRectangle, Scene, Text, Transform, TransformFromCopy,
+                   LaggedStart, Line, Rectangle, RoundedRectangle, Scene, Transform, TransformFromCopy,
                    VGroup, Write)
 from PIL import Image
 from scipy.ndimage import binary_erosion
 
 from fig_mask_classification import HERE, load_image, photo_panel
-from theme import FONT, MONO, P
+from theme import MONO, P, label
 
 SCORES = np.array([2.0, -0.6, -2.2, 1.1])
 KEPT = np.array([True, False, False, True])  # inside the dog mask
@@ -28,10 +28,6 @@ PHOTO_W, PHOTO_C = 4.6, np.array([-3.85, 0.45, 0.0])
 ROW_Y = [1.75, 0.80, -0.15, -1.10]
 X_ID, X_SCORE, X_EXP, X_BAR, BAR_LEN = -1.0, 0.4, 2.3, 3.45, 2.1
 Y_HEAD, Y_SUM, Y_OUT = 2.75, -2.05, -3.2
-
-
-def label(s, size=32, color=None, font=FONT):
-    return Text(s, font=font, font_size=size, color=color or P["text"])
 
 
 def num(x, digits=2):

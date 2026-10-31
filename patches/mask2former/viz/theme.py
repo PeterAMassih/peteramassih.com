@@ -16,7 +16,8 @@ import os
 from pathlib import Path
 
 import manimpango
-from manim import config
+import numpy as np
+from manim import Text, config
 
 PALETTES = {
     "light": dict(bg="#fafafa", text="#171717", muted="#6b6b6b", gold="#b8860b", gold_text="#8a6508",
@@ -40,3 +41,11 @@ config.pixel_width, config.pixel_height = 1600, 1000
 config.frame_height, config.frame_width = 8.0, 12.8
 config.frame_rate = 30
 config.background_color = P["bg"]
+
+
+def rgb(hex_color):
+    return np.array([int(hex_color[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
+
+
+def label(s, size=32, color=None, font=FONT):
+    return Text(s, font=font, font_size=size, color=color or P["text"])

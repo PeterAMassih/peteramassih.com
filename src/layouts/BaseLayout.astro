@@ -27,7 +27,9 @@ const imageAlt = 'Portrait of Peter Massih';
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate" type="application/rss+xml" title="Peter's Patches" href="/rss.xml" />
     {/* Open Graph and Twitter cards control the preview when the URL is shared.
-        The headshot is square, which suits Twitter's "summary" card. */}
+        X reads the title, description and image from og:*, so it only needs the
+        card type and the alt text. The headshot is square, which suits the
+        "summary" card. */}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Peter Massih" />
     <meta property="og:title" content={title} />
@@ -38,9 +40,6 @@ const imageAlt = 'Portrait of Peter Massih';
     <meta property="og:image:height" content="480" />
     <meta property="og:image:alt" content={imageAlt} />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={image} />
     <meta name="twitter:image:alt" content={imageAlt} />
     {/* Fonts are self-hosted (src/styles/fonts.css); preloading the two files
         starts them alongside the CSS instead of after it. */}

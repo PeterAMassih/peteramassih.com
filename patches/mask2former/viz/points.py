@@ -21,7 +21,7 @@ from PIL import Image, ImageFilter
 from scipy.ndimage import map_coordinates
 
 from fig_mask_classification import HERE, contour_of, load_image, photo_panel
-from theme import FONT, MONO, P
+from theme import FONT, MONO, P, rgb
 
 K = 400
 PANEL_W, PANEL_Y, PANEL_X = 6.0, -0.1, 3.15
@@ -31,10 +31,6 @@ def logit_at(logits, pts):
     """Bilinear logits at normalized (x, y) points, pixel centers at (i + 0.5) / n."""
     h, w = logits.shape
     return map_coordinates(logits, [pts[:, 1] * h - 0.5, pts[:, 0] * w - 0.5], order=1, mode="nearest")
-
-
-def rgb(hex_color):
-    return np.array([int(hex_color[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
 
 
 def panel(logits, x):

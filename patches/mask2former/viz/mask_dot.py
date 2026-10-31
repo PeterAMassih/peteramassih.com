@@ -21,15 +21,11 @@ from manim import (DOWN, LEFT, RIGHT, UP, Arrow, DashedLine, Dot, FadeIn, FadeOu
 from PIL import Image, ImageFilter
 
 from fig_mask_classification import HERE, contour_of, load_image, photo_panel
-from theme import FONT, MONO, P
+from theme import FONT, MONO, P, rgb
 
 ROWS, COLS = 13, 20
 PHOTO_W, PHOTO_C = 5.4, np.array([-3.45, 0.45, 0.0])
 X0, X1, Y0, Y1 = 0.45, 5.75, -1.75, 2.65  # the plane's drawing box
-
-
-def rgb(hex_color):
-    return np.array([int(hex_color[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
 
 
 def photo():

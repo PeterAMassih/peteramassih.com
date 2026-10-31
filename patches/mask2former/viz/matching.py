@@ -11,9 +11,9 @@ one by trying all six assignments, so the figure cannot drift from the fold.
 import itertools
 
 import numpy as np
-from manim import Circle, Create, FadeIn, LaggedStart, Rectangle, Scene, Text, VGroup, Write
+from manim import Circle, Create, FadeIn, LaggedStart, Rectangle, Scene, VGroup, Write
 
-from theme import FONT, MONO, P
+from theme import MONO, P, label
 
 C = np.array([[4, 1, 3], [2, 0, 5], [3, 2, 2]])
 
@@ -36,10 +36,6 @@ assert [C[p] for p in GREEDY] == [0, 2, 4] and sum(C[p] for p in BEST) == 5
 CELL, Y_MID, Y_TITLE = 1.0, 0.5, 3.1
 LEFT_X, RIGHT_X = -3.3, 3.3  # matrix centers
 Y_TOTAL, Y_KEY = -1.8, -3.05
-
-
-def label(s, size=32, color=None, font=FONT):
-    return Text(s, font=font, font_size=size, color=color or P["text"])
 
 
 def at(x0, r, c):

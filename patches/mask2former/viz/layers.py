@@ -19,14 +19,10 @@ from PIL import Image
 from scipy.ndimage import binary_erosion
 
 from fig_mask_classification import HERE, load_image, photo_panel
-from theme import FONT, MONO, P
+from theme import FONT, MONO, P, rgb
 
 CELL_W, GAP, X0, Y_HEAD = 2.95, 0.18, -2.0, 3.05
 PX = (480, 320)  # thumbnail pixels: enough for crisp 1/8 cells at 1600px
-
-
-def rgb(hex_color):
-    return np.array([int(hex_color[i:i + 2], 16) for i in (1, 3, 5)], np.float32)
 
 
 def top_mass(attn, share):

@@ -4,6 +4,7 @@
 // then the Markdown body.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { ME } from '../../data/publications';
 
 export async function getStaticPaths() {
   const pubs = await getCollection('publications');
@@ -26,7 +27,7 @@ const fmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', t
         </p>
         <h1>{title}</h1>
         <p class="authors">
-          {authors.map((a, i) => <>{i > 0 && ', '}{a === 'P. A. Massih' ? <strong>{a}</strong> : a}</>)}
+          {authors.map((a, i) => <>{i > 0 && ', '}{a === ME ? <strong>{a}</strong> : a}</>)}
         </p>
         <p class="venue">
           {venue}
